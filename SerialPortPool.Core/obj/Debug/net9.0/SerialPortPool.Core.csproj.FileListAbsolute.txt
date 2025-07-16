@@ -1,0 +1,12 @@
+C:\Users\ety\Documents\Ai\src\SerialPortPool.Core\bin\Debug\net9.0\SerialPortPool.Core.deps.json
+C:\Users\ety\Documents\Ai\src\SerialPortPool.Core\bin\Debug\net9.0\SerialPortPool.Core.dll
+C:\Users\ety\Documents\Ai\src\SerialPortPool.Core\bin\Debug\net9.0\SerialPortPool.Core.pdb
+C:\Users\ety\Documents\Ai\src\SerialPortPool.Core\obj\Debug\net9.0\SerialPortPool.Core.csproj.AssemblyReference.cache
+C:\Users\ety\Documents\Ai\src\SerialPortPool.Core\obj\Debug\net9.0\SerialPortPool.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\ety\Documents\Ai\src\SerialPortPool.Core\obj\Debug\net9.0\SerialPortPool.Core.AssemblyInfoInputs.cache
+C:\Users\ety\Documents\Ai\src\SerialPortPool.Core\obj\Debug\net9.0\SerialPortPool.Core.AssemblyInfo.cs
+C:\Users\ety\Documents\Ai\src\SerialPortPool.Core\obj\Debug\net9.0\SerialPortPool.Core.csproj.CoreCompileInputs.cache
+C:\Users\ety\Documents\Ai\src\SerialPortPool.Core\obj\Debug\net9.0\SerialPortPool.Core.dll
+C:\Users\ety\Documents\Ai\src\SerialPortPool.Core\obj\Debug\net9.0\refint\SerialPortPool.Core.dll
+C:\Users\ety\Documents\Ai\src\SerialPortPool.Core\obj\Debug\net9.0\SerialPortPool.Core.pdb
+C:\Users\ety\Documents\Ai\src\SerialPortPool.Core\obj\Debug\net9.0\ref\SerialPortPool.Core.dll
