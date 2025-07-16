@@ -1,0 +1,7 @@
+# Build artifacts
+**/bin/
+**/obj/
+**/*.dll
+**/*.pdb
+**/*.exe
+*.sourcelink.json
