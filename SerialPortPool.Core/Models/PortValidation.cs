@@ -59,7 +59,7 @@ public class PortValidationResult
     /// <summary>
     /// Create a failed validation result
     /// </summary>
-    public static PortValidationResult Failure(string reason, ValidationCriteria[] failedCriteria, ValidationCriteria[] passedCriteria = null)
+    public static PortValidationResult Failure(string reason, ValidationCriteria[] failedCriteria, ValidationCriteria[]? passedCriteria = null)
     {
         return new PortValidationResult
         {
