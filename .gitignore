@@ -24,3 +24,11 @@
 TestResults/
 **/*.trx
 
+
+# Additional .NET ignores
+bin/
+obj/
+
+# OS files
+.DS_Store
+Thumbs.db

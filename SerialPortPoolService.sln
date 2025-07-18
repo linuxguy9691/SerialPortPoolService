@@ -11,8 +11,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SerialPortPool.Core.Tests",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PortDiscoveryDemo", "tests\PortDiscoveryDemo\PortDiscoveryDemo.csproj", "{A0718708-6112-480C-B0B6-57BDFB6CDBC7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SerialPortPoolService", "SerialPortPoolService\SerialPortPoolService.csproj", "{A5421A74-F3DF-4CE7-8681-D01EBDFCD205}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -59,18 +57,6 @@ Global
 		{A0718708-6112-480C-B0B6-57BDFB6CDBC7}.Release|x64.Build.0 = Release|Any CPU
 		{A0718708-6112-480C-B0B6-57BDFB6CDBC7}.Release|x86.ActiveCfg = Release|Any CPU
 		{A0718708-6112-480C-B0B6-57BDFB6CDBC7}.Release|x86.Build.0 = Release|Any CPU
-		{A5421A74-F3DF-4CE7-8681-D01EBDFCD205}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A5421A74-F3DF-4CE7-8681-D01EBDFCD205}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A5421A74-F3DF-4CE7-8681-D01EBDFCD205}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{A5421A74-F3DF-4CE7-8681-D01EBDFCD205}.Debug|x64.Build.0 = Debug|Any CPU
-		{A5421A74-F3DF-4CE7-8681-D01EBDFCD205}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{A5421A74-F3DF-4CE7-8681-D01EBDFCD205}.Debug|x86.Build.0 = Debug|Any CPU
-		{A5421A74-F3DF-4CE7-8681-D01EBDFCD205}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A5421A74-F3DF-4CE7-8681-D01EBDFCD205}.Release|Any CPU.Build.0 = Release|Any CPU
-		{A5421A74-F3DF-4CE7-8681-D01EBDFCD205}.Release|x64.ActiveCfg = Release|Any CPU
-		{A5421A74-F3DF-4CE7-8681-D01EBDFCD205}.Release|x64.Build.0 = Release|Any CPU
-		{A5421A74-F3DF-4CE7-8681-D01EBDFCD205}.Release|x86.ActiveCfg = Release|Any CPU
-		{A5421A74-F3DF-4CE7-8681-D01EBDFCD205}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
