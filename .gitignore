@@ -1,7 +1,26 @@
-# Build artifacts
+
+# Build artifacts détaillés
 **/bin/
 **/obj/
 **/*.dll
 **/*.pdb
 **/*.exe
 *.sourcelink.json
+
+# Visual Studio
+.vs/
+.vscode/
+
+# Rider
+.idea/
+
+# User files
+*.user
+*.suo
+*.cache
+*.log
+
+# Test results
+TestResults/
+**/*.trx
+
