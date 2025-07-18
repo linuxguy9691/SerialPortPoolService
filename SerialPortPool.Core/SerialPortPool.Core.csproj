@@ -8,6 +8,8 @@
     <AssemblyDescription>Core library for serial port pool management</AssemblyDescription>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
+    <!-- Suppress Windows-specific API warnings (CA1416) - this is a Windows-only library -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,4 +19,6 @@
     <PackageReference Include="System.Management" Version="8.0.0" />
   </ItemGroup>
 
+
 </Project>
+

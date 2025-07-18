@@ -13,11 +13,22 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Existing packages -->
     <PackageReference Include="NLog" Version="5.2.8" />
     <PackageReference Include="NLog.Extensions.Logging" Version="5.3.8" />
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="7.0.1" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="7.0.1" />
-    <PackageReference Include="System.IO.Ports" Version="7.0.0" />
+    <PackageReference Include="System.IO.Ports" Version="8.0.0" />
+    
+    <!-- NEW: Dependency Injection packages -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+  </ItemGroup>
+
+  <!-- NEW: Project reference to Core library -->
+  <ItemGroup>
+    <ProjectReference Include="..\SerialPortPool.Core\SerialPortPool.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
