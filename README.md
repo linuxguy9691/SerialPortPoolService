@@ -60,11 +60,15 @@ SerialPortPoolService est une solution enterprise-grade qui permet de :
 - [x] Validation hardware réelle (COM6 - FT232R)
 
 ### **🚀 Sprint 3 - Service Integration & Pool Management** 
-**Status :** 🔄 **READY TO START**
-- [ ] Intégrer discovery FTDI au service Windows existant
-- [ ] Pool management avec allocation/libération
-- [ ] Configuration avancée et monitoring
-- [ ] State management et persistence
+**Status :** 🔄 **IN PROGRESS**
+- [ ] **ÉTAPE 1-2:** Service Integration Foundation (Week 1)
+- [ ] **ÉTAPE 3-4:** Pool Management + EEPROM System Info (Week 2)  
+- [ ] **ÉTAPE 5-6:** Multi-Port Awareness (Week 3)
+- [ ] 25 nouveaux tests automatisés
+- [ ] Multi-port device detection (FT4232H)
+- [ ] EEPROM system information extension
+
+📋 **[Sprint 3 Detailed Planning](docs/sprint3/SPRINT3-PLANNING.md)**
 
 ### **🔮 Sprints Futurs**
 - [ ] Sprint 4 : API REST et interface web
