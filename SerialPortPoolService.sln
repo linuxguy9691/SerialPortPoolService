@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PortDiscoveryDemo", "tests\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SerialPortPoolService", "SerialPortPoolService\SerialPortPoolService.csproj", "{0C59F0D9-7C08-4EA3-9B63-0FDE0634620D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SerialPortPool.Tests", "tests\SerialPortPool.Tests\SerialPortPool.Tests.csproj", "{4CEBF87A-7E0F-40C6-808A-F993A35AB67D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -71,6 +73,18 @@ Global
 		{0C59F0D9-7C08-4EA3-9B63-0FDE0634620D}.Release|x64.Build.0 = Release|Any CPU
 		{0C59F0D9-7C08-4EA3-9B63-0FDE0634620D}.Release|x86.ActiveCfg = Release|Any CPU
 		{0C59F0D9-7C08-4EA3-9B63-0FDE0634620D}.Release|x86.Build.0 = Release|Any CPU
+		{4CEBF87A-7E0F-40C6-808A-F993A35AB67D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4CEBF87A-7E0F-40C6-808A-F993A35AB67D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4CEBF87A-7E0F-40C6-808A-F993A35AB67D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{4CEBF87A-7E0F-40C6-808A-F993A35AB67D}.Debug|x64.Build.0 = Debug|Any CPU
+		{4CEBF87A-7E0F-40C6-808A-F993A35AB67D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4CEBF87A-7E0F-40C6-808A-F993A35AB67D}.Debug|x86.Build.0 = Debug|Any CPU
+		{4CEBF87A-7E0F-40C6-808A-F993A35AB67D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4CEBF87A-7E0F-40C6-808A-F993A35AB67D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4CEBF87A-7E0F-40C6-808A-F993A35AB67D}.Release|x64.ActiveCfg = Release|Any CPU
+		{4CEBF87A-7E0F-40C6-808A-F993A35AB67D}.Release|x64.Build.0 = Release|Any CPU
+		{4CEBF87A-7E0F-40C6-808A-F993A35AB67D}.Release|x86.ActiveCfg = Release|Any CPU
+		{4CEBF87A-7E0F-40C6-808A-F993A35AB67D}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -78,5 +92,6 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{C9DE9ED6-DF07-4C60-8C39-4F7567A59D0F} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{A0718708-6112-480C-B0B6-57BDFB6CDBC7} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{4CEBF87A-7E0F-40C6-808A-F993A35AB67D} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal
