@@ -191,35 +191,35 @@ jobs:
       run: |
         dotnet build SerialPortPool.Core/ --configuration Release
         dotnet build tests/PortDiscoveryDemo/ --configuration Release
-      
+  
     - name: "TC-020: Discovery Service Demo Test"
       timeout-minutes: 2
       run: |
         echo "::group::TC-020 - Discovery Service Demo Test"
-        
+    
         # Run the discovery demo to test real system integration
         $demoPath = "tests/PortDiscoveryDemo/bin/Release/net9.0/PortDiscoveryDemo.exe"
-        
+    
         if (Test-Path $demoPath) {
           echo "Starting discovery demo..."
-          
-          # Run demo with timeout and capture output
-          $process = Start-Process -FilePath $demoPath -PassThru -WindowStyle Hidden -RedirectStandardOutput
-          
-          # Wait for completion or timeout
-          if ($process.WaitForExit(30000)) {  # 30 second timeout
-            echo "✅ TC-020 PASSED - Discovery demo completed successfully"
-            echo "Exit code: $($process.ExitCode)"
-          } else {
-            echo "❌ TC-020 FAILED - Discovery demo timed out"
-            $process.Kill()
-            exit 1
-          }
+      
+        # Run demo with timeout (fix: remove RedirectStandardOutput or specify file)
+        $process = Start-Process -FilePath $demoPath -PassThru -WindowStyle Hidden
+      
+        # Wait for completion or timeout
+        if ($process.WaitForExit(30000)) {  # 30 second timeout
+          echo "✅ TC-020 PASSED - Discovery demo completed successfully"
+          echo "Exit code: $($process.ExitCode)"
         } else {
-          echo "❌ TC-020 FAILED - Discovery demo executable not found"
+          echo "❌ TC-020 FAILED - Discovery demo timed out"
+          $process.Kill()
           exit 1
         }
-        echo "::endgroup::"
+      } else {
+        echo "❌ TC-020 FAILED - Discovery demo executable not found"
+        exit 1
+      }
+      echo "::endgroup::"
 
   # ===============================================================
   # JOB 3: ORIGINAL SPRINT 1 TESTS (PRESERVED)
