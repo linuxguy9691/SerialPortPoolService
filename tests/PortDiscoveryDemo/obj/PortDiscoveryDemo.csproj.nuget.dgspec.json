@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\ety\\Documents\\Ai\\src\\tests\\PortDiscoveryDemo\\PortDiscoveryDemo.csproj": {}
+    "C:\\Users\\ety\\Documents\\AI\\debug\\SerialPortPoolService\\tests\\PortDiscoveryDemo\\PortDiscoveryDemo.csproj": {}
   },
   "projects": {
-    "C:\\Users\\ety\\Documents\\Ai\\src\\SerialPortPool.Core\\SerialPortPool.Core.csproj": {
+    "C:\\Users\\ety\\Documents\\AI\\debug\\SerialPortPoolService\\SerialPortPool.Core\\SerialPortPool.Core.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\ety\\Documents\\Ai\\src\\SerialPortPool.Core\\SerialPortPool.Core.csproj",
+        "projectUniqueName": "C:\\Users\\ety\\Documents\\AI\\debug\\SerialPortPoolService\\SerialPortPool.Core\\SerialPortPool.Core.csproj",
         "projectName": "SerialPortPool.Core",
-        "projectPath": "C:\\Users\\ety\\Documents\\Ai\\src\\SerialPortPool.Core\\SerialPortPool.Core.csproj",
+        "projectPath": "C:\\Users\\ety\\Documents\\AI\\debug\\SerialPortPoolService\\SerialPortPool.Core\\SerialPortPool.Core.csproj",
         "packagesPath": "C:\\Users\\ety\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\ety\\Documents\\Ai\\src\\SerialPortPool.Core\\obj\\",
+        "outputPath": "C:\\Users\\ety\\Documents\\AI\\debug\\SerialPortPoolService\\SerialPortPool.Core\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\ety\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -81,14 +81,14 @@
         }
       }
     },
-    "C:\\Users\\ety\\Documents\\Ai\\src\\tests\\PortDiscoveryDemo\\PortDiscoveryDemo.csproj": {
+    "C:\\Users\\ety\\Documents\\AI\\debug\\SerialPortPoolService\\tests\\PortDiscoveryDemo\\PortDiscoveryDemo.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\ety\\Documents\\Ai\\src\\tests\\PortDiscoveryDemo\\PortDiscoveryDemo.csproj",
+        "projectUniqueName": "C:\\Users\\ety\\Documents\\AI\\debug\\SerialPortPoolService\\tests\\PortDiscoveryDemo\\PortDiscoveryDemo.csproj",
         "projectName": "PortDiscoveryDemo",
-        "projectPath": "C:\\Users\\ety\\Documents\\Ai\\src\\tests\\PortDiscoveryDemo\\PortDiscoveryDemo.csproj",
+        "projectPath": "C:\\Users\\ety\\Documents\\AI\\debug\\SerialPortPoolService\\tests\\PortDiscoveryDemo\\PortDiscoveryDemo.csproj",
         "packagesPath": "C:\\Users\\ety\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\ety\\Documents\\Ai\\src\\tests\\PortDiscoveryDemo\\obj\\",
+        "outputPath": "C:\\Users\\ety\\Documents\\AI\\debug\\SerialPortPoolService\\tests\\PortDiscoveryDemo\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\ety\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -103,8 +103,8 @@
           "net9.0": {
             "targetAlias": "net9.0",
             "projectReferences": {
-              "C:\\Users\\ety\\Documents\\Ai\\src\\SerialPortPool.Core\\SerialPortPool.Core.csproj": {
-                "projectPath": "C:\\Users\\ety\\Documents\\Ai\\src\\SerialPortPool.Core\\SerialPortPool.Core.csproj"
+              "C:\\Users\\ety\\Documents\\AI\\debug\\SerialPortPoolService\\SerialPortPool.Core\\SerialPortPool.Core.csproj": {
+                "projectPath": "C:\\Users\\ety\\Documents\\AI\\debug\\SerialPortPoolService\\SerialPortPool.Core\\SerialPortPool.Core.csproj"
               }
             }
           }

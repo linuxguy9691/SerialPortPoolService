@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "2dOyNrUPW7Q=",
+  "dgSpecHash": "yJ+yXe6dKaI=",
   "success": true,
-  "projectFilePath": "C:\\Users\\ety\\Documents\\Ai\\src\\tests\\PortDiscoveryDemo\\PortDiscoveryDemo.csproj",
+  "projectFilePath": "C:\\Users\\ety\\Documents\\AI\\debug\\SerialPortPoolService\\tests\\PortDiscoveryDemo\\PortDiscoveryDemo.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\ety\\.nuget\\packages\\microsoft.extensions.configuration\\8.0.0\\microsoft.extensions.configuration.8.0.0.nupkg.sha512",
     "C:\\Users\\ety\\.nuget\\packages\\microsoft.extensions.configuration.abstractions\\8.0.0\\microsoft.extensions.configuration.abstractions.8.0.0.nupkg.sha512",

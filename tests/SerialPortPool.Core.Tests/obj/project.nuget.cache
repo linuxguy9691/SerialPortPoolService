@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "sBE2x5sBbnw=",
+  "dgSpecHash": "nZSy/kL2FP0=",
   "success": true,
-  "projectFilePath": "C:\\Users\\ety\\Documents\\Ai\\src\\tests\\SerialPortPool.Core.Tests\\SerialPortPool.Core.Tests.csproj",
+  "projectFilePath": "C:\\Users\\ety\\Documents\\AI\\debug\\SerialPortPoolService\\tests\\SerialPortPool.Core.Tests\\SerialPortPool.Core.Tests.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\ety\\.nuget\\packages\\castle.core\\5.1.1\\castle.core.5.1.1.nupkg.sha512",
     "C:\\Users\\ety\\.nuget\\packages\\coverlet.collector\\6.0.0\\coverlet.collector.6.0.0.nupkg.sha512",
