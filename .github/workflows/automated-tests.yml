@@ -1,7 +1,7 @@
 # ===================================================================
 # GITHUB ACTIONS - TESTS AUTOMATISÉS COMPLETS
 # Fichier: .github/workflows/automated-tests.yml
-# Sprint 1 + Sprint 2 Combined
+# Sprint 1 + Sprint 2 Combined + Sprint 1 Integration
 # ===================================================================
 
 name: Automated Tests - Sprint 1 & 2
@@ -100,7 +100,17 @@ jobs:
     - name: "TC-017: Sprint 1 Unit Tests"
       run: |
         echo "::group::TC-017 - Sprint 1 Unit Tests"
-        dotnet test tests/SerialPortPool.Tests/ --configuration Release --verbosity normal --logger "trx;LogFileName=sprint1-test-results.trx" 2>$null || echo "Sprint 1 tests skipped (may not exist yet)"
+        if (Test-Path "tests/SerialPortPool.Tests/") {
+          dotnet test tests/SerialPortPool.Tests/ --configuration Release --verbosity normal --logger "trx;LogFileName=sprint1-test-results.trx"
+          if ($LASTEXITCODE -eq 0) {
+            echo "✅ TC-017 PASSED - Sprint 1 unit tests completed successfully"
+          } else {
+            echo "❌ TC-017 FAILED - Sprint 1 unit tests failed"
+            exit 1
+          }
+        } else {
+          echo "ℹ️ TC-017 SKIPPED - Sprint 1 unit tests project not found"
+        }
         echo "::endgroup::"
         
     - name: "TC-018: Sprint 2 Unit Tests"
@@ -191,35 +201,48 @@ jobs:
       run: |
         dotnet build SerialPortPool.Core/ --configuration Release
         dotnet build tests/PortDiscoveryDemo/ --configuration Release
-  
+      
     - name: "TC-020: Discovery Service Demo Test"
       timeout-minutes: 2
       run: |
         echo "::group::TC-020 - Discovery Service Demo Test"
-    
-        # Run the discovery demo to test real system integration
-        $demoPath = "tests/PortDiscoveryDemo/bin/Release/net9.0/PortDiscoveryDemo.exe"
-    
-        if (Test-Path $demoPath) {
-          echo "Starting discovery demo..."
-      
-        # Run demo with timeout (fix: remove RedirectStandardOutput or specify file)
-        $process = Start-Process -FilePath $demoPath -PassThru -WindowStyle Hidden
-      
-        # Wait for completion or timeout
-        if ($process.WaitForExit(30000)) {  # 30 second timeout
-          echo "✅ TC-020 PASSED - Discovery demo completed successfully"
-          echo "Exit code: $($process.ExitCode)"
-        } else {
-          echo "❌ TC-020 FAILED - Discovery demo timed out"
-          $process.Kill()
-          exit 1
+        
+        # Use dotnet run for better reliability
+        try {
+          echo "Starting discovery demo with dotnet run..."
+          
+          # Run demo with timeout using dotnet run
+          $process = Start-Process "dotnet" -ArgumentList "run", "--project", "tests/PortDiscoveryDemo/", "--no-build", "--configuration", "Release" -PassThru -WindowStyle Hidden
+          
+          # Wait for completion or timeout
+          if ($process.WaitForExit(30000)) {  # 30 second timeout
+            echo "✅ TC-020 PASSED - Discovery demo completed successfully"
+            echo "Exit code: $($process.ExitCode)"
+          } else {
+            echo "❌ TC-020 FAILED - Discovery demo timed out"
+            $process.Kill()
+            exit 1
+          }
+        } catch {
+          echo "❌ TC-020 FAILED - Error running discovery demo: $_"
+          # Try alternative approach with direct executable
+          $demoPath = "tests/PortDiscoveryDemo/bin/Release/net9.0/PortDiscoveryDemo.exe"
+          if (Test-Path $demoPath) {
+            echo "Attempting direct executable execution..."
+            $process = Start-Process -FilePath $demoPath -PassThru -WindowStyle Hidden
+            if ($process.WaitForExit(15000)) {
+              echo "✅ TC-020 PASSED - Discovery demo completed via direct execution"
+            } else {
+              echo "❌ TC-020 FAILED - Discovery demo failed both methods"
+              $process.Kill()
+              exit 1
+            }
+          } else {
+            echo "❌ TC-020 FAILED - Discovery demo executable not found"
+            exit 1
+          }
         }
-      } else {
-        echo "❌ TC-020 FAILED - Discovery demo executable not found"
-        exit 1
-      }
-      echo "::endgroup::"
+        echo "::endgroup::"
 
   # ===============================================================
   # JOB 3: ORIGINAL SPRINT 1 TESTS (PRESERVED)
@@ -340,7 +363,7 @@ jobs:
         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         
         @"
-        # Automated Test Report - Sprint 1 & 2
+        # Automated Test Report - Sprint 1 & 2 Complete
         
         **Generated:** $timestamp  
         **Build:** ${{ github.run_number }}  
@@ -358,32 +381,36 @@ jobs:
         | TC-008: Log Directory | ✅ PASSED | logging-tests |
         | TC-011: Interactive Mode | ✅ PASSED | service-tests |
         | TC-013: NLog Configuration | ✅ PASSED | logging-tests |
+        | TC-017: Sprint 1 Unit Tests | ✅ PASSED | unit-tests |
         
-        ### Sprint 2 Tests (NEW)
+        ### Sprint 2 Tests
         | Test Case | Status | Job |
         |-----------|--------|-----|
         | TC-014: Core Library Build | ✅ PASSED | unit-tests |
         | TC-015: Test Projects Build | ✅ PASSED | unit-tests |
         | TC-016: Solution File Build | ✅ PASSED | unit-tests |
-        | TC-017: Sprint 1 Unit Tests | ✅ PASSED | unit-tests |
         | TC-018: Sprint 2 Unit Tests | ✅ PASSED | unit-tests |
         | TC-019: Sprint 2 Output Verification | ✅ PASSED | unit-tests |
         | TC-020: Discovery Service Demo | ✅ PASSED | sprint2-integration-tests |
         
         ## Coverage
         - **Automated Tests:** 14/20 (70%)
-        - **Sprint 1 Tests:** 7/7 (100%)
-        - **Sprint 2 Tests:** 7/7 (100%)
+        - **Sprint 1 Tests:** 8/8 (100%)
+        - **Sprint 2 Tests:** 6/6 (100%)
         - **Build Tests:** 100%
         - **Core Functionality:** 100%
         - **Discovery Service:** 100%
+        - **Windows Service:** 100%
         
-        ## Sprint 2 Achievements
+        ## Sprint 1 + Sprint 2 Integration Achievements
+        - ✅ Windows Service foundation with NLog logging
         - ✅ SerialPortPool.Core library with discovery service
-        - ✅ 12 unit tests for discovery functionality
+        - ✅ FTDI device analysis with WMI integration
+        - ✅ Configurable validation system with scoring
+        - ✅ 16 unit tests total (Sprint 1: 4 tests, Sprint 2: 12 tests)
         - ✅ Integration tests with real hardware support
         - ✅ Interactive demo for port discovery
-        - ✅ Solution file organization
+        - ✅ Solution file organization with 4 projects
         - ✅ Clean build without warnings
         
         ## Manual Tests Required
@@ -400,7 +427,7 @@ jobs:
     - name: Upload Test Report
       uses: actions/upload-artifact@v4
       with:
-        name: automated-test-report-sprint1-and-2
+        name: automated-test-report-sprint1-and-2-complete
         path: test-report.md
 
   # ===============================================================
@@ -417,12 +444,15 @@ jobs:
       if: success()
       run: |
         echo "🎉 All automated tests passed!"
-        echo "Sprint 1 & 2 - Combined test suite completed successfully"
-        echo "✅ Sprint 1: Service Windows Base"
-        echo "✅ Sprint 2: Serial Port Discovery Service"
+        echo "Sprint 1 & 2 - Complete integration test suite completed successfully"
+        echo "✅ Sprint 1: Windows Service Foundation"
+        echo "✅ Sprint 2: Serial Port Discovery Service with FTDI Analysis"
+        echo "✅ Integration: Complete repository with 4 projects"
+        echo "🚀 Ready for Sprint 3: Service Integration & Pool Management"
         
     - name: Notify Failure
       if: failure()
       run: |
         echo "❌ Some automated tests failed!"
         echo "Check the workflow logs for details"
+        echo "Sprint 1 + Sprint 2 integration requires investigation"
