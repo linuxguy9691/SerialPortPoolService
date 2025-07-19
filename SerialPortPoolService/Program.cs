@@ -3,13 +3,14 @@ using System.ServiceProcess;
 using NLog;
 using System.Threading;
 using System.Threading.Tasks;
-// NOUVEAU: Imports pour DI et Enhanced Discovery
+// Imports pour DI et Enhanced Discovery
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
 using SerialPortPool.Core.Services;
 using SerialPortPool.Core.Models;
+using SerialPortPoolService.Services; // Pour PortDiscoveryBackgroundService
 using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace SerialPortPoolService
@@ -20,8 +21,12 @@ namespace SerialPortPoolService
         private CancellationTokenSource? cancellationTokenSource;
         private Task? serviceTask;
         
-        // NOUVEAU: Service Provider pour DI
+        // Service Provider pour DI
         private IServiceProvider? serviceProvider;
+        
+        // NEW: Background Service pour discovery continue
+        private PortDiscoveryBackgroundService? backgroundDiscoveryService;
+        private Task? backgroundTask;
 
         public SerialPortPoolService()
         {
@@ -35,22 +40,26 @@ namespace SerialPortPoolService
         {
             try
             {
-                nlogLogger.Info("SerialPortPoolService starting with Enhanced Discovery integration...");
+                nlogLogger.Info("SerialPortPoolService starting with Enhanced Discovery + Background Service integration...");
                 
-                // NOUVEAU: Setup Dependency Injection
+                // Setup Dependency Injection
                 serviceProvider = SetupDependencyInjection();
                 
-                // Test que DI fonctionne (phase de dérisquage)
+                // Test que DI fonctionne
                 TestDependencyInjection();
                 
                 cancellationTokenSource = new CancellationTokenSource();
+                
+                // NEW: Start Background Discovery Service
+                StartBackgroundDiscoveryService();
+                
                 serviceTask = Task.Run(async () => await RunServiceAsync(cancellationTokenSource.Token));
                 
-                nlogLogger.Info("SerialPortPoolService started successfully with Enhanced Discovery");
+                nlogLogger.Info("SerialPortPoolService started successfully with Enhanced Discovery + Background Service");
             }
             catch (Exception ex)
             {
-                nlogLogger.Error(ex, "Failed to start SerialPortPoolService with Enhanced Discovery");
+                nlogLogger.Error(ex, "Failed to start SerialPortPoolService");
                 throw;
             }
         }
@@ -62,12 +71,15 @@ namespace SerialPortPoolService
                 nlogLogger.Info("SerialPortPoolService stopping...");
                 cancellationTokenSource?.Cancel();
 
+                // NEW: Stop Background Discovery Service
+                StopBackgroundDiscoveryService();
+
                 if (serviceTask != null && !serviceTask.Wait(TimeSpan.FromSeconds(30)))
                 {
                     nlogLogger.Warn("Service task did not complete within timeout");
                 }
 
-                // NOUVEAU: Cleanup DI
+                // Cleanup DI
                 if (serviceProvider is IDisposable disposable)
                 {
                     disposable.Dispose();
@@ -87,17 +99,18 @@ namespace SerialPortPoolService
 
         private async Task RunServiceAsync(CancellationToken cancellationToken)
         {
-            nlogLogger.Info("Service main loop starting with Enhanced Discovery integration");
+            nlogLogger.Info("Service main loop starting with Enhanced Discovery + Background Service");
 
             try
             {
-                // NOUVEAU: Démo Enhanced Discovery dans le service
+                // Test initial Enhanced Discovery (one-time)
                 await TestEnhancedDiscoveryInService(cancellationToken);
                 
+                // Main service loop (lighter now - background service handles discovery)
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    nlogLogger.Debug("Service heartbeat with Enhanced Discovery available");
-                    await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+                    nlogLogger.Debug("Service heartbeat - Background Discovery Service running");
+                    await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken); // Longer interval since background handles discovery
                 }
             }
             catch (OperationCanceledException)
@@ -111,7 +124,7 @@ namespace SerialPortPoolService
             }
         }
         
-        // NOUVEAU: Setup Dependency Injection
+        // Setup Dependency Injection
         private IServiceProvider SetupDependencyInjection()
         {
             var services = new ServiceCollection();
@@ -144,11 +157,14 @@ namespace SerialPortPoolService
             services.AddScoped<ISerialPortValidator, SerialPortValidator>();
             services.AddScoped<ISerialPortDiscovery, EnhancedSerialPortDiscoveryService>();
             
-            nlogLogger.Info("Dependency Injection configured successfully");
+            // NEW: Background Service (Singleton for state tracking)
+            services.AddSingleton<PortDiscoveryBackgroundService>();
+            
+            nlogLogger.Info("Dependency Injection configured successfully with Background Service");
             return services.BuildServiceProvider();
         }
         
-        // NOUVEAU: Test que DI fonctionne (dérisquage)
+        // Test que DI fonctionne (dérisquage)
         private void TestDependencyInjection()
         {
             try
@@ -156,13 +172,14 @@ namespace SerialPortPoolService
                 var discovery = serviceProvider?.GetService<ISerialPortDiscovery>();
                 var validator = serviceProvider?.GetService<ISerialPortValidator>();
                 var ftdiReader = serviceProvider?.GetService<IFtdiDeviceReader>();
+                var backgroundService = serviceProvider?.GetService<PortDiscoveryBackgroundService>();
                 
-                if (discovery == null || validator == null || ftdiReader == null)
+                if (discovery == null || validator == null || ftdiReader == null || backgroundService == null)
                 {
-                    throw new InvalidOperationException("Failed to resolve Enhanced Discovery services from DI container");
+                    throw new InvalidOperationException("Failed to resolve services from DI container");
                 }
                 
-                nlogLogger.Info("✅ Dependency Injection test successful - all Enhanced Discovery services resolved");
+                nlogLogger.Info("✅ Dependency Injection test successful - all services resolved including Background Service");
             }
             catch (Exception ex)
             {
@@ -171,12 +188,64 @@ namespace SerialPortPoolService
             }
         }
         
-        // NOUVEAU: Test Enhanced Discovery dans le contexte du service
+        // NEW: Start Background Discovery Service
+        private void StartBackgroundDiscoveryService()
+        {
+            try
+            {
+                nlogLogger.Info("🔄 Starting Background Discovery Service...");
+                
+                backgroundDiscoveryService = serviceProvider?.GetRequiredService<PortDiscoveryBackgroundService>();
+                if (backgroundDiscoveryService == null)
+                {
+                    throw new InvalidOperationException("Failed to get Background Discovery Service from DI");
+                }
+                
+                // Start the background service
+                backgroundTask = backgroundDiscoveryService.StartAsync(cancellationTokenSource?.Token ?? CancellationToken.None);
+                
+                nlogLogger.Info("✅ Background Discovery Service started successfully");
+            }
+            catch (Exception ex)
+            {
+                nlogLogger.Error(ex, "❌ Failed to start Background Discovery Service");
+                throw;
+            }
+        }
+        
+        // NEW: Stop Background Discovery Service
+        private void StopBackgroundDiscoveryService()
+        {
+            try
+            {
+                if (backgroundDiscoveryService != null)
+                {
+                    nlogLogger.Info("🛑 Stopping Background Discovery Service...");
+                    
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    var stopTask = backgroundDiscoveryService.StopAsync(cts.Token);
+                    if (!stopTask.Wait(TimeSpan.FromSeconds(15)))
+                    {
+                        nlogLogger.Warn("Background Discovery Service did not stop within timeout");
+                    }
+                    else
+                    {
+                        nlogLogger.Info("✅ Background Discovery Service stopped successfully");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                nlogLogger.Error(ex, "Error stopping Background Discovery Service");
+            }
+        }
+        
+        // Test Enhanced Discovery (unchanged, mais maintenant one-time)
         private async Task TestEnhancedDiscoveryInService(CancellationToken cancellationToken)
         {
             try
             {
-                nlogLogger.Info("Testing Enhanced Discovery integration in service context...");
+                nlogLogger.Info("Testing Enhanced Discovery integration (one-time test)...");
                 
                 var discovery = serviceProvider?.GetRequiredService<ISerialPortDiscovery>();
                 if (discovery == null)
@@ -189,7 +258,8 @@ namespace SerialPortPoolService
                 var ports = await discovery.DiscoverPortsAsync();
                 var portList = ports.ToList();
                 
-                nlogLogger.Info($"Enhanced Discovery test: Found {portList.Count} serial ports");
+                nlogLogger.Info($"Enhanced Discovery one-time test: Found {portList.Count} serial ports");
+                nlogLogger.Info("NOTE: Continuous discovery is now handled by Background Service");
                 
                 foreach (var port in portList)
                 {
@@ -209,11 +279,11 @@ namespace SerialPortPoolService
                     }
                 }
                 
-                nlogLogger.Info("✅ Enhanced Discovery integration test completed successfully");
+                nlogLogger.Info("✅ Enhanced Discovery one-time test completed - Background Service will handle continuous monitoring");
             }
             catch (Exception ex)
             {
-                nlogLogger.Error(ex, "❌ Enhanced Discovery integration test failed");
+                nlogLogger.Error(ex, "❌ Enhanced Discovery one-time test failed");
                 // Ne pas throw - le service doit continuer même si discovery échoue
             }
         }
@@ -234,7 +304,7 @@ namespace SerialPortPoolService
                 {
                     var service = new SerialPortPoolService();
                     service.StartInteractive();
-                    Console.WriteLine("Service running with Enhanced Discovery integration. Press any key to stop...");
+                    Console.WriteLine("Service running with Enhanced Discovery + Background Service. Press any key to stop...");
                     Console.ReadKey();
                     service.StopInteractive();
                 }
