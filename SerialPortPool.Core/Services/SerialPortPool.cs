@@ -1,303 +1,294 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
-using Moq;
 using SerialPortPool.Core.Interfaces;
 using SerialPortPool.Core.Models;
-using SerialPortPool.Core.Services;
-using Xunit;
 
-// Explicit alias to resolve namespace conflict
-using PoolService = SerialPortPool.Core.Services.SerialPortPool;
-
-namespace SerialPortPool.Core.Tests.Services;
+namespace SerialPortPool.Core.Services;
 
 /// <summary>
-/// Tests for SerialPortPool implementation - Progressive phases
-/// Phase 1: Thread-safety and basic functionality
-/// Using PoolService alias to resolve namespace conflicts
+/// Thread-safe implementation of serial port pool management
+/// Phase 1: Basic allocation/release with thread-safety
 /// </summary>
-public class SerialPortPoolTests : IDisposable
+public class SerialPortPool : ISerialPortPool, IDisposable
 {
-    private readonly Mock<ISerialPortDiscovery> _mockDiscovery;
-    private readonly Mock<ILogger<PoolService>> _mockLogger;
-    private readonly PoolService _pool;
+    private readonly ISerialPortDiscovery _discovery;
+    private readonly ILogger<SerialPortPool> _logger;
+    private readonly ConcurrentDictionary<string, PortAllocation> _allocations = new();
+    private readonly SemaphoreSlim _allocationSemaphore = new(1, 1);
+    private volatile bool _disposed;
 
-    public SerialPortPoolTests()
+    /// <summary>
+    /// Constructor with dependency injection
+    /// </summary>
+    public SerialPortPool(ISerialPortDiscovery discovery, ILogger<SerialPortPool> logger)
     {
-        _mockDiscovery = new Mock<ISerialPortDiscovery>();
-        _mockLogger = new Mock<ILogger<PoolService>>();
-        _pool = new PoolService(_mockDiscovery.Object, _mockLogger.Object);
+        _discovery = discovery ?? throw new ArgumentNullException(nameof(discovery));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        
+        _logger.LogInformation("SerialPortPool initialized with thread-safe implementation");
     }
 
-    #region Phase 1 Tests - Thread-Safety and Basic Operations
+    #region Phase 1 - Basic Thread-Safe Operations
 
-    [Fact]
-    public async Task SerialPortPool_AllocatePort_IsThreadSafe()
+    /// <summary>
+    /// Allocate an available port from the pool (Phase 1: minimal implementation)
+    /// </summary>
+    public async Task<PortAllocation?> AllocatePortAsync(PortValidationConfiguration? config = null, string? clientId = null)
     {
-        // Arrange
-        var testPorts = new[]
+        if (_disposed)
         {
-            new SerialPortInfo { PortName = "COM1", Status = PortStatus.Available },
-            new SerialPortInfo { PortName = "COM2", Status = PortStatus.Available },
-            new SerialPortInfo { PortName = "COM3", Status = PortStatus.Available },
-            new SerialPortInfo { PortName = "COM4", Status = PortStatus.Available },
-            new SerialPortInfo { PortName = "COM5", Status = PortStatus.Available }
-        };
-
-        _mockDiscovery.Setup(d => d.DiscoverPortsAsync())
-                     .ReturnsAsync(testPorts);
-
-        // Act - Allocate from multiple threads simultaneously
-        var tasks = new List<Task<PortAllocation?>>();
-        for (int i = 0; i < 5; i++)
-        {
-            var clientId = $"Client{i + 1}";
-            tasks.Add(Task.Run(() => _pool.AllocatePortAsync(clientId: clientId)));
+            _logger.LogWarning("Cannot allocate port - pool is disposed");
+            return null;
         }
 
-        var results = await Task.WhenAll(tasks);
-
-        // Assert
-        var successfulAllocations = results.Where(r => r != null).ToList();
-        Assert.True(successfulAllocations.Count <= testPorts.Length, 
-            "Should not allocate more ports than available");
-        Assert.True(successfulAllocations.Count > 0, 
-            "Should successfully allocate at least one port");
-
-        // Verify no duplicate allocations
-        var allocatedPortNames = successfulAllocations.Select(a => a!.PortName).ToList();
-        var uniquePortNames = allocatedPortNames.Distinct().ToList();
-        Assert.Equal(allocatedPortNames.Count, uniquePortNames.Count);
-
-        // Verify all allocations are active
-        Assert.All(successfulAllocations, allocation =>
+        await _allocationSemaphore.WaitAsync();
+        try
         {
-            Assert.True(allocation!.IsActive, "Allocated port should be active");
-            Assert.NotNull(allocation.SessionId);
-            Assert.NotEqual(string.Empty, allocation.SessionId);
-        });
-    }
+            _logger.LogDebug($"Attempting to allocate port for client: {clientId ?? "Unknown"}");
 
-    [Fact]
-    public async Task SerialPortPool_ReleasePort_IsThreadSafe()
-    {
-        // Arrange - First allocate some ports
-        var testPorts = new[]
-        {
-            new SerialPortInfo { PortName = "COM10", Status = PortStatus.Available },
-            new SerialPortInfo { PortName = "COM11", Status = PortStatus.Available },
-            new SerialPortInfo { PortName = "COM12", Status = PortStatus.Available }
-        };
-
-        _mockDiscovery.Setup(d => d.DiscoverPortsAsync())
-                     .ReturnsAsync(testPorts);
-
-        var allocations = new List<PortAllocation>();
-        for (int i = 0; i < 3; i++)
-        {
-            var allocation = await _pool.AllocatePortAsync(clientId: $"TestClient{i}");
-            Assert.NotNull(allocation);
-            allocations.Add(allocation!);
-        }
-
-        // Act - Release all ports from multiple threads simultaneously
-        var releaseTasks = allocations.Select(allocation =>
-            Task.Run(() => _pool.ReleasePortAsync(allocation.PortName, allocation.SessionId))
-        ).ToList();
-
-        var releaseResults = await Task.WhenAll(releaseTasks);
-
-        // Assert
-        Assert.All(releaseResults, result => 
-            Assert.True(result, "All releases should succeed"));
-
-        // Verify all allocations are now inactive
-        var allAllocations = await _pool.GetAllocationsAsync();
-        var releasedAllocations = allAllocations.Where(a => 
-            allocations.Any(orig => orig.PortName == a.PortName)).ToList();
-
-        Assert.All(releasedAllocations, allocation =>
-        {
-            Assert.False(allocation.IsActive, "Released port should not be active");
-            Assert.NotNull(allocation.ReleasedAt);
-        });
-    }
-
-    [Fact]
-    public async Task SerialPortPool_ConcurrentAccess_NoDeadlocks()
-    {
-        // Arrange
-        var testPorts = new[]
-        {
-            new SerialPortInfo { PortName = "COM20", Status = PortStatus.Available },
-            new SerialPortInfo { PortName = "COM21", Status = PortStatus.Available },
-            new SerialPortInfo { PortName = "COM22", Status = PortStatus.Available },
-            new SerialPortInfo { PortName = "COM23", Status = PortStatus.Available }
-        };
-
-        _mockDiscovery.Setup(d => d.DiscoverPortsAsync())
-                     .ReturnsAsync(testPorts);
-
-        // Act - Mix of allocate, release, and query operations from multiple threads
-        var mixedTasks = new List<Task>();
-
-        // Allocation tasks
-        for (int i = 0; i < 6; i++)
-        {
-            var clientId = $"MixedClient{i}";
-            mixedTasks.Add(Task.Run(async () =>
+            // Phase 1: Simple implementation - discover ports and allocate first available
+            var availablePorts = await _discovery.DiscoverPortsAsync();
+            
+            foreach (var portInfo in availablePorts)
             {
-                var allocation = await _pool.AllocatePortAsync(clientId: clientId);
-                if (allocation != null)
+                // Check if port is already allocated
+                if (_allocations.TryGetValue(portInfo.PortName, out var existingAllocation) && existingAllocation.IsActive)
                 {
-                    // Hold for a short time, then release
-                    await Task.Delay(100);
-                    await _pool.ReleasePortAsync(allocation.PortName, allocation.SessionId);
+                    _logger.LogDebug($"Port {portInfo.PortName} already allocated and active, skipping");
+                    continue;
                 }
-            }));
-        }
 
-        // Query tasks (should not interfere with allocations)
-        for (int i = 0; i < 4; i++)
-        {
-            mixedTasks.Add(Task.Run(async () =>
-            {
-                await _pool.GetAllocationsAsync();
-                await _pool.GetAvailablePortsCountAsync();
-                await _pool.GetStatisticsAsync();
-            }));
-        }
+                // Phase 1: Basic allocation without validation (will be enhanced in Phase 2)
+                var allocation = PortAllocation.Create(portInfo.PortName, clientId);
+                
+                // Use indexer to replace existing allocation (active or inactive)
+                _allocations[portInfo.PortName] = allocation;
 
-        // Act - Execute all tasks with timeout to detect deadlocks
-        var timeoutTask = Task.Delay(TimeSpan.FromSeconds(10));
-        var completedTask = await Task.WhenAny(Task.WhenAll(mixedTasks), timeoutTask);
-
-        // Assert - Check that operations completed without deadlock
-        Assert.True(completedTask != timeoutTask, 
-            "Operations should complete without deadlock (within 10 seconds)");
-
-        // Verify pool is still functional after concurrent access
-        var finalStats = await _pool.GetStatisticsAsync();
-        Assert.NotNull(finalStats);
-        
-        var finalAllocations = await _pool.GetAllocationsAsync();
-        Assert.NotNull(finalAllocations);
-    }
-
-    [Fact]
-    public async Task SerialPortPool_BasicOperations_WorkCorrectly()
-    {
-        // Arrange
-        var testPort = new SerialPortInfo { PortName = "COM99", Status = PortStatus.Available };
-        _mockDiscovery.Setup(d => d.DiscoverPortsAsync())
-                     .ReturnsAsync(new[] { testPort });
-
-        // Act & Assert - Basic allocation
-        var allocation = await _pool.AllocatePortAsync(clientId: "TestBasic");
-        Assert.NotNull(allocation);
-        Assert.Equal("COM99", allocation!.PortName);
-        Assert.Equal("TestBasic", allocation.AllocatedTo);
-        Assert.True(allocation.IsActive);
-
-        // Act & Assert - Port is allocated
-        var isAllocated = await _pool.IsPortAllocatedAsync("COM99");
-        Assert.True(isAllocated);
-
-        // Act & Assert - Get allocation
-        var retrievedAllocation = await _pool.GetPortAllocationAsync("COM99");
-        Assert.NotNull(retrievedAllocation);
-        Assert.Equal(allocation.SessionId, retrievedAllocation!.SessionId);
-
-        // Act & Assert - Release port
-        var releaseResult = await _pool.ReleasePortAsync("COM99", allocation.SessionId);
-        Assert.True(releaseResult);
-
-        // Act & Assert - Port is no longer active
-        var isStillAllocated = await _pool.IsPortAllocatedAsync("COM99");
-        Assert.False(isStillAllocated);
-    }
-
-    [Fact]
-    public async Task SerialPortPool_SessionValidation_WorksCorrectly()
-    {
-        // Arrange
-        var testPort = new SerialPortInfo { PortName = "COM88", Status = PortStatus.Available };
-        _mockDiscovery.Setup(d => d.DiscoverPortsAsync())
-                     .ReturnsAsync(new[] { testPort });
-
-        var allocation = await _pool.AllocatePortAsync(clientId: "SessionTest");
-        Assert.NotNull(allocation);
-
-        // Act & Assert - Release with correct session ID
-        var releaseWithCorrectSession = await _pool.ReleasePortAsync("COM88", allocation!.SessionId);
-        Assert.True(releaseWithCorrectSession);
-
-        // Re-allocate for next test
-        var newAllocation = await _pool.AllocatePortAsync(clientId: "SessionTest2");
-        Assert.NotNull(newAllocation);
-
-        // Act & Assert - Release with incorrect session ID should fail
-        var releaseWithWrongSession = await _pool.ReleasePortAsync("COM88", "wrong-session-id");
-        Assert.False(releaseWithWrongSession);
-
-        // Act & Assert - Port should still be allocated
-        var stillAllocated = await _pool.IsPortAllocatedAsync("COM88");
-        Assert.True(stillAllocated);
-
-        // Cleanup - Release with correct session
-        var finalRelease = await _pool.ReleasePortAsync("COM88", newAllocation!.SessionId);
-        Assert.True(finalRelease);
-    }
-
-    [Fact]
-    public async Task SerialPortPool_ClientCleanup_ReleasesAllClientPorts()
-    {
-        // Arrange
-        var testPorts = new[]
-        {
-            new SerialPortInfo { PortName = "COM30", Status = PortStatus.Available },
-            new SerialPortInfo { PortName = "COM31", Status = PortStatus.Available },
-            new SerialPortInfo { PortName = "COM32", Status = PortStatus.Available }
-        };
-
-        _mockDiscovery.Setup(d => d.DiscoverPortsAsync())
-                     .ReturnsAsync(testPorts);
-
-        // Allocate multiple ports to same client
-        const string clientId = "CleanupTestClient";
-        var allocations = new List<PortAllocation>();
-        
-        for (int i = 0; i < 3; i++)
-        {
-            var allocation = await _pool.AllocatePortAsync(clientId: clientId);
-            if (allocation != null)
-            {
-                allocations.Add(allocation);
+                _logger.LogInformation($"Successfully allocated port {portInfo.PortName} to client {clientId ?? "Unknown"} (Session: {allocation.SessionId})");
+                return allocation;
             }
+
+            _logger.LogWarning($"No available ports found for allocation (client: {clientId ?? "Unknown"})");
+            return null;
         }
-
-        Assert.True(allocations.Count > 0, "Should have allocated at least one port");
-
-        // Act - Release all ports for client
-        var releasedCount = await _pool.ReleaseAllPortsForClientAsync(clientId);
-
-        // Assert
-        Assert.Equal(allocations.Count, releasedCount);
-
-        // Verify all client ports are released
-        foreach (var allocation in allocations)
+        catch (Exception ex)
         {
-            var isStillAllocated = await _pool.IsPortAllocatedAsync(allocation.PortName);
-            Assert.False(isStillAllocated, $"Port {allocation.PortName} should be released");
+            _logger.LogError(ex, $"Error during port allocation for client {clientId ?? "Unknown"}");
+            return null;
         }
+        finally
+        {
+            _allocationSemaphore.Release();
+        }
+    }
+
+    /// <summary>
+    /// Release a port back to the pool (Phase 1: basic implementation)
+    /// </summary>
+    public async Task<bool> ReleasePortAsync(string portName, string? sessionId = null)
+    {
+        if (_disposed)
+        {
+            _logger.LogWarning("Cannot release port - pool is disposed");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(portName))
+        {
+            _logger.LogWarning("Cannot release port - port name is null or empty");
+            return false;
+        }
+
+        await _allocationSemaphore.WaitAsync();
+        try
+        {
+            _logger.LogDebug($"Attempting to release port {portName} (Session: {sessionId ?? "Unknown"})");
+
+            if (!_allocations.TryGetValue(portName, out var allocation))
+            {
+                _logger.LogWarning($"Cannot release port {portName} - not found in allocations");
+                return false;
+            }
+
+            // Phase 1: Basic session validation (will be enhanced later)
+            if (!string.IsNullOrEmpty(sessionId) && allocation.SessionId != sessionId)
+            {
+                _logger.LogWarning($"Cannot release port {portName} - session ID mismatch (provided: {sessionId}, expected: {allocation.SessionId})");
+                return false;
+            }
+
+            // Mark as released and update allocation
+            allocation.Release();
+            
+            // In Phase 1, we keep the allocation record for tracking
+            // Phase 4 will add cleanup strategies
+            _logger.LogInformation($"Successfully released port {portName} (Session: {allocation.SessionId}, Duration: {allocation.AllocationDuration.TotalMinutes:F1}min)");
+            
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error during port release for {portName}");
+            return false;
+        }
+        finally
+        {
+            _allocationSemaphore.Release();
+        }
+    }
+
+    /// <summary>
+    /// Get all current port allocations (Phase 1: read-only access)
+    /// </summary>
+    public async Task<IEnumerable<PortAllocation>> GetAllocationsAsync()
+    {
+        if (_disposed)
+        {
+            return Enumerable.Empty<PortAllocation>();
+        }
+
+        // No locking needed for read-only access to ConcurrentDictionary values
+        await Task.CompletedTask; // Keep async signature for interface compatibility
+        
+        var allocations = _allocations.Values.ToList(); // Create snapshot to avoid enumeration issues
+        
+        _logger.LogDebug($"Retrieved {allocations.Count} port allocations");
+        return allocations;
     }
 
     #endregion
 
-    #region Test Utilities and Cleanup
+    #region Phase 1 - Minimal Interface Implementation (Placeholders)
+
+    // Phase 1: Basic placeholders - will be implemented in later phases
+    public async Task<IEnumerable<PortAllocation>> GetActiveAllocationsAsync()
+    {
+        var allAllocations = await GetAllocationsAsync();
+        return allAllocations.Where(a => a.IsActive);
+    }
+
+    public async Task<SystemInfo?> GetPortSystemInfoAsync(string portName, bool forceRefresh = false)
+    {
+        // Phase 1: Placeholder - will be implemented in Phase 3 with caching
+        await Task.CompletedTask;
+        _logger.LogDebug($"SystemInfo requested for {portName} (forceRefresh: {forceRefresh}) - Phase 3 implementation pending");
+        return null;
+    }
+
+    public async Task<int> GetAvailablePortsCountAsync(PortValidationConfiguration? config = null)
+    {
+        // Phase 1: Simple count - will be enhanced with validation in Phase 2
+        var availablePorts = await _discovery.DiscoverPortsAsync();
+        var count = availablePorts.Count(p => !_allocations.ContainsKey(p.PortName));
+        
+        _logger.LogDebug($"Available ports count: {count}");
+        return count;
+    }
+
+    public async Task<int> GetAllocatedPortsCountAsync()
+    {
+        var activeAllocations = await GetActiveAllocationsAsync();
+        return activeAllocations.Count();
+    }
+
+    public async Task<bool> IsPortAllocatedAsync(string portName)
+    {
+        await Task.CompletedTask;
+        var isAllocated = _allocations.ContainsKey(portName) && _allocations[portName].IsActive;
+        _logger.LogDebug($"Port {portName} allocation status: {isAllocated}");
+        return isAllocated;
+    }
+
+    public async Task<PortAllocation?> GetPortAllocationAsync(string portName)
+    {
+        await Task.CompletedTask;
+        _allocations.TryGetValue(portName, out var allocation);
+        return allocation;
+    }
+
+    public async Task<int> ReleaseAllPortsForClientAsync(string clientId)
+    {
+        // Phase 1: Basic client cleanup - will be enhanced in Phase 2
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            return 0;
+        }
+
+        var clientAllocations = _allocations.Values.Where(a => a.AllocatedTo == clientId && a.IsActive).ToList();
+        int releasedCount = 0;
+
+        foreach (var allocation in clientAllocations)
+        {
+            if (await ReleasePortAsync(allocation.PortName, allocation.SessionId))
+            {
+                releasedCount++;
+            }
+        }
+
+        _logger.LogInformation($"Released {releasedCount} ports for client {clientId}");
+        return releasedCount;
+    }
+
+    public async Task<int> RefreshPoolAsync()
+    {
+        // Phase 1: Basic refresh - will be enhanced in Phase 4
+        var discoveredPorts = await _discovery.DiscoverPortsAsync();
+        var count = discoveredPorts.Count();
+        
+        _logger.LogInformation($"Pool refresh discovered {count} ports");
+        return count;
+    }
+
+    public async Task<PoolStatistics> GetStatisticsAsync()
+    {
+        // Phase 1: Basic statistics - will be enhanced in Phase 4
+        var allAllocations = await GetAllocationsAsync();
+        var activeAllocations = allAllocations.Where(a => a.IsActive).ToList();
+        var totalPorts = await RefreshPoolAsync();
+        var allocatedPorts = activeAllocations.Count;
+        
+        return new PoolStatistics
+        {
+            TotalPorts = totalPorts,
+            AllocatedPorts = allocatedPorts,
+            AvailablePorts = totalPorts - allocatedPorts,
+            ErrorPorts = 0, // Phase 1: No error tracking yet
+            ActiveClients = activeAllocations.Select(a => a.AllocatedTo).Where(c => c != null).Distinct().Count(),
+            TotalAllocations = allAllocations.Count(),
+            AverageAllocationDurationMinutes = allAllocations.Any() ? 
+                allAllocations.Average(a => a.AllocationDuration.TotalMinutes) : 0,
+            GeneratedAt = DateTime.Now
+        };
+    }
+
+    #endregion
+
+    #region Disposal
 
     public void Dispose()
     {
-        _pool?.Dispose();
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposed && disposing)
+        {
+            _logger.LogInformation("Disposing SerialPortPool...");
+            
+            try
+            {
+                _allocationSemaphore.Dispose();
+                _logger.LogInformation("SerialPortPool disposed successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during SerialPortPool disposal");
+            }
+            
+            _disposed = true;
+        }
     }
 
     #endregion

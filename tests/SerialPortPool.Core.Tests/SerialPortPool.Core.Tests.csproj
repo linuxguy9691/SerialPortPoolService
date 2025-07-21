@@ -6,8 +6,6 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <!-- Suppress Windows-specific API warnings -->
-    <NoWarn>$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,11 +19,11 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <!-- NEW: Moq for mocking dependencies -->
     <PackageReference Include="Moq" Version="4.20.69" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- CHEMIN CORRIGÉ pour votre structure -->
     <ProjectReference Include="..\..\SerialPortPool.Core\SerialPortPool.Core.csproj" />
   </ItemGroup>
 

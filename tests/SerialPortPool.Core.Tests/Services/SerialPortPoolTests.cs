@@ -66,8 +66,7 @@ public class SerialPortPoolTests : IDisposable
         // Verify no duplicate allocations
         var allocatedPortNames = successfulAllocations.Select(a => a!.PortName).ToList();
         var uniquePortNames = allocatedPortNames.Distinct().ToList();
-        Assert.Equal(allocatedPortNames.Count, uniquePortNames.Count, 
-            "Should not allocate the same port to multiple clients");
+        Assert.Equal(allocatedPortNames.Count, uniquePortNames.Count);
 
         // Verify all allocations are active
         Assert.All(successfulAllocations, allocation =>
@@ -172,8 +171,8 @@ public class SerialPortPoolTests : IDisposable
         var timeoutTask = Task.Delay(TimeSpan.FromSeconds(10));
         var completedTask = await Task.WhenAny(Task.WhenAll(mixedTasks), timeoutTask);
 
-        // Assert
-        Assert.NotSame(timeoutTask, completedTask, 
+        // Assert - Check that operations completed without deadlock
+        Assert.True(completedTask != timeoutTask, 
             "Operations should complete without deadlock (within 10 seconds)");
 
         // Verify pool is still functional after concurrent access
