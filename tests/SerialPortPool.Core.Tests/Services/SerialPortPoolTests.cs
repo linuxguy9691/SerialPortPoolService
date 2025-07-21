@@ -12,23 +12,26 @@ namespace SerialPortPool.Core.Tests.Services;
 
 /// <summary>
 /// Tests for SerialPortPool implementation - Progressive phases
-/// Phase 1: Thread-safety and basic functionality
+/// Phase 1: Thread-safety and basic functionality ✅ COMPLETED (50/50 tests)
+/// Phase 2: Enhanced allocation with validation ✅ IN PROGRESS (+4 tests)
 /// Using PoolService alias to resolve namespace conflicts
 /// </summary>
 public class SerialPortPoolTests : IDisposable
 {
     private readonly Mock<ISerialPortDiscovery> _mockDiscovery;
+    private readonly Mock<ISerialPortValidator> _mockValidator;  // ← NEW Phase 2!
     private readonly Mock<ILogger<PoolService>> _mockLogger;
     private readonly PoolService _pool;
 
     public SerialPortPoolTests()
     {
         _mockDiscovery = new Mock<ISerialPortDiscovery>();
+        _mockValidator = new Mock<ISerialPortValidator>();  // ← NEW Phase 2!
         _mockLogger = new Mock<ILogger<PoolService>>();
-        _pool = new PoolService(_mockDiscovery.Object, _mockLogger.Object);
+        _pool = new PoolService(_mockDiscovery.Object, _mockValidator.Object, _mockLogger.Object);  // ← 3 params now
     }
 
-    #region Phase 1 Tests - Thread-Safety and Basic Operations
+    #region Phase 1 Tests - Thread-Safety and Basic Operations (PRESERVED)
 
     [Fact]
     public async Task SerialPortPool_AllocatePort_IsThreadSafe()
@@ -289,6 +292,176 @@ public class SerialPortPoolTests : IDisposable
             var isStillAllocated = await _pool.IsPortAllocatedAsync(allocation.PortName);
             Assert.False(isStillAllocated, $"Port {allocation.PortName} should be released");
         }
+    }
+
+    #endregion
+
+    #region Phase 2 Tests - Enhanced Allocation with Validation
+
+    [Fact]
+    public async Task AllocatePort_WithValidation_FiltersCorrectly()
+    {
+        // Arrange - Mix of FTDI and non-FTDI ports
+        var testPorts = new[]
+        {
+            new SerialPortInfo 
+            { 
+                PortName = "COM1", 
+                Status = PortStatus.Available,
+                IsFtdiDevice = true,
+                FtdiInfo = FtdiDeviceInfo.ParseFromDeviceId("FTDIBUS\\VID_0403+PID_6011+TEST4232H\\0000"),
+                IsValidForPool = true,
+                ValidationResult = PortValidationResult.Success("Valid 4232H device", new[] { ValidationCriteria.Is4232HChip })
+            },
+            new SerialPortInfo 
+            { 
+                PortName = "COM2", 
+                Status = PortStatus.Available,
+                IsFtdiDevice = true,
+                FtdiInfo = FtdiDeviceInfo.ParseFromDeviceId("FTDIBUS\\VID_0403+PID_6001+TESTFT232R\\0000"),
+                IsValidForPool = false,
+                ValidationResult = PortValidationResult.Failure("Not 4232H chip", new[] { ValidationCriteria.Not4232HChip })
+            },
+            new SerialPortInfo 
+            { 
+                PortName = "COM3", 
+                Status = PortStatus.Available,
+                IsFtdiDevice = false,
+                IsValidForPool = false
+            }
+        };
+
+        _mockDiscovery.Setup(d => d.DiscoverPortsAsync()).ReturnsAsync(testPorts);
+        
+        // Setup validator to return only valid ports
+        _mockValidator.Setup(v => v.GetValidPortsAsync(It.IsAny<IEnumerable<SerialPortInfo>>(), It.IsAny<PortValidationConfiguration>()))
+                    .ReturnsAsync((IEnumerable<SerialPortInfo> ports, PortValidationConfiguration config) => 
+                        ports.Where(p => p.IsValidForPool));
+
+        // Act - Allocate with client configuration (strict)
+        var clientConfig = PortValidationConfiguration.CreateClientDefault();
+        var allocation = await _pool.AllocatePortAsync(clientConfig, "ValidatedClient");
+
+        // Assert - Should get only the valid FTDI 4232H port
+        Assert.NotNull(allocation);
+        Assert.Equal("COM1", allocation!.PortName);
+        Assert.Equal("ValidatedClient", allocation.AllocatedTo);
+        Assert.True(allocation.Metadata.ContainsKey("ValidationScore"));  // ← Fixed ambiguous Assert.Contains
+        
+        // Verify validator was called
+        _mockValidator.Verify(v => v.GetValidPortsAsync(It.IsAny<IEnumerable<SerialPortInfo>>(), It.IsAny<PortValidationConfiguration>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task AllocatePort_WithoutValidation_UsesAllPorts()
+    {
+        // Arrange
+        var testPorts = new[]
+        {
+            new SerialPortInfo { PortName = "COM10", Status = PortStatus.Available },
+            new SerialPortInfo { PortName = "COM11", Status = PortStatus.Available }
+        };
+
+        _mockDiscovery.Setup(d => d.DiscoverPortsAsync()).ReturnsAsync(testPorts);
+
+        // Act - Allocate without validation config
+        var allocation = await _pool.AllocatePortAsync(config: null, clientId: "NoValidationClient");
+
+        // Assert - Should get first available port (no filtering)
+        Assert.NotNull(allocation);
+        Assert.Contains(allocation!.PortName, testPorts.Select(p => p.PortName));  // ← Fixed xUnit2012
+        Assert.Equal("NoValidationClient", allocation!.AllocatedTo);
+        
+        // Validator should not be called when no config provided
+        _mockValidator.Verify(v => v.GetValidPortsAsync(It.IsAny<IEnumerable<SerialPortInfo>>(), It.IsAny<PortValidationConfiguration>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetAvailablePortsCount_RespectsValidation()
+    {
+        // Arrange
+        var testPorts = new[]
+        {
+            new SerialPortInfo { PortName = "COM20", Status = PortStatus.Available, IsValidForPool = true },
+            new SerialPortInfo { PortName = "COM21", Status = PortStatus.Available, IsValidForPool = false },
+            new SerialPortInfo { PortName = "COM22", Status = PortStatus.Available, IsValidForPool = true }
+        };
+
+        _mockDiscovery.Setup(d => d.DiscoverPortsAsync()).ReturnsAsync(testPorts);
+        
+        _mockValidator.Setup(v => v.GetValidPortsAsync(It.IsAny<IEnumerable<SerialPortInfo>>(), It.IsAny<PortValidationConfiguration>()))
+                    .ReturnsAsync((IEnumerable<SerialPortInfo> ports, PortValidationConfiguration config) => 
+                        ports.Where(p => p.IsValidForPool));
+
+        // Act
+        var clientConfig = PortValidationConfiguration.CreateClientDefault();
+        var countWithValidation = await _pool.GetAvailablePortsCountAsync(clientConfig);
+        var countWithoutValidation = await _pool.GetAvailablePortsCountAsync(null);
+
+        // Assert
+        Assert.Equal(2, countWithValidation); // Only valid ports
+        Assert.Equal(3, countWithoutValidation); // All ports
+        
+        // Validator should be called only once (for the with-validation case)
+        _mockValidator.Verify(v => v.GetValidPortsAsync(It.IsAny<IEnumerable<SerialPortInfo>>(), It.IsAny<PortValidationConfiguration>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task AllocatePort_StoresValidationMetadata()
+    {
+        // Arrange
+        var ftdiInfo = new FtdiDeviceInfo
+        {
+            VendorId = "0403",
+            ProductId = "6011", 
+            ChipType = "FT4232H",  // ← Set ChipType here
+            SerialNumber = "TESTSERIAL123"
+        };
+
+        var testPort = new SerialPortInfo 
+        { 
+            PortName = "COM50", 
+            Status = PortStatus.Available,
+            IsFtdiDevice = true,
+            FtdiInfo = ftdiInfo,  // ← FtdiChipType will be calculated from this
+            ValidationResult = new PortValidationResult 
+            { 
+                IsValid = true, 
+                ValidationScore = 95, 
+                Reason = "Perfect FTDI match" 
+            }
+        };
+
+        _mockDiscovery.Setup(d => d.DiscoverPortsAsync()).ReturnsAsync(new[] { testPort });
+        
+        _mockValidator.Setup(v => v.GetValidPortsAsync(It.IsAny<IEnumerable<SerialPortInfo>>(), It.IsAny<PortValidationConfiguration>()))
+                    .ReturnsAsync(new[] { testPort });
+
+        // Act
+        var allocation = await _pool.AllocatePortAsync(PortValidationConfiguration.CreateClientDefault(), "MetadataClient");
+
+        // Assert
+        Assert.NotNull(allocation);
+        
+        // Verify validation metadata is stored - Fixed ambiguous Assert.Contains
+        Assert.True(allocation!.Metadata.ContainsKey("ValidationScore"));
+        Assert.Equal("95", allocation.Metadata["ValidationScore"]);
+        Assert.True(allocation.Metadata.ContainsKey("ValidationReason"));
+        Assert.Equal("Perfect FTDI match", allocation.Metadata["ValidationReason"]);
+        Assert.True(allocation.Metadata.ContainsKey("IsFtdiDevice"));
+        Assert.Equal("True", allocation.Metadata["IsFtdiDevice"]);
+        Assert.True(allocation.Metadata.ContainsKey("FtdiChipType"));
+        Assert.Equal("FT4232H", allocation.Metadata["FtdiChipType"]);
+        
+        // Verify FTDI-specific metadata
+        Assert.True(allocation.Metadata.ContainsKey("FtdiVendorId"));
+        Assert.Equal("0403", allocation.Metadata["FtdiVendorId"]);
+        Assert.True(allocation.Metadata.ContainsKey("FtdiProductId"));
+        Assert.Equal("6011", allocation.Metadata["FtdiProductId"]);
+        Assert.True(allocation.Metadata.ContainsKey("FtdiSerialNumber"));
+        Assert.Equal("TESTSERIAL123", allocation.Metadata["FtdiSerialNumber"]);
+        Assert.True(allocation.Metadata.ContainsKey("Is4232H"));
+        Assert.Equal("True", allocation.Metadata["Is4232H"]);
     }
 
     #endregion
