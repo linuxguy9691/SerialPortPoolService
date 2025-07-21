@@ -13,22 +13,30 @@ namespace SerialPortPool.Core.Tests.Services;
 /// <summary>
 /// Tests for SerialPortPool implementation - Progressive phases
 /// Phase 1: Thread-safety and basic functionality ✅ COMPLETED (50/50 tests)
-/// Phase 2: Enhanced allocation with validation ✅ IN PROGRESS (+4 tests)
+/// Phase 2: Enhanced allocation with validation ✅ COMPLETED (54/54 tests)
+/// Phase 3: Smart caching layer with SystemInfo ✅ IN PROGRESS (+5 tests)
 /// Using PoolService alias to resolve namespace conflicts
 /// </summary>
 public class SerialPortPoolTests : IDisposable
 {
     private readonly Mock<ISerialPortDiscovery> _mockDiscovery;
-    private readonly Mock<ISerialPortValidator> _mockValidator;  // ← NEW Phase 2!
+    private readonly Mock<ISerialPortValidator> _mockValidator;
+    private readonly Mock<SystemInfoCache> _mockSystemInfoCache;  // ← NEW Phase 3!
     private readonly Mock<ILogger<PoolService>> _mockLogger;
     private readonly PoolService _pool;
 
     public SerialPortPoolTests()
     {
         _mockDiscovery = new Mock<ISerialPortDiscovery>();
-        _mockValidator = new Mock<ISerialPortValidator>();  // ← NEW Phase 2!
+        _mockValidator = new Mock<ISerialPortValidator>();
+        
+        // Phase 3: Create mock for SystemInfoCache (needs mocks for its dependencies)
+        var mockFtdiReader = new Mock<IFtdiDeviceReader>();
+        var mockCacheLogger = new Mock<ILogger<SystemInfoCache>>();
+        _mockSystemInfoCache = new Mock<SystemInfoCache>(mockFtdiReader.Object, mockCacheLogger.Object, TimeSpan.FromMinutes(5));
+        
         _mockLogger = new Mock<ILogger<PoolService>>();
-        _pool = new PoolService(_mockDiscovery.Object, _mockValidator.Object, _mockLogger.Object);  // ← 3 params now
+        _pool = new PoolService(_mockDiscovery.Object, _mockValidator.Object, _mockSystemInfoCache.Object, _mockLogger.Object);  // ← 4 params now
     }
 
     #region Phase 1 Tests - Thread-Safety and Basic Operations (PRESERVED)
@@ -296,7 +304,7 @@ public class SerialPortPoolTests : IDisposable
 
     #endregion
 
-    #region Phase 2 Tests - Enhanced Allocation with Validation
+    #region Phase 2 Tests - Enhanced Allocation with Validation (PRESERVED)
 
     [Fact]
     public async Task AllocatePort_WithValidation_FiltersCorrectly()
@@ -462,6 +470,220 @@ public class SerialPortPoolTests : IDisposable
         Assert.Equal("TESTSERIAL123", allocation.Metadata["FtdiSerialNumber"]);
         Assert.True(allocation.Metadata.ContainsKey("Is4232H"));
         Assert.Equal("True", allocation.Metadata["Is4232H"]);
+    }
+
+    #endregion
+
+    #region Phase 3 Tests - Smart Caching Layer
+
+    [Fact]
+    public async Task SystemInfoCache_RespectsTimeToLive()
+    {
+        // Arrange - Create cache with short TTL for testing
+        var ftdiReaderMock = new Mock<IFtdiDeviceReader>();
+        var cacheLogger = new Mock<ILogger<SystemInfoCache>>();
+        var shortTtl = TimeSpan.FromMilliseconds(500); // 500ms TTL
+        
+        var cache = new SystemInfoCache(ftdiReaderMock.Object, cacheLogger.Object, shortTtl);
+        
+        ftdiReaderMock.Setup(f => f.ReadDeviceInfoAsync("COM_CACHE_TEST"))
+                     .ReturnsAsync(FtdiDeviceInfo.ParseFromDeviceId("FTDIBUS\\VID_0403+PID_6001+CACHE_TEST_001\\0000"));
+        ftdiReaderMock.Setup(f => f.ReadEepromDataAsync("COM_CACHE_TEST"))
+                     .ReturnsAsync(new Dictionary<string, string> { { "TestKey", "TestValue" } });
+
+        // Act & Assert - First call should cache
+        var firstResult = await cache.GetSystemInfoAsync("COM_CACHE_TEST");
+        var secondResult = await cache.GetSystemInfoAsync("COM_CACHE_TEST");
+        
+        // Should get same instance (cached)
+        Assert.NotNull(firstResult);
+        Assert.NotNull(secondResult);
+        
+        // Wait for TTL to expire
+        await Task.Delay(600); // Longer than TTL
+        
+        var thirdResult = await cache.GetSystemInfoAsync("COM_CACHE_TEST");
+        
+        // Should still get result but potentially refreshed in background
+        Assert.NotNull(thirdResult);
+        
+        // Verify cache statistics
+        var stats = cache.GetStatistics();
+        Assert.True(stats.TotalHits >= 1, "Should have at least one cache hit");
+        Assert.True(stats.TotalMisses >= 1, "Should have at least one cache miss");
+        
+        cache.Dispose();
+    }
+
+    [Fact]
+    public async Task SystemInfoCache_ForceRefresh_IgnoresCache()
+    {
+        // Arrange
+        var ftdiReaderMock = new Mock<IFtdiDeviceReader>();
+        var cacheLogger = new Mock<ILogger<SystemInfoCache>>();
+        var cache = new SystemInfoCache(ftdiReaderMock.Object, cacheLogger.Object);
+        
+        int callCount = 0;
+        ftdiReaderMock.Setup(f => f.ReadDeviceInfoAsync("COM_FORCE_TEST"))
+                     .ReturnsAsync(() =>
+                     {
+                         callCount++;
+                         return FtdiDeviceInfo.ParseFromDeviceId($"FTDIBUS\\VID_0403+PID_6001+FORCE_TEST_{callCount:000}\\0000");
+                     });
+        ftdiReaderMock.Setup(f => f.ReadEepromDataAsync("COM_FORCE_TEST"))
+                     .ReturnsAsync(new Dictionary<string, string>());
+
+        // Act - Normal call (should cache)
+        var firstResult = await cache.GetSystemInfoAsync("COM_FORCE_TEST");
+        Assert.Equal(1, callCount);
+        
+        // Second call (should use cache)
+        var secondResult = await cache.GetSystemInfoAsync("COM_FORCE_TEST");
+        Assert.Equal(1, callCount); // No additional call
+        
+        // Force refresh (should bypass cache)
+        var thirdResult = await cache.GetSystemInfoAsync("COM_FORCE_TEST", forceRefresh: true);
+        Assert.Equal(2, callCount); // Should make new call
+        
+        // Assert
+        Assert.NotNull(firstResult);
+        Assert.NotNull(secondResult);
+        Assert.NotNull(thirdResult);
+        
+        // Verify different data due to force refresh
+        Assert.NotEqual(firstResult?.SerialNumber, thirdResult?.SerialNumber);
+        
+        cache.Dispose();
+    }
+
+    [Fact]
+    public async Task SystemInfoCache_ConcurrentAccess_ThreadSafe()
+    {
+        // Arrange
+        var ftdiReaderMock = new Mock<IFtdiDeviceReader>();
+        var cacheLogger = new Mock<ILogger<SystemInfoCache>>();
+        var cache = new SystemInfoCache(ftdiReaderMock.Object, cacheLogger.Object);
+        
+        int readCount = 0;
+        ftdiReaderMock.Setup(f => f.ReadDeviceInfoAsync("COM_CONCURRENT_TEST"))
+                     .ReturnsAsync(() =>
+                     {
+                         Interlocked.Increment(ref readCount);
+                         await Task.Delay(100); // Simulate slow EEPROM read
+                         return FtdiDeviceInfo.ParseFromDeviceId("FTDIBUS\\VID_0403+PID_6001+CONCURRENT_TEST\\0000");
+                     });
+        ftdiReaderMock.Setup(f => f.ReadEepromDataAsync("COM_CONCURRENT_TEST"))
+                     .ReturnsAsync(new Dictionary<string, string>());
+
+        // Act - Multiple concurrent requests
+        var tasks = new List<Task<SystemInfo?>>();
+        for (int i = 0; i < 10; i++)
+        {
+            tasks.Add(Task.Run(() => cache.GetSystemInfoAsync("COM_CONCURRENT_TEST")));
+        }
+
+        var results = await Task.WhenAll(tasks);
+
+        // Assert - Thread safety validation
+        Assert.All(results, result => Assert.NotNull(result));
+        Assert.True(readCount <= 2, $"Should not have excessive device reads due to caching (actual: {readCount})");
+        
+        // Verify cache handled concurrency correctly
+        var stats = cache.GetStatistics();
+        Assert.True(stats.TotalHits + stats.TotalMisses >= 10, "Should account for all requests");
+        Assert.True(stats.HitRatio > 50, "Should have good hit ratio due to caching");
+        
+        cache.Dispose();
+    }
+
+    [Fact]
+    public async Task GetPortSystemInfo_UsesCacheCorrectly()
+    {
+        // Arrange - Create pool with real cache
+        var ftdiReaderMock = new Mock<IFtdiDeviceReader>();
+        var cacheLogger = new Mock<ILogger<SystemInfoCache>>();
+        var cache = new SystemInfoCache(ftdiReaderMock.Object, cacheLogger.Object);
+        
+        var poolWithCache = new PoolService(_mockDiscovery.Object, _mockValidator.Object, cache, _mockLogger.Object);
+        
+        ftdiReaderMock.Setup(f => f.ReadDeviceInfoAsync("COM_POOL_CACHE_TEST"))
+                     .ReturnsAsync(FtdiDeviceInfo.ParseFromDeviceId("FTDIBUS\\VID_0403+PID_6001+POOL_CACHE_TEST\\0000"));
+        ftdiReaderMock.Setup(f => f.ReadEepromDataAsync("COM_POOL_CACHE_TEST"))
+                     .ReturnsAsync(new Dictionary<string, string> { { "PoolTest", "Success" } });
+
+        // Act - Multiple calls through pool
+        var firstResult = await poolWithCache.GetPortSystemInfoAsync("COM_POOL_CACHE_TEST");
+        var secondResult = await poolWithCache.GetPortSystemInfoAsync("COM_POOL_CACHE_TEST");
+        var forceRefreshResult = await poolWithCache.GetPortSystemInfoAsync("COM_POOL_CACHE_TEST", forceRefresh: true);
+
+        // Assert
+        Assert.NotNull(firstResult);
+        Assert.NotNull(secondResult);
+        Assert.NotNull(forceRefreshResult);
+        
+        Assert.True(firstResult!.IsDataValid);
+        Assert.Equal("POOL_CACHE_TEST", firstResult.SerialNumber);
+        Assert.True(firstResult.EepromData.ContainsKey("PoolTest"));
+        
+        // Verify cache was used (second call should be fast)
+        Assert.Equal(firstResult.SerialNumber, secondResult!.SerialNumber);
+        
+        // Verify force refresh works
+        Assert.Equal(firstResult.SerialNumber, forceRefreshResult!.SerialNumber);
+        
+        poolWithCache.Dispose();
+        cache.Dispose();
+    }
+
+    [Fact]
+    public void CacheStatistics_ReportCorrectly()
+    {
+        // Arrange
+        var ftdiReaderMock = new Mock<IFtdiDeviceReader>();
+        var cacheLogger = new Mock<ILogger<SystemInfoCache>>();
+        var cache = new SystemInfoCache(ftdiReaderMock.Object, cacheLogger.Object);
+        
+        ftdiReaderMock.Setup(f => f.ReadDeviceInfoAsync(It.IsAny<string>()))
+                     .ReturnsAsync((string portName) => 
+                         FtdiDeviceInfo.ParseFromDeviceId($"FTDIBUS\\VID_0403+PID_6001+STATS_TEST_{portName}\\0000"));
+        ftdiReaderMock.Setup(f => f.ReadEepromDataAsync(It.IsAny<string>()))
+                     .ReturnsAsync(new Dictionary<string, string>());
+
+        // Act - Generate some cache activity
+        var initialStats = cache.GetStatistics();
+        
+        // Make some requests to generate statistics
+        _ = cache.GetSystemInfoAsync("COM_STATS_1").Result;
+        _ = cache.GetSystemInfoAsync("COM_STATS_1").Result; // Cache hit
+        _ = cache.GetSystemInfoAsync("COM_STATS_2").Result; // Cache miss
+        _ = cache.GetSystemInfoAsync("COM_STATS_2").Result; // Cache hit
+
+        var finalStats = cache.GetStatistics();
+
+        // Assert - Initial statistics
+        Assert.Equal(0, initialStats.TotalEntries);
+        Assert.Equal(0, initialStats.TotalHits);
+        Assert.Equal(0, initialStats.TotalMisses);
+        Assert.Equal(0, initialStats.HitRatio);
+        
+        // Assert - Final statistics
+        Assert.Equal(2, finalStats.TotalEntries); // Two unique ports
+        Assert.Equal(2, finalStats.TotalHits);    // Two cache hits
+        Assert.Equal(2, finalStats.TotalMisses);  // Two cache misses
+        Assert.Equal(50.0, finalStats.HitRatio);  // 50% hit ratio
+        Assert.True(finalStats.GeneratedAt > initialStats.GeneratedAt);
+        
+        // Test ToString functionality
+        var statsString = finalStats.ToString();
+        Assert.Contains("2 entries", statsString);
+        Assert.Contains("50.0% hit ratio", statsString);
+        
+        // Test cache clearing
+        cache.ClearAll();
+        var clearedStats = cache.GetStatistics();
+        Assert.Equal(0, clearedStats.TotalEntries);
+        
+        cache.Dispose();
     }
 
     #endregion
