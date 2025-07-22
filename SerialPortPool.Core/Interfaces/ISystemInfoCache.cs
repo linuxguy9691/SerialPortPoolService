@@ -1,4 +1,4 @@
-// SerialPortPool.Core/Interfaces/ISystemInfoCache.cs
+// SerialPortPool.Core/Interfaces/ISystemInfoCache.cs - FIXED
 using SerialPortPool.Core.Models;
 
 namespace SerialPortPool.Core.Interfaces;
@@ -32,7 +32,7 @@ public interface ISystemInfoCache : IDisposable
     /// Get cache statistics for monitoring
     /// </summary>
     /// <returns>Cache statistics</returns>
-    SystemInfoCache.CacheStatistics GetStatistics();
+    CacheStatistics GetStatistics(); // ← FIXED: Using CacheStatistics model
 
     /// <summary>
     /// Clear all cache entries
