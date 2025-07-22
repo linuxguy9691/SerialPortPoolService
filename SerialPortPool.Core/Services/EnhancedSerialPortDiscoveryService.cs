@@ -7,7 +7,8 @@ using SerialPortPool.Core.Models;
 namespace SerialPortPool.Core.Services;
 
 /// <summary>
-/// Enhanced serial port discovery service with FTDI analysis and validation
+/// Enhanced serial port discovery service with FTDI analysis, validation, and device grouping (ÉTAPE 5 Complete)
+/// Combines original Sprint 2 functionality with new ÉTAPE 5 multi-port device grouping
 /// </summary>
 public class EnhancedSerialPortDiscoveryService : ISerialPortDiscovery
 {
@@ -27,6 +28,8 @@ public class EnhancedSerialPortDiscoveryService : ISerialPortDiscovery
         _validator = validator ?? throw new ArgumentNullException(nameof(validator));
         _defaultConfig = defaultConfig ?? PortValidationConfiguration.CreateDevelopmentDefault();
     }
+
+    #region Original Sprint 2 Methods (PRESERVED)
 
     /// <summary>
     /// Discover all serial ports with FTDI analysis and validation
@@ -132,6 +135,180 @@ public class EnhancedSerialPortDiscoveryService : ISerialPortDiscovery
         _logger.LogInformation($"Valid ports discovery: {validPorts.Count()} out of {allPorts.Count()} ports are valid for pool");
         return validPorts;
     }
+
+    #endregion
+
+    #region ÉTAPE 5 NEW - Device Grouping Methods
+
+    /// <summary>
+    /// Discover ports and group them by physical device (ÉTAPE 5 Phase 2)
+    /// This method combines port discovery with device grouping analysis
+    /// </summary>
+    /// <param name="configuration">Optional validation configuration for filtering</param>
+    /// <returns>Collection of device groups with their associated ports</returns>
+    public async Task<IEnumerable<DeviceGroup>> DiscoverDeviceGroupsAsync(PortValidationConfiguration? configuration = null)
+    {
+        try
+        {
+            _logger.LogDebug("Starting enhanced discovery with device grouping analysis");
+            
+            // Step 1: Discover all ports with FTDI analysis (existing functionality)
+            var allPorts = await DiscoverPortsAsync();
+            var portList = allPorts.ToList();
+            
+            if (!portList.Any())
+            {
+                _logger.LogInformation("No ports discovered - returning empty device groups");
+                return Enumerable.Empty<DeviceGroup>();
+            }
+            
+            // Step 2: Apply validation filtering if configuration provided
+            IEnumerable<SerialPortInfo> portsToGroup = portList;
+            if (configuration != null)
+            {
+                var validPorts = await _validator.GetValidPortsAsync(portList, configuration);
+                portsToGroup = validPorts;
+                
+                _logger.LogDebug($"Port filtering applied: {portList.Count} total → {portsToGroup.Count()} valid");
+            }
+            
+            // Step 3: Analyze and group ports by physical device
+            var deviceAnalyzer = CreateDeviceAnalyzer();
+            var deviceGroups = await deviceAnalyzer.AnalyzeDeviceGroupsAsync(portsToGroup);
+            var groupList = deviceGroups.ToList();
+            
+            // Step 4: Log comprehensive results
+            LogDeviceGroupingResults(portList, groupList);
+            
+            return groupList;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during device grouping discovery");
+            return Enumerable.Empty<DeviceGroup>();
+        }
+    }
+    
+    /// <summary>
+    /// Get device grouping statistics for current system (ÉTAPE 5 Phase 2)
+    /// </summary>
+    /// <returns>Statistics about discovered device groups</returns>
+    public async Task<DeviceGroupingStatistics> GetDeviceGroupingStatisticsAsync()
+    {
+        try
+        {
+            var deviceGroups = await DiscoverDeviceGroupsAsync();
+            var analyzer = CreateDeviceAnalyzer();
+            
+            return analyzer.GetGroupingStatistics(deviceGroups);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting device grouping statistics");
+            return new DeviceGroupingStatistics();
+        }
+    }
+    
+    /// <summary>
+    /// Discover only multi-port devices (FT4232H, FT2232H, etc.) (ÉTAPE 5 Phase 2)
+    /// </summary>
+    /// <param name="configuration">Optional validation configuration</param>
+    /// <returns>Collection of multi-port device groups only</returns>
+    public async Task<IEnumerable<DeviceGroup>> DiscoverMultiPortDevicesAsync(PortValidationConfiguration? configuration = null)
+    {
+        try
+        {
+            _logger.LogDebug("Discovering multi-port devices only");
+            
+            var allDeviceGroups = await DiscoverDeviceGroupsAsync(configuration);
+            var multiPortGroups = allDeviceGroups.Where(g => g.IsMultiPortDevice).ToList();
+            
+            _logger.LogInformation($"Multi-port device discovery complete: {multiPortGroups.Count} multi-port devices found");
+            
+            return multiPortGroups;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error discovering multi-port devices");
+            return Enumerable.Empty<DeviceGroup>();
+        }
+    }
+    
+    /// <summary>
+    /// Find device groups that contain a specific port (ÉTAPE 5 Phase 2)
+    /// </summary>
+    /// <param name="portName">Port name to search for</param>
+    /// <returns>Device group containing the port, or null if not found</returns>
+    public async Task<DeviceGroup?> FindDeviceGroupByPortAsync(string portName)
+    {
+        if (string.IsNullOrWhiteSpace(portName))
+            return null;
+            
+        try
+        {
+            _logger.LogDebug($"Finding device group for port {portName}");
+            
+            var deviceGroups = await DiscoverDeviceGroupsAsync();
+            var deviceGroup = deviceGroups.FirstOrDefault(g => 
+                g.Ports.Any(p => p.PortName.Equals(portName, StringComparison.OrdinalIgnoreCase)));
+            
+            if (deviceGroup != null)
+            {
+                _logger.LogDebug($"Port {portName} found in device group {deviceGroup.DeviceId} with {deviceGroup.PortCount} total ports");
+            }
+            else
+            {
+                _logger.LogWarning($"Port {portName} not found in any device group");
+            }
+            
+            return deviceGroup;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error finding device group for port {portName}");
+            return null;
+        }
+    }
+    
+    /// <summary>
+    /// Get detailed analysis of a specific device group (ÉTAPE 5 Phase 2)
+    /// </summary>
+    /// <param name="deviceId">Device identifier</param>
+    /// <returns>Device group with detailed analysis, or null if not found</returns>
+    public async Task<DeviceGroup?> GetDeviceGroupAnalysisAsync(string deviceId)
+    {
+        if (string.IsNullOrWhiteSpace(deviceId))
+            return null;
+            
+        try
+        {
+            var deviceGroups = await DiscoverDeviceGroupsAsync();
+            var deviceGroup = deviceGroups.FirstOrDefault(g => 
+                g.DeviceId.Equals(deviceId, StringComparison.OrdinalIgnoreCase));
+            
+            if (deviceGroup != null)
+            {
+                _logger.LogInformation($"Device group analysis: {deviceGroup.GetSummary()}");
+                
+                // Log detailed port information
+                foreach (var port in deviceGroup.Ports.OrderBy(p => p.PortName))
+                {
+                    _logger.LogDebug($"  Port {port.PortName}: {port.Status}, FTDI: {port.IsFtdiDevice}, Valid: {port.IsValidForPool}");
+                }
+            }
+            
+            return deviceGroup;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error getting device group analysis for {deviceId}");
+            return null;
+        }
+    }
+
+    #endregion
+
+    #region Private Helper Methods (Original Sprint 2 - PRESERVED)
 
     /// <summary>
     /// Enrich port information using Windows Management Instrumentation (WMI)
@@ -332,4 +509,59 @@ public class EnhancedSerialPortDiscoveryService : ISerialPortDiscovery
             portInfo.IsValidForPool = false;
         }
     }
+
+    #endregion
+
+    #region Private Helper Methods (ÉTAPE 5 NEW)
+
+    /// <summary>
+    /// Create device analyzer instance with proper dependencies (ÉTAPE 5 Phase 2)
+    /// </summary>
+    private MultiPortDeviceAnalyzer CreateDeviceAnalyzer()
+    {
+        // Use NullLogger for now to avoid circular dependencies with DI
+        var analyzerLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<MultiPortDeviceAnalyzer>.Instance;
+        return new MultiPortDeviceAnalyzer(analyzerLogger, _ftdiReader);
+    }
+    
+    /// <summary>
+    /// Log comprehensive device grouping results (ÉTAPE 5 Phase 2)
+    /// </summary>
+    private void LogDeviceGroupingResults(List<SerialPortInfo> allPorts, List<DeviceGroup> deviceGroups)
+    {
+        _logger.LogInformation($"=== DEVICE GROUPING RESULTS ===");
+        _logger.LogInformation($"Total ports discovered: {allPorts.Count}");
+        _logger.LogInformation($"Physical devices found: {deviceGroups.Count}");
+        
+        // Group statistics
+        var multiPortDevices = deviceGroups.Where(g => g.IsMultiPortDevice).ToList();
+        var singlePortDevices = deviceGroups.Where(g => !g.IsMultiPortDevice).ToList();
+        var ftdiDevices = deviceGroups.Where(g => g.IsFtdiDevice).ToList();
+        var clientValidDevices = deviceGroups.Where(g => g.IsClientValidDevice).ToList();
+        
+        _logger.LogInformation($"Multi-port devices: {multiPortDevices.Count}");
+        _logger.LogInformation($"Single-port devices: {singlePortDevices.Count}");
+        _logger.LogInformation($"FTDI devices: {ftdiDevices.Count}");
+        _logger.LogInformation($"Client-valid devices (FT4232H): {clientValidDevices.Count}");
+        
+        // Detail each device group
+        foreach (var group in deviceGroups.OrderBy(g => g.DeviceId))
+        {
+            var deviceType = group.IsFtdiDevice ? $"FTDI {group.DeviceInfo!.ChipType}" : "Non-FTDI";
+            var portCount = group.PortCount > 1 ? $" ({group.PortCount} ports)" : "";
+            var portNames = string.Join(", ", group.GetPortNames());
+            var validIcon = group.IsClientValidDevice ? "✅" : "❌";
+            
+            _logger.LogInformation($"  {validIcon} {deviceType}{portCount}: {portNames}");
+            
+            if (group.SharedSystemInfo != null)
+            {
+                _logger.LogDebug($"    System info: {group.SharedSystemInfo.GetSummary()}");
+            }
+        }
+        
+        _logger.LogInformation($"=== END DEVICE GROUPING RESULTS ===");
+    }
+
+    #endregion
 }
