@@ -1,4 +1,4 @@
-// SerialPortPool.Core/Services/SystemInfoCache.cs - CLEAN PRODUCTION VERSION
+// SerialPortPool.Core/Services/SystemInfoCache.cs - FIXED WITH CacheEntry CLASS
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
@@ -316,4 +316,22 @@ public class SystemInfoCache : ISystemInfoCache
     }
 
     #endregion
+}
+
+/// <summary>
+/// Cache entry for SystemInfo with TTL and access tracking
+/// FIXED: This class was missing and causing compilation errors
+/// </summary>
+internal class CacheEntry
+{
+    public SystemInfo SystemInfo { get; set; } = null!;
+    public DateTime ExpiresAt { get; set; }
+    public bool IsRefreshing { get; set; }
+    public DateTime LastAccessed { get; set; } = DateTime.Now;
+    public int AccessCount { get; set; } = 0;
+    
+    /// <summary>
+    /// Whether this cache entry has expired
+    /// </summary>
+    public bool IsExpired => DateTime.Now > ExpiresAt;
 }
