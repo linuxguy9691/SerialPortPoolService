@@ -37,4 +37,13 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+  <None Update="default-settings.json">
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+  </None>
+  <None Update="README-MVP.txt">
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+  </None>
+</ItemGroup>
+
 </Project>

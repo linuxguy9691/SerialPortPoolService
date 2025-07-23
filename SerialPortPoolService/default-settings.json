@@ -1,0 +1,28 @@
+{
+  "ServiceSettings": {
+    "LogLevel": "Information",
+    "DiscoveryInterval": 30,
+    "EnableBackgroundService": true,
+    "Environment": "Production"
+  },
+  "PoolSettings": {
+    "DefaultAllocationTimeout": 30000,
+    "MaxConcurrentAllocations": 10,
+    "EnableSmartCaching": true,
+    "CacheTimeToLive": 300
+  },
+  "ValidationSettings": {
+    "RequireFtdiDevice": true,
+    "Require4232HChip": true,
+    "StrictValidation": true,
+    "MinimumValidationScore": 90
+  },
+  "SerialPortDefaults": {
+    "BaudRate": 115200,
+    "Parity": "None",
+    "DataBits": 8,
+    "StopBits": "One",
+    "ReadTimeout": 2000,
+    "WriteTimeout": 2000
+  }
+}
