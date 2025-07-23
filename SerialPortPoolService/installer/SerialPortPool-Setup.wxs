@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- SerialPortPoolService/installer/SerialPortPool-Setup.wxs -->
-<!-- Professional MSI Installer for SerialPortPool MVP -->
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
-     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+<!-- SerialPortPool-Setup-Simple.wxs - Simplified version without problematic elements -->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
 
   <!-- Product Definition -->
   <Product Id="*" 
@@ -15,8 +13,7 @@
     <Package InstallerVersion="200" 
              Compressed="yes" 
              InstallScope="perMachine"
-             Description="Professional serial port pool management service"
-             Comments="SerialPortPool MVP - Industrial Communication Solution" />
+             Description="Professional serial port pool management service" />
 
     <!-- Media and Cabinet -->
     <MediaTemplate EmbedCab="yes" />
@@ -42,16 +39,8 @@
         </Directory>
       </Directory>
 
-      <!-- Start Menu -->
-      <Directory Id="ProgramMenuFolder">
-        <Directory Id="ApplicationProgramsFolder" Name="SerialPortPool" />
-      </Directory>
-
-      <!-- System Directories -->
-      <Directory Id="System32Folder" />
-      
       <!-- Logs Directory (C:\Logs\SerialPortPool) -->
-      <Directory Id="LocalAppDataFolder">
+      <Directory Id="CommonAppDataFolder">
         <Directory Id="LogsRootDir" Name="Logs">
           <Directory Id="LogsDir" Name="SerialPortPool" />
         </Directory>
@@ -61,174 +50,91 @@
     <!-- Components -->
     
     <!-- Main Service Component -->
-    <ComponentGroup Id="ServiceComponents" Directory="ServiceDir">
-      <Component Id="ServiceExecutable" Guid="*">
-        <File Id="ServiceExe" 
-              Source="$(var.SourceDir)\SerialPortPoolService.exe" 
-              KeyPath="yes" />
-        <File Id="ServiceConfig" 
-              Source="$(var.SourceDir)\SerialPortPoolService.dll.config" />
-        <File Id="NLogConfig" 
-              Source="$(var.SourceDir)\NLog.config" />
-        
-        <!-- Service Dependencies -->
-        <File Id="CoreLibrary" 
-              Source="$(var.SourceDir)\SerialPortPool.Core.dll" />
-        <File Id="NLogDll" 
-              Source="$(var.SourceDir)\NLog.dll" />
-        <File Id="NLogExtensions" 
-              Source="$(var.SourceDir)\NLog.Extensions.Logging.dll" />
-        
-        <!-- Windows Service Installation -->
-        <ServiceInstall Id="SerialPortPoolServiceInstall"
-                        Name="SerialPortPoolService"
-                        DisplayName="SerialPortPool Service"
-                        Description="Professional serial port pool management service for industrial communication"
-                        Type="ownProcess"
-                        Start="auto"
-                        Account="LocalSystem"
-                        ErrorControl="normal"
-                        Interactive="no" />
-        
-        <!-- Service Control -->
-        <ServiceControl Id="SerialPortPoolServiceControl"
-                        Name="SerialPortPoolService"
-                        Start="install"
-                        Stop="both"
-                        Remove="uninstall"
-                        Wait="yes" />
-      </Component>
-    </ComponentGroup>
+    <Component Id="ServiceExecutable" Guid="*" Directory="ServiceDir">
+      <File Id="ServiceExe" 
+            Source="$(var.SourceDir)\SerialPortPoolService.exe" 
+            KeyPath="yes" />
+      <File Id="NLogConfig" 
+            Source="$(var.SourceDir)\NLog.config" />
+      
+      <!-- Service Dependencies -->
+      <File Id="CoreLibrary" 
+            Source="$(var.SourceDir)\SerialPortPool.Core.dll" />
+      <File Id="NLogDll" 
+            Source="$(var.SourceDir)\NLog.dll" />
+      <File Id="NLogExtensions" 
+            Source="$(var.SourceDir)\NLog.Extensions.Logging.dll" />
+      
+      <!-- Windows Service Installation -->
+      <ServiceInstall Id="SerialPortPoolServiceInstall"
+                      Name="SerialPortPoolService"
+                      DisplayName="SerialPortPool Service"
+                      Description="Professional serial port pool management service"
+                      Type="ownProcess"
+                      Start="auto"
+                      Account="LocalSystem"
+                      ErrorControl="normal"
+                      Interactive="no" />
+      
+      <!-- Service Control -->
+      <ServiceControl Id="SerialPortPoolServiceControl"
+                      Name="SerialPortPoolService"
+                      Start="install"
+                      Stop="both"
+                      Remove="uninstall"
+                      Wait="yes" />
+    </Component>
 
     <!-- Configuration Component -->
-    <ComponentGroup Id="ConfigurationComponents" Directory="ConfigDir">
-      <Component Id="DefaultConfiguration" Guid="*">
-        <File Id="BibConfiguration" 
-              Source="$(var.SourceDir)\Configuration\bib-configurations.json" 
-              KeyPath="yes" />
-        <File Id="DefaultSettings" 
-              Source="$(var.SourceDir)\Configuration\default-settings.json" />
-      </Component>
-    </ComponentGroup>
+    <Component Id="DefaultConfiguration" Guid="*" Directory="ConfigDir">
+      <File Id="DefaultSettings" 
+            Source="$(var.SourceDir)\default-settings.json" 
+            KeyPath="yes" />
+    </Component>
 
     <!-- Documentation Component -->
-    <ComponentGroup Id="DocumentationComponents" Directory="DocsDir">
-      <Component Id="Documentation" Guid="*">
-        <File Id="ReadmeMVP" 
-              Source="$(var.SourceDir)\Documentation\README-MVP.txt" 
-              KeyPath="yes" />
-        <File Id="InstallGuide" 
-              Source="$(var.SourceDir)\Documentation\Installation-Guide.pdf" />
-        <File Id="ConfigGuide" 
-              Source="$(var.SourceDir)\Documentation\Configuration-Guide.pdf" />
-        <File Id="DemoGuide" 
-              Source="$(var.SourceDir)\Documentation\Demo-Guide.pdf" />
-      </Component>
-    </ComponentGroup>
+    <Component Id="Documentation" Guid="*" Directory="DocsDir">
+      <File Id="ReadmeMVP" 
+            Source="$(var.SourceDir)\README-MVP.txt" 
+            KeyPath="yes" />
+    </Component>
 
-    <!-- Logs Directory Component -->
-    <ComponentGroup Id="LogsComponents" Directory="LogsDir">
-      <Component Id="LogsDirectory" Guid="*">
-        <CreateFolder />
-        <util:PermissionEx User="Everyone" 
-                          GenericAll="yes" 
-                          Domain="[%COMPUTERNAME]" />
-      </Component>
-    </ComponentGroup>
-
-    <!-- Start Menu Shortcuts -->
-    <ComponentGroup Id="ShortcutComponents" Directory="ApplicationProgramsFolder">
-      <Component Id="ApplicationShortcuts" Guid="*">
-        <!-- Demo Application Shortcut -->
-        <Shortcut Id="DemoShortcut"
-                  Name="SerialPortPool Demo"
-                  Description="Run SerialPortPool MVP Demo"
-                  Target="[ServiceDir]MVPDemo.exe"
-                  WorkingDirectory="ServiceDir" />
-        
-        <!-- Configuration Shortcut -->
-        <Shortcut Id="ConfigShortcut"
-                  Name="Configure SerialPortPool"
-                  Description="Open configuration directory"
-                  Target="[ConfigDir]" />
-        
-        <!-- Documentation Shortcut -->
-        <Shortcut Id="DocsShortcut"
-                  Name="SerialPortPool Documentation"
-                  Description="View documentation"
-                  Target="[DocsDir]README-MVP.txt" />
-        
-        <!-- Logs Shortcut -->
-        <Shortcut Id="LogsShortcut"
-                  Name="View Logs"
-                  Description="Open logs directory"
-                  Target="[LogsDir]" />
-        
-        <!-- Uninstall Shortcut -->
-        <Shortcut Id="UninstallShortcut"
-                  Name="Uninstall SerialPortPool"
-                  Description="Uninstall SerialPortPool Service"
-                  Target="[System32Folder]msiexec.exe"
-                  Arguments="/x [ProductCode]" />
-                  
-        <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
-        <RegistryValue Root="HKCU" 
-                       Key="Software\SerialPortPool\Installer" 
-                       Name="installed" 
-                       Type="integer" 
-                       Value="1" 
-                       KeyPath="yes" />
-      </Component>
-    </ComponentGroup>
+    <!-- Logs Directory Component - Simplified without PermissionEx -->
+    <Component Id="LogsDirectory" Guid="*" Directory="LogsDir">
+      <CreateFolder />
+    </Component>
 
     <!-- Registry Component for Configuration -->
-    <ComponentGroup Id="RegistryComponents">
-      <Component Id="RegistryEntries" Guid="*" Directory="TARGETDIR">
-        <!-- Installation Path -->
-        <RegistryKey Root="HKLM" Key="SOFTWARE\SerialPortPool">
-          <RegistryValue Name="InstallPath" 
-                         Type="string" 
-                         Value="[INSTALLFOLDER]" />
-          <RegistryValue Name="Version" 
-                         Type="string" 
-                         Value="1.0.0.0" />
-          <RegistryValue Name="ServiceName" 
-                         Type="string" 
-                         Value="SerialPortPoolService" />
-          <RegistryValue Name="ConfigPath" 
-                         Type="string" 
-                         Value="[ConfigDir]" />
-          <RegistryValue Name="LogsPath" 
-                         Type="string" 
-                         Value="[LogsDir]" />
-        </RegistryKey>
-        
-        <!-- Uninstall Information -->
-        <RegistryKey Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\SerialPortPool">
-          <RegistryValue Name="DisplayName" 
-                         Type="string" 
-                         Value="SerialPortPool Service" />
-          <RegistryValue Name="DisplayVersion" 
-                         Type="string" 
-                         Value="1.0.0.0" />
-          <RegistryValue Name="Publisher" 
-                         Type="string" 
-                         Value="SerialPortPool Solutions" />
-          <RegistryValue Name="InstallLocation" 
-                         Type="string" 
-                         Value="[INSTALLFOLDER]" />
-          <RegistryValue Name="EstimatedSize" 
-                         Type="integer" 
-                         Value="15000" />
-          <RegistryValue Name="NoModify" 
-                         Type="integer" 
-                         Value="1" />
-          <RegistryValue Name="NoRepair" 
-                         Type="integer" 
-                         Value="1" />
-        </RegistryKey>
-      </Component>
-    </ComponentGroup>
+    <Component Id="RegistryEntries" Guid="*" Directory="TARGETDIR">
+      <!-- Installation Path -->
+      <RegistryKey Root="HKLM" Key="SOFTWARE\SerialPortPool">
+        <RegistryValue Name="InstallPath" 
+                       Type="string" 
+                       Value="[INSTALLFOLDER]" />
+        <RegistryValue Name="Version" 
+                       Type="string" 
+                       Value="1.0.0.0" />
+        <RegistryValue Name="ServiceName" 
+                       Type="string" 
+                       Value="SerialPortPoolService" />
+      </RegistryKey>
+      
+      <!-- Uninstall Information -->
+      <RegistryKey Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\SerialPortPool">
+        <RegistryValue Name="DisplayName" 
+                       Type="string" 
+                       Value="SerialPortPool Service" />
+        <RegistryValue Name="DisplayVersion" 
+                       Type="string" 
+                       Value="1.0.0.0" />
+        <RegistryValue Name="Publisher" 
+                       Type="string" 
+                       Value="SerialPortPool Solutions" />
+        <RegistryValue Name="InstallLocation" 
+                       Type="string" 
+                       Value="[INSTALLFOLDER]" />
+      </RegistryKey>
+    </Component>
 
     <!-- Features -->
     <Feature Id="MainFeature" 
@@ -236,73 +142,26 @@
              Description="Core service and components" 
              Level="1"
              ConfigurableDirectory="INSTALLFOLDER">
-      <ComponentGroupRef Id="ServiceComponents" />
-      <ComponentGroupRef Id="LogsComponents" />
-      <ComponentGroupRef Id="RegistryComponents" />
+      <ComponentRef Id="ServiceExecutable" />
+      <ComponentRef Id="LogsDirectory" />
+      <ComponentRef Id="RegistryEntries" />
     </Feature>
 
     <Feature Id="ConfigurationFeature" 
              Title="Configuration Files" 
              Description="Default configuration templates" 
              Level="1">
-      <ComponentGroupRef Id="ConfigurationComponents" />
+      <ComponentRef Id="DefaultConfiguration" />
     </Feature>
 
     <Feature Id="DocumentationFeature" 
              Title="Documentation" 
              Description="User guides and documentation" 
              Level="1">
-      <ComponentGroupRef Id="DocumentationComponents" />
+      <ComponentRef Id="Documentation" />
     </Feature>
 
-    <Feature Id="ShortcutsFeature" 
-             Title="Start Menu Shortcuts" 
-             Description="Convenient access shortcuts" 
-             Level="1">
-      <ComponentGroupRef Id="ShortcutComponents" />
-    </Feature>
-
-    <!-- Custom Actions -->
-    
-    <!-- Pre-installation: Stop service if running -->
-    <CustomAction Id="StopExistingService"
-                  Directory="System32Folder"
-                  ExeCommand="net stop SerialPortPoolService"
-                  Execute="deferred"
-                  Impersonate="no"
-                  Return="ignore" />
-
-    <!-- Post-installation: Start service -->
-    <CustomAction Id="StartService"
-                  Directory="System32Folder"
-                  ExeCommand="net start SerialPortPoolService"
-                  Execute="deferred"
-                  Impersonate="no"
-                  Return="ignore" />
-
-    <!-- Installation Sequence -->
-    <InstallExecuteSequence>
-      <Custom Action="StopExistingService" Before="InstallServices">
-        NOT REMOVE
-      </Custom>
-      <Custom Action="StartService" After="InstallServices">
-        NOT REMOVE
-      </Custom>
-    </InstallExecuteSequence>
-
-    <!-- UI and Dialogs -->
-    <UIRef Id="WixUI_FeatureTree" />
-    <UIRef Id="WixUI_ErrorProgressText" />
-    
-    <!-- License Agreement -->
-    <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
-    
-    <!-- Installer Icons and Branding -->
-    <Icon Id="SerialPortPoolIcon" SourceFile="icon.ico" />
-    <Property Id="ARPPRODUCTICON" Value="SerialPortPoolIcon" />
-    
     <!-- Installation Properties -->
-    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
     <Property Id="MSIUSEREALADMINDETECTION" Value="1" />
     
     <!-- Prevent installation on non-Windows platforms -->

@@ -1,371 +1,211 @@
-# SerialPortPoolService/installer/Build-Installer.ps1
-# Professional MSI build script for SerialPortPool MVP
+# Build-Installer-Simple.ps1 - Simplified MSI build script
 
 param(
-    [Parameter(Mandatory=$false)]
     [string]$Configuration = "Release",
-    
-    [Parameter(Mandatory=$false)]
-    [string]$Platform = "x64",
-    
-    [Parameter(Mandatory=$false)]
     [string]$OutputDir = ".\bin\Installer",
-    
-    [Parameter(Mandatory=$false)]
-    [switch]$Clean,
-    
-    [Parameter(Mandatory=$false)]
-    [switch]$Verbose
+    [switch]$Clean
 )
 
-# Colors for output
-$ErrorColor = "Red"
-$SuccessColor = "Green"
-$InfoColor = "Cyan"
-$WarningColor = "Yellow"
+$ErrorActionPreference = "Stop"
 
-function Write-Status {
-    param([string]$Message, [string]$Color = "White")
-    Write-Host "🔧 $Message" -ForegroundColor $Color
-}
-
-function Write-Success {
-    param([string]$Message)
-    Write-Host "✅ $Message" -ForegroundColor $SuccessColor
-}
-
-function Write-Error {
-    param([string]$Message)
-    Write-Host "❌ $Message" -ForegroundColor $ErrorColor
-}
-
-function Write-Info {
-    param([string]$Message)
-    Write-Host "ℹ️  $Message" -ForegroundColor $InfoColor
-}
+function Write-Status($Message) { Write-Host "BUILD $Message" -ForegroundColor Cyan }
+function Write-Success($Message) { Write-Host "SUCCESS $Message" -ForegroundColor Green }
+function Write-Error($Message) { Write-Host "ERROR $Message" -ForegroundColor Red }
+function Write-Info($Message) { Write-Host "INFO $Message" -ForegroundColor Yellow }
 
 try {
-    Write-Host "🚀 SerialPortPool MSI Installer Build Script" -ForegroundColor $InfoColor
-    Write-Host "=" * 50 -ForegroundColor $InfoColor
+    Write-Host "SerialPortPool MSI Installer Build Script (Simple)" -ForegroundColor Cyan
+    Write-Host "=================================================" -ForegroundColor Cyan
     
-    # Check prerequisites
-    Write-Status "Checking prerequisites..."
+    # 1. Add WiX to PATH manually if needed
+    $wixPaths = @(
+        "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin",
+        "${env:ProgramFiles}\WiX Toolset v3.14\bin",
+        "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin",
+        "${env:ProgramFiles}\WiX Toolset v3.11\bin"
+    )
     
-    # Check if WiX is installed
-    $wixPath = Get-Command "candle.exe" -ErrorAction SilentlyContinue
-    if (-not $wixPath) {
-        # Try common WiX installation paths
-        $commonPaths = @(
-            "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin\candle.exe",
-            "${env:ProgramFiles}\WiX Toolset v3.11\bin\candle.exe",
-            "${env:USERPROFILE}\.dotnet\tools\wix.exe"
-        )
-        
-        $wixFound = $false
-        foreach ($path in $commonPaths) {
-            if (Test-Path $path) {
-                $env:PATH += ";$(Split-Path $path -Parent)"
-                $wixFound = $true
-                Write-Success "Found WiX at: $path"
-                break
-            }
+    $wixFound = $false
+    foreach ($path in $wixPaths) {
+        if (Test-Path (Join-Path $path "candle.exe")) {
+            $env:PATH += ";$path"
+            Write-Success "Added WiX to PATH: $path"
+            $wixFound = $true
+            break
         }
-        
-        if (-not $wixFound) {
-            Write-Error "WiX Toolset not found. Please install WiX Toolset v3.11 or later."
-            Write-Info "Download from: https://wixtoolset.org/releases/"
-            exit 1
-        }
-    } else {
-        Write-Success "WiX Toolset found: $($wixPath.Source)"
     }
     
-    # Validate project structure
-    Write-Status "Validating project structure..."
+    if (-not $wixFound) {
+        # Check if already in PATH
+        $existing = Get-Command "candle.exe" -ErrorAction SilentlyContinue
+        if ($existing) {
+            Write-Success "WiX already in PATH: $($existing.Source)"
+        } else {
+            Write-Error "WiX Toolset not found. Please install it first."
+            exit 1
+        }
+    }
     
-    $projectRoot = Split-Path -Parent $PSScriptRoot
-    $serviceProjectPath = Join-Path $projectRoot "SerialPortPoolService"
-    $serviceBinPath = Join-Path $serviceProjectPath "bin\$Configuration\net9.0-windows"
+    # 2. Find project structure
+    Write-Status "Finding project structure..."
     
-    if (-not (Test-Path $serviceProjectPath)) {
-        Write-Error "Service project not found at: $serviceProjectPath"
+    $currentDir = $PSScriptRoot
+    $parentDir = Split-Path $currentDir -Parent
+    
+    # Look for project file
+    $projectPath = $null
+    $possiblePaths = @($parentDir, $currentDir, (Split-Path $parentDir -Parent))
+    
+    foreach ($path in $possiblePaths) {
+        Write-Host "  Checking: $path" -ForegroundColor Gray
+        $csproj = Get-ChildItem -Path $path -Filter "*.csproj" -ErrorAction SilentlyContinue | Select-Object -First 1
+        $sln = Get-ChildItem -Path $path -Filter "*.sln" -ErrorAction SilentlyContinue | Select-Object -First 1
+        
+        if ($csproj -or $sln) {
+            $projectPath = $path.ToString()  # Ensure it's a string
+            Write-Success "Found project at: $projectPath"
+            break
+        }
+    }
+    
+    if (-not $projectPath) {
+        Write-Error "Cannot find .csproj or .sln file in expected locations"
+        Write-Info "Searched: $($possiblePaths -join ', ')"
         exit 1
     }
     
-    Write-Success "Project structure validated"
-    
-    # Clean previous builds if requested
+    # 3. Clean if requested
     if ($Clean) {
         Write-Status "Cleaning previous builds..."
-        if (Test-Path $OutputDir) {
-            Remove-Item $OutputDir -Recurse -Force
-        }
-        if (Test-Path "obj") {
-            Remove-Item "obj" -Recurse -Force
-        }
+        if (Test-Path $OutputDir) { Remove-Item $OutputDir -Recurse -Force }
+        if (Test-Path "obj") { Remove-Item "obj" -Recurse -Force }
         Write-Success "Clean completed"
     }
     
-    # Build the main service first
-    Write-Status "Building SerialPortPool Service..."
+    # 4. Build the project
+    Write-Status "Building project..."
     
-    Push-Location $projectRoot
+    Push-Location $projectPath
     try {
-        $buildArgs = @(
-            "build"
-            "SerialPortPoolService.sln"
-            "--configuration", $Configuration
-            "--verbosity", $(if ($Verbose) { "normal" } else { "minimal" })
-            "--nologo"
-        )
-        
-        & dotnet @buildArgs
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error "Service build failed with exit code: $LASTEXITCODE"
-            exit 1
+        $buildFile = Get-ChildItem -Filter "*.sln" | Select-Object -First 1
+        if (-not $buildFile) {
+            $buildFile = Get-ChildItem -Filter "*.csproj" | Select-Object -First 1
         }
         
-        Write-Success "Service build completed"
+        & dotnet build $buildFile.Name --configuration $Configuration --verbosity minimal --nologo
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Build failed with exit code: $LASTEXITCODE"
+            exit 1
+        }
+        Write-Success "Build completed"
     }
     finally {
         Pop-Location
     }
     
-    # Verify service executable exists
-    $serviceExePath = Join-Path $serviceBinPath "SerialPortPoolService.exe"
-    if (-not (Test-Path $serviceExePath)) {
-        Write-Error "Service executable not found at: $serviceExePath"
-        Write-Info "Expected after building with configuration: $Configuration"
-        exit 1
-    }
+    # 5. Find built executable
+    Write-Status "Locating built executable..."
     
-    Write-Success "Service executable verified: $serviceExePath"
-    
-    # Create staging directory
-    Write-Status "Preparing installer staging area..."
-    
-    $stagingDir = Join-Path $PSScriptRoot "staging"
-    if (Test-Path $stagingDir) {
-        Remove-Item $stagingDir -Recurse -Force
-    }
-    New-Item $stagingDir -ItemType Directory -Force | Out-Null
-    
-    # Copy service files
-    $serviceFiles = @(
-        "SerialPortPoolService.exe",
-        "SerialPortPool.Core.dll",
-        "NLog.dll",
-        "NLog.Extensions.Logging.dll",
-        "NLog.config",
-        "Microsoft.Extensions.*.dll",
-        "System.IO.Ports.dll",
-        "System.Management.dll"
+    # Ensure projectPath is a string and build possible paths
+    $baseProjectPath = $projectPath.ToString()
+    $binPaths = @(
+        (Join-Path $baseProjectPath "bin\$Configuration\net9.0-windows"),
+        (Join-Path $baseProjectPath "bin\$Configuration\net8.0-windows"), 
+        (Join-Path $baseProjectPath "bin\$Configuration\net7.0-windows"),
+        (Join-Path $baseProjectPath "bin\$Configuration\net6.0-windows")
     )
     
-    foreach ($pattern in $serviceFiles) {
-        $files = Get-ChildItem $serviceBinPath -Filter $pattern -ErrorAction SilentlyContinue
-        foreach ($file in $files) {
-            Copy-Item $file.FullName $stagingDir -Force
-            Write-Verbose "Copied: $($file.Name)"
-        }
-    }
-    
-    # Create configuration directory
-    $configStagingDir = Join-Path $stagingDir "Configuration"
-    New-Item $configStagingDir -ItemType Directory -Force | Out-Null
-    
-    # Create default configuration files
-    Write-Status "Creating default configuration files..."
-    
-    # Default BIB configuration
-    $defaultBibConfig = @{
-        "Configurations" = @{
-            "BIB_001" = @{
-                "BibId" = "BIB_001"
-                "DutId" = "DUT_05"
-                "Description" = "Standard Test Configuration for BIB 001"
-                "PortSettings" = @{
-                    "BaudRate" = 115200
-                    "Parity" = "None"
-                    "DataBits" = 8
-                    "StopBits" = "One"
-                    "ReadTimeout" = 2000
-                    "WriteTimeout" = 2000
-                }
-                "PowerOnCommands" = @(
-                    @{
-                        "Command" = "ATZ`r`n"
-                        "ExpectedResponse" = "OK"
-                        "TimeoutMs" = 3000
-                        "RetryCount" = 3
-                        "Description" = "Reset device"
-                    }
-                )
-                "TestCommands" = @(
-                    @{
-                        "Command" = "AT+STATUS`r`n"
-                        "ExpectedResponse" = "STATUS_OK"
-                        "TimeoutMs" = 2000
-                        "RetryCount" = 3
-                        "Description" = "Check device status"
-                    }
-                )
-                "PowerOffCommands" = @(
-                    @{
-                        "Command" = "AT+SHUTDOWN`r`n"
-                        "ExpectedResponse" = "SHUTDOWN_OK"
-                        "TimeoutMs" = 5000
-                        "RetryCount" = 1
-                        "Description" = "Graceful shutdown"
-                    }
-                )
+    $serviceBinPath = $null
+    foreach ($binPath in $binPaths) {
+        Write-Host "  Checking: $binPath" -ForegroundColor Gray
+        if (Test-Path $binPath) {
+            $exeFiles = Get-ChildItem -Path $binPath -Filter "*.exe" -ErrorAction SilentlyContinue
+            if ($exeFiles) {
+                $serviceBinPath = $binPath
+                Write-Success "Found executable(s) in: $serviceBinPath"
+                Write-Info "  Found .exe files: $($exeFiles.Name -join ', ')"
+                break
             }
         }
-        "DefaultSettings" = @{
-            "BaudRate" = 115200
-            "Parity" = "None"
-            "DataBits" = 8
-            "StopBits" = "One"
-            "ReadTimeout" = 2000
-            "WriteTimeout" = 2000
-        }
     }
     
-    $defaultBibConfig | ConvertTo-Json -Depth 10 | Out-File (Join-Path $configStagingDir "bib-configurations.json") -Encoding UTF8
-    
-    # Default settings
-    $defaultSettings = @{
-        "ServiceSettings" = @{
-            "DiscoveryInterval" = 30
-            "LogLevel" = "Information"
-            "EnableBackgroundDiscovery" = $true
+    if (-not $serviceBinPath) {
+        Write-Error "Cannot find built executable in any expected location"
+        Write-Info "Expected locations checked:"
+        foreach ($path in $binPaths) {
+            Write-Info "  - $path (Exists: $(Test-Path $path))"
         }
-        "ClientSettings" = @{
-            "DefaultTimeout" = 2000
-            "MaxRetries" = 3
-            "EnableValidation" = $true
-        }
+        exit 1
     }
     
-    $defaultSettings | ConvertTo-Json -Depth 5 | Out-File (Join-Path $configStagingDir "default-settings.json") -Encoding UTF8
+    # 6. Create staging area
+    Write-Status "Creating staging area..."
     
-    # Create documentation directory
-    $docsStagingDir = Join-Path $stagingDir "Documentation"
-    New-Item $docsStagingDir -ItemType Directory -Force | Out-Null
+    $stagingDir = Join-Path $PSScriptRoot "staging"
+    if (Test-Path $stagingDir) { Remove-Item $stagingDir -Recurse -Force }
+    New-Item $stagingDir -ItemType Directory -Force | Out-Null
     
-    # Create basic documentation
-    $readmeContent = @"
-SerialPortPool MVP - Industrial Communication Solution
-===================================================
-
-Version: 1.0.0
-Installation Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-
-QUICK START:
------------
-1. The SerialPortPool service has been installed and started automatically
-2. Configure your BIB devices in: C:\Program Files\SerialPortPool\Configuration\bib-configurations.json
-3. Run the demo: Start Menu > SerialPortPool > SerialPortPool Demo
-4. View logs: Start Menu > SerialPortPool > View Logs
-
-CONFIGURATION:
--------------
-- Service Configuration: [Install Dir]\Configuration\
-- Log Files: C:\Logs\SerialPortPool\
-- Service Name: SerialPortPoolService
-
-SUPPORT:
---------
-For technical support and documentation, see the Documentation folder.
-
-UNINSTALL:
-----------
-Use Start Menu > SerialPortPool > Uninstall SerialPortPool
-Or use Windows "Add or Remove Programs"
-"@
+    # Copy all files from bin directory
+    Copy-Item "$serviceBinPath\*" $stagingDir -Recurse -Force
+    Write-Success "Files staged successfully"
     
-    $readmeContent | Out-File (Join-Path $docsStagingDir "README-MVP.txt") -Encoding UTF8
+    # 7. Create minimal config and docs
+    $configDir = Join-Path $stagingDir "Configuration"
+    $docsDir = Join-Path $stagingDir "Documentation"
+    New-Item $configDir -ItemType Directory -Force | Out-Null
+    New-Item $docsDir -ItemType Directory -Force | Out-Null
     
-    Write-Success "Configuration and documentation files created"
+    # Simple config file
+    @{ "ServiceSettings" = @{ "LogLevel" = "Information" } } | ConvertTo-Json | Out-File (Join-Path $configDir "settings.json") -Encoding UTF8
     
-    # Build WiX installer
-    Write-Status "Building WiX installer..."
+    # Simple readme
+    "SerialPortPool Service Installation Complete" | Out-File (Join-Path $docsDir "README.txt") -Encoding UTF8
     
-    # Create output directory
+    # 8. Build MSI
+    Write-Status "Building MSI installer..."
+    
     New-Item $OutputDir -ItemType Directory -Force | Out-Null
     
-    # WiX Compiler (candle)
-    $wixSourceFile = Join-Path $PSScriptRoot "SerialPortPool-Setup.wxs"
-    $wixObjectFile = Join-Path $PSScriptRoot "obj\SerialPortPool-Setup.wixobj"
+    $wixSource = Join-Path $PSScriptRoot "SerialPortPool-Setup.wxs"
+    $wixObject = Join-Path $PSScriptRoot "obj\SerialPortPool-Setup.wixobj"
+    $msiOutput = Join-Path $OutputDir "SerialPortPool-Setup.msi"
     
-    New-Item (Split-Path $wixObjectFile -Parent) -ItemType Directory -Force | Out-Null
+    New-Item (Split-Path $wixObject -Parent) -ItemType Directory -Force | Out-Null
     
-    $candleArgs = @(
-        $wixSourceFile
-        "-out", $wixObjectFile
-        "-dSourceDir=$stagingDir"
-        "-ext", "WixUtilExtension"
-    )
-    
-    if ($Verbose) {
-        $candleArgs += "-v"
-    }
-    
-    Write-Info "Running candle.exe..."
-    & candle.exe @candleArgs
+    # Compile
+    & candle.exe $wixSource -out $wixObject -dSourceDir=$stagingDir -ext WixUtilExtension
     if ($LASTEXITCODE -ne 0) {
-        Write-Error "WiX compilation failed with exit code: $LASTEXITCODE"
+        Write-Error "WiX compilation failed"
         exit 1
     }
     
-    Write-Success "WiX compilation completed"
-    
-    # WiX Linker (light)
-    $msiOutputFile = Join-Path $OutputDir "SerialPortPool-Setup.msi"
-    
-    $lightArgs = @(
-        $wixObjectFile
-        "-out", $msiOutputFile
-        "-ext", "WixUIExtension"
-        "-ext", "WixUtilExtension"
-        "-spdb"  # Suppress PDB file creation
-    )
-    
-    if ($Verbose) {
-        $lightArgs += "-v"
-    }
-    
-    Write-Info "Running light.exe..."
-    & light.exe @lightArgs
+    # Link
+    & light.exe $wixObject -out $msiOutput -ext WixUIExtension -ext WixUtilExtension -spdb
     if ($LASTEXITCODE -ne 0) {
-        Write-Error "WiX linking failed with exit code: $LASTEXITCODE"
+        Write-Error "WiX linking failed"
         exit 1
     }
     
-    Write-Success "MSI installer created successfully!"
+    Write-Success "MSI created successfully!"
     
-    # Verify output
-    if (Test-Path $msiOutputFile) {
-        $fileInfo = Get-Item $msiOutputFile
+    # 9. Cleanup and report
+    Remove-Item $stagingDir -Recurse -Force -ErrorAction SilentlyContinue
+    
+    if (Test-Path $msiOutput) {
+        $fileInfo = Get-Item $msiOutput
         Write-Success "MSI Package Details:"
         Write-Info "  File: $($fileInfo.Name)"
         Write-Info "  Size: $([math]::Round($fileInfo.Length / 1MB, 2)) MB"
         Write-Info "  Path: $($fileInfo.FullName)"
-        Write-Info "  Created: $($fileInfo.CreationTime)"
     }
     
-    # Cleanup staging
-    Write-Status "Cleaning up staging area..."
-    Remove-Item $stagingDir -Recurse -Force -ErrorAction SilentlyContinue
-    
     Write-Host ""
-    Write-Success "🎉 MSI Installer build completed successfully!"
-    Write-Info "📦 Installer: $msiOutputFile"
-    Write-Info "🚀 Ready for client deployment!"
+    Write-Success "Build completed successfully!"
+    Write-Info "Installer: $msiOutput"
     
 } catch {
     Write-Error "Build failed: $($_.Exception.Message)"
-    Write-Host "Stack trace:" -ForegroundColor Yellow
-    Write-Host $_.ScriptStackTrace -ForegroundColor Yellow
+    Write-Host "Stack trace:" -ForegroundColor Red
+    Write-Host $_.ScriptStackTrace -ForegroundColor Red
     exit 1
 }
