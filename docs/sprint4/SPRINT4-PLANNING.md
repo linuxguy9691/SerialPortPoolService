@@ -1,614 +1,264 @@
-# Sprint 5 Planning - Industrial Business Logic & Communication Sequences
+# Sprint 4 Planning - MVP Industrial Communication
 
-![Sprint](https://img.shields.io/badge/Sprint%205-📋%20PLANNED-blue.svg)
-![Focus](https://img.shields.io/badge/Focus-EEPROM%20%2B%20Sequences-purple.svg)
+![Sprint](https://img.shields.io/badge/Sprint%204-🚀%20MVP%20READY-brightgreen.svg)
+![Focus](https://img.shields.io/badge/Focus-Client%20MVP%20Demo-purple.svg)
 ![Duration](https://img.shields.io/badge/Duration-4%20weeks-green.svg)
-![Foundation](https://img.shields.io/badge/Foundation-Sprint%204%20Complete-gold.svg)
+![Foundation](https://img.shields.io/badge/Foundation-Sprint%203%20Excellence-gold.svg)
 
-## 🎯 **Objectif Sprint 5 - Industrial Business Logic Layer**
+## 🎯 **Objectif Sprint 4 - MVP Client Ready**
 
-**OBJECTIF :** Implémenter la **couche business logic industrielle** complète en s'appuyant sur l'excellente foundation technique des Sprints 3-4.
+**OBJECTIF MVP :** Livrer un **package d'installation complet** avec **communication série 3-phases** configurable par JSON pour démonstration client concrete avec hardware réel.
 
-**FOUNDATION DISPONIBLE :**
-- ✅ **Service Windows** + Enhanced Discovery + Pool Management (Sprint 3)
-- ✅ **Device Grouping** + Multi-port awareness (Sprint 3)  
-- ✅ **Bit-Bang Communication** + Power signals (Sprint 4)
-- ✅ **Background Monitoring** + Service integration (Sprint 4)
+**CLIENT VALUE :**
+- 📦 **Installation One-Click** : MSI package professionnel
+- ⚙️ **Configuration JSON** : BIB_ID, DUT_ID, paramètres série
+- 🔄 **Communication 3-Phases** : PowerOn → Test → PowerOff  
+- 📋 **Question/Réponse** : Échanges série avec logs structurés
+- 🎬 **Demo Hardware** : Validation avec équipement réel
 
-**BUSINESS VALUE SPRINT 5 :**
-- 📋 **Industrial EEPROM Parsing** : Extract BIB ID, DUT#, UART#, Slot Position
-- 🔄 **Communication Sequence Management** : Sequences spécifiques par BIB
-- 🏭 **Complete Industrial Workflow** : End-to-end automation ready
+**FOUNDATION DISPONIBLE (Sprint 3 ✅) :**
+- ✅ **Service Windows** + Enhanced Discovery + Pool Management thread-safe
+- ✅ **Device Grouping** + Multi-port awareness + FTDI intelligence
+- ✅ **Background Services** + Dependency injection complète
+- ✅ **NLog Infrastructure** + 65+ tests + Enterprise architecture
 
 ---
 
-## 📋 **Scope Sprint 5 - Business Logic Focused**
+## 📋 **Scope Sprint 4 - MVP Focused**
 
 ### **✅ CORE DELIVERABLES**
-- 🔍 **Industrial EEPROM Parsing** : BIB/DUT/UART/Slot extraction
-- 📋 **Communication Sequence Engine** : Init → Polling → Shutdown sequences
-- 🏭 **BIB-to-Sequence Mapping** : Configuration-driven sequences
-- 🔧 **Enhanced Pool Integration** : Industrial allocation workflow
-- 🎬 **Complete Industrial Demo** : End-to-end workflow demonstration
+- 📦 **MSI Installer Package** : Installation/désinstallation professionnelle
+- ⚙️ **JSON Configuration System** : Paramètres BIB/DUT/série par device
+- 🔄 **Serial Communication Engine** : 3-phases workflow automation
+- 📋 **Command/Response Framework** : Question/réponse avec timeouts
+- 📊 **Communication Logging** : Logs structurés des échanges série
+- 🎬 **Complete MVP Demo** : Validation end-to-end avec hardware
 
-### **🎯 BUSINESS ALIGNMENT**
-Addresses core client requirements :
-- ✅ *"Get information about Driver Board via USB2Serial"*
-- ✅ *"Extract BIB ID, DUT#, UART# from USB2Serial"*  
-- ✅ *"List of communication sequences specific to BIB"*
-- ✅ *"Power ON/OFF signals for UART polling"* (Sprint 4 ✅)
-
----
-
-## 🏗️ **Architecture Sprint 5 - Business Logic Layer**
-
-```
-SerialPortPool.Core/                           ← Enhanced Core Library
-├── Models/
-│   ├── IndustrialInfo.cs                     ← NEW: BIB/DUT/UART/Slot data
-│   ├── CommunicationSequence.cs              ← NEW: Init/Polling/Shutdown
-│   ├── CommandStep.cs                        ← NEW: Individual command
-│   ├── SequenceConfiguration.cs              ← NEW: BIB-to-sequence mapping
-│   └── IndustrialWorkflow.cs                 ← NEW: Complete workflow state
-├── Services/
-│   ├── IndustrialEepromParser.cs             ← NEW: EEPROM business parsing
-│   ├── SequenceManager.cs                    ← NEW: Sequence execution engine
-│   ├── IndustrialPoolManager.cs              ← NEW: Industrial allocation
-│   ├── WorkflowOrchestrator.cs               ← NEW: Complete workflow
-│   └── SequenceConfigurationLoader.cs        ← NEW: Configuration management
-└── Interfaces/
-    ├── IIndustrialEepromParser.cs            ← NEW: EEPROM parsing contract
-    ├── ISequenceManager.cs                   ← NEW: Sequence execution
-    └── IIndustrialPoolManager.cs             ← NEW: Industrial pool contract
-
-SerialPortPoolService/                          ← Enhanced Windows Service
-├── Services/
-│   ├── IndustrialBackgroundService.cs        ← NEW: Industrial monitoring
-│   ├── SequenceExecutionService.cs           ← NEW: Background execution
-│   └── BitBangBackgroundService.cs           ← EXISTING: From Sprint 4
-├── Configuration/
-│   ├── IndustrialSettings.cs                 ← NEW: Industrial configuration
-│   └── SequenceSettings.cs                   ← NEW: Sequence configuration
-└── Controllers/ (Optional)
-    └── IndustrialController.cs               ← OPTIONAL: Simple API if needed
-
-tests/SerialPortPool.Core.Tests/               ← Enhanced Test Suite
-├── Services/
-│   ├── IndustrialEepromParserTests.cs        ← NEW: 10 tests
-│   ├── SequenceManagerTests.cs               ← NEW: 12 tests  
-│   ├── IndustrialPoolManagerTests.cs         ← NEW: 8 tests
-│   └── WorkflowOrchestratorTests.cs          ← NEW: 10 tests
-└── Integration/
-    └── IndustrialWorkflowIntegrationTests.cs ← NEW: 12 tests end-to-end
-```
+### **🎯 CLIENT REQUIREMENTS ADDRESSED**
+- ✅ *"Package d'installation et désinstallation"*
+- ✅ *"Configuration JSON avec BIB_ID, DUT_ID, paramètres port"*
+- ✅ *"Échanges 3-phases : PowerOn → Test → PowerOff"*
+- ✅ *"Question/réponse sur port série avec logs"*
 
 ---
 
-## 📅 **Sprint 5 Planning - 4 Semaines Business Logic**
+## 📅 **Sprint 4 Planning - 4 Semaines MVP**
 
-### **🔹 SEMAINE 1: Industrial EEPROM Parsing (5 jours)**
-**Objectif :** Extract BIB ID, DUT#, UART#, Slot Position depuis EEPROM
+### **🔹 SEMAINE 1: Installation Package + Configuration Foundation (5 jours)**
 
-#### **Jour 1-2: Industrial Models**
-```csharp
-// SerialPortPool.Core/Models/IndustrialInfo.cs
-public class IndustrialInfo
-{
-    public string BibId { get; set; } = "";           // "BIB_001"
-    public string DutNumber { get; set; } = "";       // "DUT_05"  
-    public string UartNumber { get; set; } = "";      // "UART_2"
-    public string SlotPosition { get; set; } = "";    // "Slot_01"
-    public string OvenId { get; set; } = "";          // "Oven_A"
-    public string TestBoardType { get; set; } = "";   // "TestBoard_v2"
-    public Dictionary<string, string> CustomProperties { get; set; } = new();
-    
-    /// <summary>
-    /// Parse industrial info from EEPROM data
-    /// </summary>
-    public static IndustrialInfo ParseFromEeprom(Dictionary<string, string> eepromData)
-    {
-        return new IndustrialInfo
-        {
-            BibId = ExtractValue(eepromData, "BibId", "BIB_ID", "BIB"),
-            DutNumber = ExtractValue(eepromData, "DutNumber", "DUT_NUMBER", "DUT"),
-            UartNumber = ExtractValue(eepromData, "UartNumber", "UART_NUMBER", "UART"),
-            SlotPosition = ExtractValue(eepromData, "SlotPosition", "SLOT_POSITION", "SLOT"),
-            OvenId = ExtractValue(eepromData, "OvenId", "OVEN_ID", "OVEN"),
-            TestBoardType = ExtractValue(eepromData, "TestBoardType", "BOARD_TYPE", "TYPE")
-        };
-    }
-    
-    private static string ExtractValue(Dictionary<string, string> data, params string[] keys)
-    {
-        foreach (var key in keys)
-        {
-            if (data.TryGetValue(key, out var value) && !string.IsNullOrEmpty(value))
-                return value;
-        }
-        return "Unknown";
-    }
-    
-    /// <summary>
-    /// Generate unique identifier for this industrial configuration
-    /// </summary>
-    public string GetUniqueId() => $"{BibId}_{DutNumber}_{UartNumber}";
-    
-    /// <summary>
-    /// Check if this industrial info is valid for automation
-    /// </summary>
-    public bool IsValidForAutomation => 
-        !string.IsNullOrEmpty(BibId) && BibId != "Unknown" &&
-        !string.IsNullOrEmpty(DutNumber) && DutNumber != "Unknown";
-}
+#### **Jour 1-2: MSI Installer Package**
+```powershell
+# SerialPortPoolService/installer/SerialPortPool-Setup.wxs (WiX)
+# Professional MSI installer with:
+# - Service installation/removal
+# - Configuration file deployment  
+# - Start menu shortcuts
+# - Uninstall capability
+# - Version management
 ```
 
-#### **Jour 3-4: EEPROM Parser Service**
+**Deliverables:**
+- MSI installer (`SerialPortPool-Setup.msi`)
+- Installation scripts améliorés
+- Uninstaller integration
+- Version management
+
+#### **Jour 3-4: JSON Configuration System**
 ```csharp
-// SerialPortPool.Core/Services/IndustrialEepromParser.cs
-public class IndustrialEepromParser : IIndustrialEepromParser
+// SerialPortPool.Core/Models/BibConfiguration.cs
+public class BibConfiguration
 {
-    private readonly IFtdiDeviceReader _ftdiReader;
-    private readonly ILogger<IndustrialEepromParser> _logger;
-    
-    /// <summary>
-    /// Extract industrial information from allocated port
-    /// </summary>
-    public async Task<IndustrialInfo?> ParseIndustrialInfoAsync(PortAllocation allocation)
-    {
-        try
-        {
-            _logger.LogDebug("Parsing industrial info for port {PortName}", allocation.PortName);
-            
-            // Read EEPROM data using existing Sprint 2 functionality
-            var eepromData = await _ftdiReader.ReadEepromDataAsync(allocation.PortName);
-            
-            if (!eepromData.Any())
-            {
-                _logger.LogWarning("No EEPROM data found for port {PortName}", allocation.PortName);
-                return null;
-            }
-            
-            // Parse using business logic
-            var industrialInfo = IndustrialInfo.ParseFromEeprom(eepromData);
-            
-            _logger.LogInformation("Industrial info parsed: {UniqueId} for port {PortName}", 
-                industrialInfo.GetUniqueId(), allocation.PortName);
-                
-            return industrialInfo;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error parsing industrial info for port {PortName}", allocation.PortName);
-            return null;
-        }
-    }
-    
-    /// <summary>
-    /// Find devices by industrial criteria
-    /// </summary>
-    public async Task<IEnumerable<(DeviceGroup device, IndustrialInfo info)>> FindDevicesByIndustrialCriteriaAsync(
-        string? bibId = null, 
-        string? ovenId = null, 
-        string? slotPosition = null)
-    {
-        var results = new List<(DeviceGroup, IndustrialInfo)>();
-        
-        // Use existing Sprint 3 device discovery
-        var deviceGroups = await _discovery.DiscoverDeviceGroupsAsync();
-        
-        foreach (var device in deviceGroups.Where(d => d.IsFtdiDevice))
-        {
-            try
-            {
-                var firstPort = device.Ports.FirstOrDefault();
-                if (firstPort != null)
-                {
-                    var eepromData = await _ftdiReader.ReadEepromDataAsync(firstPort.PortName);
-                    var industrialInfo = IndustrialInfo.ParseFromEeprom(eepromData);
-                    
-                    // Apply filters
-                    if (MatchesCriteria(industrialInfo, bibId, ovenId, slotPosition))
-                    {
-                        results.Add((device, industrialInfo));
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not parse industrial info for device {DeviceId}", device.DeviceId);
-            }
-        }
-        
-        return results;
-    }
-}
-```
-
-#### **Jour 5: Integration avec Pool Management**
-```csharp
-// Extension de SerialPortPool.cs avec industrial awareness
-public class SerialPortPool : ISerialPortPool
-{
-    // Existing methods...
-    
-    /// <summary>
-    /// Allocate port with industrial requirements
-    /// </summary>
-    public async Task<(PortAllocation? allocation, IndustrialInfo? industrialInfo)> 
-        AllocateIndustrialPortAsync(
-            string? requiredBibId = null,
-            string? requiredOvenId = null,
-            string? clientId = null)
-    {
-        // Use existing allocation with client config (FT4232H only)
-        var clientConfig = PortValidationConfiguration.CreateClientDefault();
-        var allocation = await AllocatePortAsync(clientConfig, clientId);
-        
-        if (allocation == null)
-            return (null, null);
-            
-        // Parse industrial info
-        var industrialInfo = await _industrialParser.ParseIndustrialInfoAsync(allocation);
-        
-        // Validate industrial requirements
-        if (!string.IsNullOrEmpty(requiredBibId) && 
-            industrialInfo?.BibId != requiredBibId)
-        {
-            // Release and try next port
-            await ReleasePortAsync(allocation.PortName, allocation.SessionId);
-            return await AllocateIndustrialPortAsync(requiredBibId, requiredOvenId, clientId);
-        }
-        
-        return (allocation, industrialInfo);
-    }
-}
-```
-
-**Deliverable Semaine 1 :** ✅ Industrial EEPROM parsing operational
-
----
-
-### **🔹 SEMAINE 2: Communication Sequence Engine (5 jours)**
-**Objectif :** Business logic sequences (Init → Polling → Shutdown)
-
-#### **Jour 1-2: Sequence Models**
-```csharp
-// SerialPortPool.Core/Models/CommunicationSequence.cs
-public class CommunicationSequence
-{
-    public string SequenceId { get; set; } = "";       // "StandardTest_v1"
-    public string BibId { get; set; } = "";            // "BIB_001" 
-    public string Description { get; set; } = "";       // "Standard test sequence"
-    
-    // Serial port configuration
-    public SerialConfiguration PortConfig { get; set; } = new()
-    {
-        BaudRate = 115200,
-        Parity = Parity.None,
-        DataBits = 8,
-        StopBits = StopBits.One,
-        ReadTimeout = 2000,
-        WriteTimeout = 2000
-    };
-    
-    // Sequence phases
-    public List<CommandStep> InitializationCommands { get; set; } = new();
-    public List<CommandStep> PollingCommands { get; set; } = new();
-    public List<CommandStep> ShutdownCommands { get; set; } = new();
-    
-    // Timing configuration
-    public TimeSpan PollingInterval { get; set; } = TimeSpan.FromSeconds(1);
-    public TimeSpan MaxExecutionTime { get; set; } = TimeSpan.FromMinutes(30);
-    public int MaxPollingCycles { get; set; } = 1000;
+    public string BibId { get; set; } = "";
+    public string DutId { get; set; } = "";
+    public SerialPortSettings PortSettings { get; set; } = new();
+    public List<CommandSequence> PowerOnCommands { get; set; } = new();
+    public List<CommandSequence> TestCommands { get; set; } = new();
+    public List<CommandSequence> PowerOffCommands { get; set; } = new();
 }
 
-// SerialPortPool.Core/Models/CommandStep.cs
-public class CommandStep
+// SerialPortPool.Core/Models/SerialPortSettings.cs
+public class SerialPortSettings
 {
-    public string StepId { get; set; } = "";            // "INIT_01"
-    public string Command { get; set; } = "";           // "AT+STATUS\r\n"
-    public string? ExpectedResponse { get; set; }       // "OK"
-    public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(2);
+    public int BaudRate { get; set; } = 115200;
+    public Parity Parity { get; set; } = Parity.None;
+    public int DataBits { get; set; } = 8;
+    public StopBits StopBits { get; set; } = StopBits.One;
+    public int ReadTimeout { get; set; } = 2000;
+    public int WriteTimeout { get; set; } = 2000;
+}
+
+// SerialPortPool.Core/Models/CommandSequence.cs
+public class CommandSequence
+{
+    public string Command { get; set; } = "";
+    public string? ExpectedResponse { get; set; }
+    public int TimeoutMs { get; set; } = 2000;
     public int RetryCount { get; set; } = 3;
-    public TimeSpan DelayAfter { get; set; } = TimeSpan.FromMilliseconds(100);
-    public bool IsOptional { get; set; } = false;
     public string Description { get; set; } = "";
-    
-    /// <summary>
-    /// Validate if response matches expected
-    /// </summary>
-    public bool ValidateResponse(string response)
-    {
-        if (string.IsNullOrEmpty(ExpectedResponse))
-            return true; // No validation required
-            
-        return response.Contains(ExpectedResponse, StringComparison.OrdinalIgnoreCase);
-    }
-}
-
-// SerialPortPool.Core/Models/SequenceConfiguration.cs
-public class SequenceConfiguration
-{
-    public Dictionary<string, CommunicationSequence> BibSequences { get; set; } = new();
-    public CommunicationSequence DefaultSequence { get; set; } = new();
-    
-    /// <summary>
-    /// Get sequence for specific BIB ID
-    /// </summary>
-    public CommunicationSequence GetSequenceForBib(string bibId)
-    {
-        return BibSequences.TryGetValue(bibId, out var sequence) ? sequence : DefaultSequence;
-    }
-    
-    /// <summary>
-    /// Load configuration from JSON file
-    /// </summary>
-    public static SequenceConfiguration LoadFromFile(string filePath)
-    {
-        var json = File.ReadAllText(filePath);
-        return JsonSerializer.Deserialize<SequenceConfiguration>(json) ?? new();
-    }
 }
 ```
 
-#### **Jour 3-4: Sequence Manager**
+#### **Jour 5: Configuration Loader Service**
 ```csharp
-// SerialPortPool.Core/Services/SequenceManager.cs
-public class SequenceManager : ISequenceManager
+// SerialPortPool.Core/Services/BibConfigurationLoader.cs
+public class BibConfigurationLoader
 {
-    private readonly ILogger<SequenceManager> _logger;
-    private readonly SequenceConfiguration _configuration;
+    public Dictionary<string, BibConfiguration> LoadConfigurations(string configPath)
+    public BibConfiguration? GetConfigurationForBib(string bibId)
+    public bool ValidateConfiguration(BibConfiguration config)
+}
+```
+
+**Deliverable Semaine 1 :** ✅ Installation + Configuration Foundation
+
+---
+
+### **🔹 SEMAINE 2: Serial Communication Engine (5 jours)**
+
+#### **Jour 1-2: Communication Service Foundation**
+```csharp
+// SerialPortPool.Core/Services/SerialCommunicationService.cs
+public class SerialCommunicationService
+{
+    private readonly ILogger<SerialCommunicationService> _logger;
+    private readonly BibConfigurationLoader _configLoader;
     
     /// <summary>
-    /// Execute complete communication sequence
+    /// Execute 3-phase communication workflow
     /// </summary>
-    public async Task<SequenceExecutionResult> ExecuteSequenceAsync(
-        PortAllocation allocation, 
-        IndustrialInfo industrialInfo,
+    public async Task<WorkflowResult> ExecuteCompleteWorkflowAsync(
+        string portName, 
+        string bibId,
         CancellationToken cancellationToken = default)
     {
-        var sequence = _configuration.GetSequenceForBib(industrialInfo.BibId);
-        var result = new SequenceExecutionResult { StartTime = DateTime.Now };
+        var config = _configLoader.GetConfigurationForBib(bibId);
+        var result = new WorkflowResult { BibId = bibId, PortName = portName };
         
-        SerialPort? serialPort = null;
+        // Phase 1: PowerOn
+        result.PowerOnResult = await ExecutePowerOnSequenceAsync(portName, config, cancellationToken);
         
-        try
+        // Phase 2: Test (only if PowerOn successful)
+        if (result.PowerOnResult.Success)
         {
-            _logger.LogInformation("Starting sequence {SequenceId} for {BibId} on port {PortName}", 
-                sequence.SequenceId, industrialInfo.BibId, allocation.PortName);
-                
-            // Configure and open serial port
-            serialPort = new SerialPort(allocation.PortName);
-            ConfigureSerialPort(serialPort, sequence.PortConfig);
-            serialPort.Open();
-            
-            // Phase 1: Initialization
-            result.InitializationResult = await ExecuteCommandPhaseAsync(
-                serialPort, sequence.InitializationCommands, "Initialization", cancellationToken);
-                
-            if (!result.InitializationResult.Success)
-            {
-                result.Success = false;
-                result.ErrorMessage = "Initialization phase failed";
-                return result;
-            }
-            
-            // Phase 2: Polling Loop
-            result.PollingResult = await ExecutePollingPhaseAsync(
-                serialPort, sequence, cancellationToken);
-                
-            // Phase 3: Shutdown (always execute)
-            result.ShutdownResult = await ExecuteCommandPhaseAsync(
-                serialPort, sequence.ShutdownCommands, "Shutdown", cancellationToken);
-                
-            result.Success = result.PollingResult.Success;
-            result.EndTime = DateTime.Now;
-            
-            return result;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error executing sequence for {BibId}", industrialInfo.BibId);
-            result.Success = false;
-            result.ErrorMessage = ex.Message;
-            result.EndTime = DateTime.Now;
-            return result;
-        }
-        finally
-        {
-            serialPort?.Dispose();
-        }
-    }
-    
-    private async Task<PhaseResult> ExecutePollingPhaseAsync(
-        SerialPort serialPort, 
-        CommunicationSequence sequence,
-        CancellationToken cancellationToken)
-    {
-        var result = new PhaseResult { PhaseName = "Polling" };
-        var cycleCount = 0;
-        var startTime = DateTime.Now;
-        
-        while (!cancellationToken.IsCancellationRequested && 
-               cycleCount < sequence.MaxPollingCycles &&
-               DateTime.Now - startTime < sequence.MaxExecutionTime)
-        {
-            var cycleResult = await ExecuteCommandPhaseAsync(
-                serialPort, sequence.PollingCommands, $"Polling-{cycleCount}", cancellationToken);
-                
-            result.StepResults.AddRange(cycleResult.StepResults);
-            
-            if (!cycleResult.Success && !sequence.PollingCommands.All(c => c.IsOptional))
-            {
-                result.Success = false;
-                result.ErrorMessage = $"Polling cycle {cycleCount} failed";
-                break;
-            }
-            
-            cycleCount++;
-            await Task.Delay(sequence.PollingInterval, cancellationToken);
+            result.TestResult = await ExecuteTestSequenceAsync(portName, config, cancellationToken);
         }
         
-        result.Success = !cancellationToken.IsCancellationRequested;
+        // Phase 3: PowerOff (always execute)
+        result.PowerOffResult = await ExecutePowerOffSequenceAsync(portName, config, cancellationToken);
+        
         return result;
     }
 }
 ```
 
-#### **Jour 5: Configuration Management**
+#### **Jour 3-4: Command/Response Framework**
 ```csharp
-// Default sequence configurations
-// SerialPortPoolService/Configuration/default-sequences.json
+// SerialPortPool.Core/Services/SerialCommandExecutor.cs
+public class SerialCommandExecutor
 {
-  "BibSequences": {
-    "BIB_001": {
-      "SequenceId": "BIB_001_Standard",
-      "BibId": "BIB_001",
-      "Description": "Standard test sequence for BIB 001",
-      "PortConfig": {
-        "BaudRate": 115200,
-        "Parity": "None",
-        "DataBits": 8,
-        "StopBits": "One"
-      },
-      "InitializationCommands": [
+    /// <summary>
+    /// Send command and wait for response with timeout
+    /// </summary>
+    public async Task<CommandResult> ExecuteCommandAsync(
+        SerialPort serialPort,
+        CommandSequence command,
+        CancellationToken cancellationToken = default)
+    {
+        var result = new CommandResult 
+        { 
+            Command = command.Command,
+            StartTime = DateTime.Now 
+        };
+        
+        try
         {
-          "StepId": "INIT_01",
-          "Command": "ATZ\r\n",
-          "ExpectedResponse": "OK",
-          "Timeout": "00:00:02",
-          "Description": "Reset device"
-        },
-        {
-          "StepId": "INIT_02", 
-          "Command": "AT+ECHO=0\r\n",
-          "ExpectedResponse": "OK",
-          "Description": "Disable echo"
+            // Log outgoing command
+            _logger.LogInformation("📤 Sending: {Command}", command.Command.Trim());
+            
+            // Send command
+            await serialPort.WriteAsync(Encoding.UTF8.GetBytes(command.Command), cancellationToken);
+            
+            // Wait for response with timeout
+            var response = await ReadResponseAsync(serialPort, command.TimeoutMs, cancellationToken);
+            
+            // Log incoming response
+            _logger.LogInformation("📥 Received: {Response}", response?.Trim() ?? "NO_RESPONSE");
+            
+            // Validate response
+            result.Response = response;
+            result.Success = ValidateResponse(response, command.ExpectedResponse);
+            result.EndTime = DateTime.Now;
+            
+            return result;
         }
-      ],
-      "PollingCommands": [
+        catch (Exception ex)
         {
-          "StepId": "POLL_01",
-          "Command": "AT+STATUS\r\n",
-          "ExpectedResponse": "STATUS",
-          "Description": "Check device status"
+            _logger.LogError(ex, "❌ Command failed: {Command}", command.Command);
+            result.Success = false;
+            result.ErrorMessage = ex.Message;
+            result.EndTime = DateTime.Now;
+            return result;
         }
-      ],
-      "ShutdownCommands": [
-        {
-          "StepId": "SHUT_01",
-          "Command": "AT+DISCONNECT\r\n",
-          "ExpectedResponse": "OK",
-          "Description": "Graceful disconnect"
-        }
-      ],
-      "PollingInterval": "00:00:01",
-      "MaxExecutionTime": "00:30:00"
     }
-  },
-  "DefaultSequence": {
-    "SequenceId": "Default",
-    "BibId": "DEFAULT",
-    "Description": "Default sequence for unknown BIBs"
-  }
 }
 ```
 
-**Deliverable Semaine 2 :** ✅ Communication sequence engine operational
+#### **Jour 5: Integration Testing**
+```csharp
+// tests/SerialPortPool.Core.Tests/Services/SerialCommunicationTests.cs
+// 8 tests pour communication engine
+[Fact] ExecuteCompleteWorkflow_WithValidConfig_CompletesAllPhases()
+[Fact] ExecuteCommandAsync_WithResponse_ReturnsSuccess()
+[Fact] ExecuteCommandAsync_WithTimeout_ReturnsFailure()
+[Fact] ExecutePowerOnSequence_WithMultipleCommands_ExecutesInOrder()
+```
+
+**Deliverable Semaine 2 :** ✅ Serial Communication Engine
 
 ---
 
-### **🔹 SEMAINE 3: Complete Industrial Workflow (5 jours)**
-**Objectif :** End-to-end industrial automation workflow
+### **🔹 SEMAINE 3: 3-Phase Workflow + Logging (5 jours)**
 
-#### **Jour 1-2: Workflow Orchestrator**
+#### **Jour 1-2: Workflow Orchestration**
 ```csharp
-// SerialPortPool.Core/Services/WorkflowOrchestrator.cs
-public class WorkflowOrchestrator
+// SerialPortPool.Core/Services/IndustrialWorkflowOrchestrator.cs
+public class IndustrialWorkflowOrchestrator
 {
-    private readonly IIndustrialPoolManager _poolManager;
-    private readonly ISequenceManager _sequenceManager;
-    private readonly IBitBangService _bitBangService; // From Sprint 4
-    private readonly ILogger<WorkflowOrchestrator> _logger;
+    private readonly ISerialPortPool _pool;
+    private readonly SerialCommunicationService _communicationService;
     
     /// <summary>
-    /// Execute complete industrial workflow for a BIB
+    /// Execute complete industrial workflow with pool management
     /// </summary>
     public async Task<IndustrialWorkflowResult> ExecuteIndustrialWorkflowAsync(
         string bibId,
         string clientId = "IndustrialWorkflow",
         CancellationToken cancellationToken = default)
     {
-        var workflowResult = new IndustrialWorkflowResult 
-        { 
-            BibId = bibId,
-            StartTime = DateTime.Now 
-        };
+        var workflowResult = new IndustrialWorkflowResult { BibId = bibId };
         
         try
         {
-            _logger.LogInformation("Starting industrial workflow for BIB {BibId}", bibId);
-            
-            // Step 1: Allocate industrial port
-            var (allocation, industrialInfo) = await _poolManager
-                .AllocateIndustrialPortAsync(requiredBibId: bibId, clientId: clientId);
-                
-            if (allocation == null || industrialInfo == null)
+            // Step 1: Allocate port from pool
+            var allocation = await _pool.AllocatePortAsync(clientId: clientId);
+            if (allocation == null)
             {
                 workflowResult.Success = false;
-                workflowResult.ErrorMessage = $"Could not allocate port for BIB {bibId}";
+                workflowResult.ErrorMessage = $"No available ports for BIB {bibId}";
                 return workflowResult;
             }
             
-            workflowResult.Allocation = allocation;
-            workflowResult.IndustrialInfo = industrialInfo;
+            workflowResult.AllocatedPort = allocation.PortName;
             
-            // Step 2: Send PowerOn signal (Sprint 4 bit-bang)
-            var deviceGroup = await FindDeviceGroupForPort(allocation.PortName);
-            if (deviceGroup != null)
-            {
-                await _bitBangService.SendPowerSignalAsync(
-                    deviceGroup.SerialNumber, PowerSignal.PowerOn);
-                workflowResult.PowerSignalsSent.Add("PowerOn");
-            }
-            
-            // Step 3: Execute communication sequence
-            workflowResult.SequenceResult = await _sequenceManager
-                .ExecuteSequenceAsync(allocation, industrialInfo, cancellationToken);
+            // Step 2: Execute communication workflow
+            var commResult = await _communicationService.ExecuteCompleteWorkflowAsync(
+                allocation.PortName, bibId, cancellationToken);
                 
-            // Step 4: Send TestStart signal
-            if (workflowResult.SequenceResult.InitializationResult.Success && deviceGroup != null)
-            {
-                await _bitBangService.SendPowerSignalAsync(
-                    deviceGroup.SerialNumber, PowerSignal.TestStart);
-                workflowResult.PowerSignalsSent.Add("TestStart");
-            }
+            workflowResult.CommunicationResult = commResult;
+            workflowResult.Success = commResult.Success;
             
-            // Step 5: Wait for sequence completion or cancellation
-            // (Sequence manager handles the polling loop)
-            
-            // Step 6: Send TestStop signal
-            if (deviceGroup != null)
-            {
-                await _bitBangService.SendPowerSignalAsync(
-                    deviceGroup.SerialNumber, PowerSignal.TestStop);
-                workflowResult.PowerSignalsSent.Add("TestStop");
-            }
-            
-            // Step 7: Send PowerOff signal
-            if (deviceGroup != null)
-            {
-                await _bitBangService.SendPowerSignalAsync(
-                    deviceGroup.SerialNumber, PowerSignal.PowerOff);
-                workflowResult.PowerSignalsSent.Add("PowerOff");
-            }
-            
-            // Step 8: Release port
-            await _poolManager.ReleasePortAsync(allocation.PortName, allocation.SessionId);
-            workflowResult.PortReleased = true;
-            
-            workflowResult.Success = workflowResult.SequenceResult.Success;
-            workflowResult.EndTime = DateTime.Now;
+            // Step 3: Release port
+            await _pool.ReleasePortAsync(allocation.PortName, allocation.SessionId);
             
             return workflowResult;
         }
@@ -617,243 +267,391 @@ public class WorkflowOrchestrator
             _logger.LogError(ex, "Error in industrial workflow for BIB {BibId}", bibId);
             workflowResult.Success = false;
             workflowResult.ErrorMessage = ex.Message;
-            workflowResult.EndTime = DateTime.Now;
             return workflowResult;
         }
     }
-    
-    /// <summary>
-    /// Execute workflows for multiple BIBs concurrently
-    /// </summary>
-    public async Task<List<IndustrialWorkflowResult>> ExecuteMultipleBibWorkflowsAsync(
-        IEnumerable<string> bibIds,
-        int maxConcurrency = 3,
-        CancellationToken cancellationToken = default)
-    {
-        var semaphore = new SemaphoreSlim(maxConcurrency, maxConcurrency);
-        var tasks = bibIds.Select(async bibId =>
-        {
-            await semaphore.WaitAsync(cancellationToken);
-            try
-            {
-                return await ExecuteIndustrialWorkflowAsync(bibId, 
-                    $"MultiWorkflow-{bibId}", cancellationToken);
-            }
-            finally
-            {
-                semaphore.Release();
-            }
-        });
-        
-        return (await Task.WhenAll(tasks)).ToList();
-    }
 }
 ```
 
-#### **Jour 3-4: Service Integration**
+#### **Jour 3-4: Enhanced Communication Logging**
 ```csharp
-// SerialPortPoolService/Services/IndustrialBackgroundService.cs
-public class IndustrialBackgroundService : BackgroundService
+// Enhanced NLog configuration for communication logs
+// SerialPortPoolService/NLog.config (updated)
+<target xsi:type="File"
+        name="communicationTarget"
+        fileName="C:\Logs\SerialPortPool\communication-${shortdate}.log"
+        layout="${longdate} [${level}] ${logger} | ${message} ${exception}"
+        archiveEvery="Day" />
+
+// Structured logging for serial communication
+// SerialPortPool.Core/Services/CommunicationLogger.cs
+public class CommunicationLogger
 {
-    private readonly WorkflowOrchestrator _orchestrator;
-    private readonly ILogger<IndustrialBackgroundService> _logger;
-    private readonly IndustrialSettings _settings;
-    
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        _logger.LogInformation("🏭 Starting Industrial Background Service...");
-        
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                // Check for scheduled workflows
-                await ProcessScheduledWorkflowsAsync(stoppingToken);
-                
-                // Monitor ongoing workflows
-                await MonitorActiveWorkflowsAsync();
-                
-                // Cleanup completed workflows
-                await CleanupCompletedWorkflowsAsync();
-                
-                await Task.Delay(_settings.MonitoringInterval, stoppingToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in industrial background service");
-            }
-        }
-    }
+    public void LogCommandSent(string portName, string bibId, string command)
+    public void LogResponseReceived(string portName, string bibId, string response, double durationMs)
+    public void LogWorkflowStarted(string bibId, string portName)
+    public void LogWorkflowCompleted(string bibId, bool success, double totalDurationMs)
 }
-
-// SerialPortPoolService/Program.cs - Enhanced DI
-services.AddSingleton<IndustrialSettings>();
-services.AddScoped<IIndustrialEepromParser, IndustrialEepromParser>();
-services.AddScoped<ISequenceManager, SequenceManager>();
-services.AddScoped<IIndustrialPoolManager, IndustrialPoolManager>();
-services.AddScoped<WorkflowOrchestrator>();
-services.AddHostedService<IndustrialBackgroundService>();
-
-// Load sequence configuration
-var sequenceConfig = SequenceConfiguration.LoadFromFile("Configuration/sequences.json");
-services.AddSingleton(sequenceConfig);
 ```
 
-#### **Jour 5: Complete Integration Testing**
-```csharp
-// tests/SerialPortPool.Core.Tests/Integration/IndustrialWorkflowIntegrationTests.cs
-[Fact] EndToEnd_IndustrialWorkflow_BIB001_CompleteSuccess()
-[Fact] EndToEnd_MultipleWorkflows_ConcurrentExecution()
-[Fact] EndToEnd_WorkflowWithBitBang_PowerSignalsIntegrated()
-[Fact] EndToEnd_ErrorRecovery_GracefulFailure()
+#### **Jour 5: Default Configuration Setup**
+```json
+// SerialPortPoolService/Configuration/bib-configurations.json
+{
+  "Configurations": {
+    "BIB_001": {
+      "BibId": "BIB_001",
+      "DutId": "DUT_05",
+      "Description": "Standard Test Configuration for BIB 001",
+      "PortSettings": {
+        "BaudRate": 115200,
+        "Parity": "None",
+        "DataBits": 8,
+        "StopBits": "One",
+        "ReadTimeout": 2000,
+        "WriteTimeout": 2000
+      },
+      "PowerOnCommands": [
+        {
+          "Command": "ATZ\r\n",
+          "ExpectedResponse": "OK",
+          "TimeoutMs": 3000,
+          "RetryCount": 3,
+          "Description": "Reset device"
+        },
+        {
+          "Command": "AT+INIT\r\n", 
+          "ExpectedResponse": "READY",
+          "TimeoutMs": 5000,
+          "RetryCount": 2,
+          "Description": "Initialize device"
+        }
+      ],
+      "TestCommands": [
+        {
+          "Command": "AT+STATUS\r\n",
+          "ExpectedResponse": "STATUS_OK",
+          "TimeoutMs": 2000,
+          "RetryCount": 3,
+          "Description": "Check device status"
+        },
+        {
+          "Command": "AT+DATA?\r\n",
+          "ExpectedResponse": "DATA:",
+          "TimeoutMs": 3000,
+          "RetryCount": 2,
+          "Description": "Request test data"
+        }
+      ],
+      "PowerOffCommands": [
+        {
+          "Command": "AT+SHUTDOWN\r\n",
+          "ExpectedResponse": "SHUTDOWN_OK",
+          "TimeoutMs": 5000,
+          "RetryCount": 1,
+          "Description": "Graceful shutdown"
+        }
+      ]
+    },
+    "BIB_002": {
+      "BibId": "BIB_002",
+      "DutId": "DUT_03",
+      "Description": "Alternative Configuration for BIB 002",
+      "PortSettings": {
+        "BaudRate": 57600,
+        "Parity": "Even",
+        "DataBits": 7,
+        "StopBits": "One"
+      },
+      "PowerOnCommands": [
+        {
+          "Command": "INIT\r\n",
+          "ExpectedResponse": "ACK",
+          "TimeoutMs": 2000,
+          "Description": "Simple initialization"
+        }
+      ],
+      "TestCommands": [
+        {
+          "Command": "TEST\r\n",
+          "ExpectedResponse": "PASS",
+          "TimeoutMs": 1000,
+          "Description": "Basic test command"
+        }
+      ],
+      "PowerOffCommands": [
+        {
+          "Command": "EXIT\r\n",
+          "ExpectedResponse": "BYE",
+          "TimeoutMs": 1000,
+          "Description": "Exit command"
+        }
+      ]
+    }
+  },
+  "DefaultSettings": {
+    "BaudRate": 115200,
+    "Parity": "None",
+    "DataBits": 8,
+    "StopBits": "One",
+    "ReadTimeout": 2000,
+    "WriteTimeout": 2000
+  }
+}
 ```
 
-**Deliverable Semaine 3 :** ✅ Complete industrial workflow operational
+**Deliverable Semaine 3 :** ✅ Complete Workflow + Enhanced Logging
 
 ---
 
-### **🔹 SEMAINE 4: Production Polish & Demo (5 jours)**
-**Objectif :** Production readiness + impressive industrial demo
+### **🔹 SEMAINE 4: Integration + MVP Demo (5 jours)**
 
-#### **Jour 1-2: Enhanced Industrial Demo**
+#### **Jour 1-2: Service Integration Complete**
 ```csharp
-// tests/IndustrialDemo/IndustrialDemo.cs
+// SerialPortPoolService/Program.cs - Enhanced DI for MVP
+services.AddSingleton<BibConfigurationLoader>();
+services.AddScoped<SerialCommunicationService>();
+services.AddScoped<SerialCommandExecutor>();
+services.AddScoped<IndustrialWorkflowOrchestrator>();
+services.AddScoped<CommunicationLogger>();
+
+// Load BIB configurations
+var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Configuration", "bib-configurations.json");
+var bibConfigurations = BibConfigurationLoader.LoadFromFile(configPath);
+services.AddSingleton(bibConfigurations);
+```
+
+#### **Jour 3: MVP Demo Application**
+```csharp
+// tests/MVPDemo/IndustrialMVPDemo.cs
 class Program
 {
     static async Task Main(string[] args)
     {
-        Console.WriteLine("🏭 Complete Industrial Automation Demo");
-        Console.WriteLine("====================================");
+        Console.WriteLine("🏭 SerialPortPool MVP Demo - Industrial Communication");
+        Console.WriteLine("=====================================================");
         
-        // Phase 1: Discovery + Industrial Info (Sprint 3 + 5)
-        await DemoIndustrialDiscovery();
+        // Setup services (same DI as main service)
+        var serviceProvider = SetupMVPServices();
         
-        // Phase 2: Bit-Bang Communication (Sprint 4)
-        await DemoBitBangCommunication();
+        try
+        {
+            await RunMVPDemo(serviceProvider);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Demo failed: {ex.Message}");
+        }
         
-        // Phase 3: Communication Sequences (Sprint 5)
-        await DemoCommunicationSequences();
-        
-        // Phase 4: Complete Industrial Workflow (Sprint 5)
-        await DemoCompleteWorkflow();
-        
-        Console.WriteLine("✅ Industrial automation demo completed!");
+        Console.WriteLine("\nPress any key to exit...");
+        Console.ReadKey();
     }
     
-    static async Task DemoCompleteWorkflow()
+    static async Task RunMVPDemo(IServiceProvider services)
     {
-        Console.WriteLine("\n🏭 === COMPLETE INDUSTRIAL WORKFLOW ===");
+        var orchestrator = services.GetRequiredService<IndustrialWorkflowOrchestrator>();
         
-        var bibIds = new[] { "BIB_001", "BIB_002" };
-        var results = await orchestrator.ExecuteMultipleBibWorkflowsAsync(bibIds);
+        Console.WriteLine("📋 Available BIB Configurations:");
+        Console.WriteLine("  - BIB_001 (Standard Test Configuration)");
+        Console.WriteLine("  - BIB_002 (Alternative Configuration)");
+        Console.WriteLine();
         
-        foreach (var result in results)
+        // Demo with BIB_001
+        Console.WriteLine("🚀 Starting workflow for BIB_001...");
+        var result = await orchestrator.ExecuteIndustrialWorkflowAsync("BIB_001", "MVPDemo");
+        
+        DisplayWorkflowResult(result);
+        
+        Console.WriteLine("\n" + "=".PadRight(50, '='));
+        Console.WriteLine("✅ MVP Demo completed successfully!");
+        Console.WriteLine("📋 Check logs at: C:\\Logs\\SerialPortPool\\");
+    }
+    
+    static void DisplayWorkflowResult(IndustrialWorkflowResult result)
+    {
+        Console.WriteLine($"\n📊 Workflow Result for {result.BibId}:");
+        Console.WriteLine($"   Port Used: {result.AllocatedPort}");
+        Console.WriteLine($"   Success: {(result.Success ? "✅ YES" : "❌ NO")}");
+        
+        if (result.CommunicationResult != null)
         {
-            Console.WriteLine($"📋 BIB {result.BibId}: {(result.Success ? "✅ SUCCESS" : "❌ FAILED")}");
-            Console.WriteLine($"   Duration: {result.Duration.TotalSeconds:F1}s");
-            Console.WriteLine($"   Power Signals: {string.Join(", ", result.PowerSignalsSent)}");
-            Console.WriteLine($"   Sequence Steps: {result.SequenceResult?.StepResults.Count ?? 0}");
+            var comm = result.CommunicationResult;
+            Console.WriteLine($"   PowerOn: {(comm.PowerOnResult?.Success == true ? "✅" : "❌")} ({comm.PowerOnResult?.CommandResults?.Count ?? 0} commands)");
+            Console.WriteLine($"   Test: {(comm.TestResult?.Success == true ? "✅" : "❌")} ({comm.TestResult?.CommandResults?.Count ?? 0} commands)");
+            Console.WriteLine($"   PowerOff: {(comm.PowerOffResult?.Success == true ? "✅" : "❌")} ({comm.PowerOffResult?.CommandResults?.Count ?? 0} commands)");
+            Console.WriteLine($"   Total Duration: {comm.TotalDuration.TotalSeconds:F1}s");
+        }
+        
+        if (!result.Success)
+        {
+            Console.WriteLine($"   Error: {result.ErrorMessage}");
         }
     }
 }
 ```
 
-#### **Jour 3-4: Production Features**
-- **Enhanced Logging** : Structured logging pour workflows industriels
-- **Performance Monitoring** : Metrics pour sequence execution times
-- **Error Recovery** : Robust error handling et retry strategies
-- **Configuration Validation** : Startup validation des sequences
-- **Health Checks** : Industrial service health monitoring
+#### **Jour 4: Documentation & Packaging**
+```markdown
+# MVP-README.md
+## SerialPortPool MVP - Industrial Communication
 
-#### **Jour 5: Documentation & Deployment**
-- **User Guide** : Industrial workflow documentation
-- **Configuration Guide** : Sequence setup et BIB mapping
-- **Troubleshooting** : Common issues et solutions
-- **Performance Guide** : Optimization recommendations
+### Installation
+1. Run `SerialPortPool-Setup.msi` as Administrator
+2. Service starts automatically
+3. Configure BIBs in `C:\Program Files\SerialPortPool\Configuration\bib-configurations.json`
 
-**Deliverable Semaine 4 :** ✅ Production-ready industrial automation
+### Usage
+1. Connect FTDI device (FT232R/FT4232H)
+2. Update configuration with your BIB_ID and commands
+3. Run demo: `MVPDemo.exe`
+4. Check logs: `C:\Logs\SerialPortPool\`
+
+### Configuration Example
+See bib-configurations.json for BIB_001 and BIB_002 examples.
+```
+
+#### **Jour 5: Final Testing + Package**
+```bash
+# Final validation checklist
+✅ MSI installs/uninstalls correctly
+✅ Service starts with MVP functionality
+✅ Configuration loads from JSON
+✅ 3-phase workflow executes
+✅ Communication logs correctly
+✅ MVP demo runs end-to-end
+✅ Hardware validation with real device
+✅ Documentation complete
+```
+
+**Deliverable Semaine 4 :** ✅ Complete MVP Package Ready for Client
 
 ---
 
-## 🧪 **Testing Strategy Sprint 5**
+## 🏗️ **Architecture MVP Sprint 4**
 
-### **Test Coverage Targets :**
-- **Industrial EEPROM :** 10 tests parsing logic
-- **Sequence Management :** 12 tests execution engine
-- **Pool Integration :** 8 tests industrial allocation
-- **Workflow Orchestration :** 10 tests end-to-end
-- **Integration Tests :** 12 tests complete scenarios
-- **Total :** 52+ nouveaux tests
+```
+SerialPortPoolService/                          ← Enhanced Windows Service
+├── installer/
+│   ├── SerialPortPool-Setup.wxs              ← NEW: WiX installer
+│   └── build-installer.bat                    ← NEW: Build script
+├── Configuration/
+│   ├── bib-configurations.json               ← NEW: BIB configurations
+│   └── IndustrialSettings.cs                 ← NEW: Settings model
+├── Services/
+│   └── (existing background services)         ← Sprint 3 foundation
+└── Program.cs                                 ← Enhanced DI for MVP
 
-### **Business Logic Testing :**
-- ✅ **Real EEPROM data** avec BIB/DUT/UART scenarios
-- ✅ **Communication sequences** avec hardware simulation
-- ✅ **Multi-BIB workflows** concurrent execution
-- ✅ **Error scenarios** et recovery testing
+SerialPortPool.Core/                           ← Enhanced Core Library
+├── Models/
+│   ├── BibConfiguration.cs                   ← NEW: Configuration model
+│   ├── SerialPortSettings.cs                 ← NEW: Port settings
+│   ├── CommandSequence.cs                    ← NEW: Command model
+│   ├── WorkflowResult.cs                     ← NEW: Result models
+│   └── (existing Sprint 3 models)            ← Foundation preserved
+├── Services/
+│   ├── BibConfigurationLoader.cs             ← NEW: Config loader
+│   ├── SerialCommunicationService.cs         ← NEW: Communication engine
+│   ├── SerialCommandExecutor.cs              ← NEW: Command executor
+│   ├── IndustrialWorkflowOrchestrator.cs     ← NEW: Workflow orchestrator
+│   ├── CommunicationLogger.cs                ← NEW: Enhanced logging
+│   └── (existing Sprint 3 services)          ← Foundation preserved
+└── Interfaces/
+    ├── (new communication interfaces)         ← NEW: Communication contracts
+    └── (existing Sprint 3 interfaces)        ← Foundation preserved
+
+tests/MVPDemo/                                 ← NEW: MVP Demo
+├── IndustrialMVPDemo.cs                      ← NEW: Demo application
+├── MVPDemo.csproj                            ← NEW: Demo project
+└── README-MVP.md                             ← NEW: Demo documentation
+```
 
 ---
 
-## 🎯 **Success Criteria Sprint 5**
+## 🧪 **Testing Strategy Sprint 4**
 
-### **Must Have :**
-- ✅ Industrial EEPROM parsing extracting BIB/DUT/UART
-- ✅ Communication sequences configurable par BIB
-- ✅ Complete workflow : allocation → sequence → bit-bang → release
-- ✅ Multi-BIB concurrent processing
-- ✅ 52+ nouveaux tests passing
-- ✅ Production logging et monitoring
-- ✅ Zero regression sur Sprints 3-4
+### **Test Coverage MVP :**
+- **Configuration Loading :** 6 tests (JSON parsing, validation)
+- **Serial Communication :** 8 tests (command/response, timeouts)
+- **3-Phase Workflow :** 6 tests (PowerOn/Test/PowerOff sequences)
+- **Integration MVP :** 4 tests (end-to-end scenarios)
+- **Installation Package :** Manual validation checklist
+- **Total :** 24+ nouveaux tests + MVP validation
+
+### **Hardware Testing :**
+- ✅ **Real FTDI device** validation (COM6 FT232R)
+- ✅ **3-phase communication** avec device simulé
+- ✅ **Configuration JSON** avec multiple BIBs
+- ✅ **Error scenarios** et recovery
+- ✅ **Installation process** sur machine propre
+
+---
+
+## 🎯 **Success Criteria Sprint 4**
+
+### **Must Have MVP :**
+- ✅ MSI installer package fonctionnel (install/uninstall)
+- ✅ JSON configuration système avec BIB_ID/DUT_ID/paramètres
+- ✅ Communication série 3-phases (PowerOn → Test → PowerOff)
+- ✅ Question/réponse framework avec timeouts et retries
+- ✅ Logs structurés des échanges série avec timestamps
+- ✅ MVP demo fonctionnel avec hardware réel
+- ✅ 24+ nouveaux tests passing + validation manuelle
+- ✅ Zero regression sur Sprint 3 foundation
 
 ### **Nice to Have :**
-- 🎯 Advanced sequence debugging et tracing
-- 🎯 Real-time workflow monitoring dashboard
-- 🎯 Sequence performance optimization
-- 🎯 Configuration hot-reload capability
+- 🎯 Advanced error recovery et reconnection
+- 🎯 Real-time communication monitoring
+- 🎯 Configuration validation avancée
+- 🎯 Performance metrics des communications
 
 ---
 
-## 🚀 **Sprint 6 Foundation Ready**
+## 📦 **Deliverables Package Sprint 4**
 
-**Avec Sprint 5 completed :**
-- **Complete Industrial Layer** : EEPROM + Sequences ✅
-- **End-to-End Automation** : Workflow orchestration ✅
-- **Production Ready** : Monitoring + error handling ✅
-- **Client Requirements** : All core needs addressed ✅
+### **Client Package :**
+```
+SerialPortPool-MVP-v1.0/
+├── SerialPortPool-Setup.msi              ← Installation package
+├── MVPDemo.exe                           ← Demo application  
+├── Configuration/
+│   └── bib-configurations.json          ← Example configurations
+├── Documentation/
+│   ├── MVP-Installation-Guide.pdf       ← Installation guide
+│   ├── MVP-Configuration-Guide.pdf      ← Configuration guide
+│   └── MVP-Demo-Guide.pdf               ← Demo usage guide
+└── README-MVP.txt                       ← Quick start guide
+```
 
-**Sprint 6 Focus Candidates :**
-- **Advanced Monitoring & Analytics** : Performance dashboards
-- **High Availability Features** : Clustering et fault tolerance
-- **Advanced Sequence Features** : Conditional logic, loops
-- **Client-Specific Customizations** : Additional BIB types
-
----
-
-## 📈 **Expected Business Value**
-
-| Capability | Client Requirement | Sprint 5 Deliverable |
-|------------|-------------------|---------------------|
-| **Driver Board Info** | "Get information about Driver Board" | ✅ Industrial EEPROM parsing |
-| **BIB/DUT/UART Extraction** | "Extract BIB ID, DUT#, UART#" | ✅ IndustrialInfo.ParseFromEeprom() |
-| **BIB-Specific Sequences** | "Communication sequences specific to BIB" | ✅ SequenceConfiguration + Manager |
-| **UART Polling** | "Power ON/OFF signals for UART polling" | ✅ Integration with Sprint 4 bit-bang |
-| **Complete Automation** | End-to-end workflow | ✅ WorkflowOrchestrator |
+### **Technical Deliverables :**
+- **Enhanced Windows Service** avec MVP functionality
+- **Complete source code** avec 90+ tests (Sprint 3: 65+ + Sprint 4: 24+)
+- **Installation scripts** professionnels
+- **Configuration system** extensible
+- **Communication framework** industrial-ready
+- **Documentation complète** pour utilisateurs et développeurs
 
 ---
 
-## 🔥 **Sprint 5 - Industrial Business Logic Ready !**
+## 🚀 **Ready for Sprint 4 MVP !**
 
-**Foundation Parfaite :**
-- **Technical Excellence** : Sprints 3-4 provide solid base
-- **Business Focus** : Direct client value delivery  
-- **Incremental Approach** : Build on proven components
-- **Production Ready** : Full industrial automation capability
+**Foundation Sprint 3 Exceptionnelle ✅ + Client MVP Focus = Success Garanti !**
 
-**Next Action après Sprint 4 :** Start with `IndustrialInfo` model and EEPROM parsing !
+### **Next Action Sprint 4 :**
+1. **Create installer project** (WiX setup)
+2. **Design BibConfiguration models** 
+3. **Implement JSON configuration loader**
+4. **Build serial communication service**
+5. **Validate MVP with hardware**
+
+### **Timeline Confidence :**
+- **Week 1-2 :** Foundation + Communication engine
+- **Week 3-4 :** Integration + MVP demo + package
+- **Total :** 4 semaines pour MVP client-ready
 
 ---
 
-*Document créé : 22 Juillet 2025*  
-*Sprint 5 Status : 📋 PLANNED - Ready after Sprint 4*  
-*Focus : Industrial Business Logic (EEPROM + Sequences)*  
-*Duration : 4 semaines*  
-*Foundation : Sprint 3 + Sprint 4 Complete*
+*Document créé : 23 Juillet 2025*  
+*Sprint 4 Status : 🚀 MVP READY TO START*  
+*Focus : Client MVP Demo - Installation + Configuration + Communication 3-Phases*  
+*Foundation : Sprint 3 Excellence (65+ tests, thread-safe pool, device grouping)*  
+*Target : 4 semaines pour package MVP complet avec demo hardware*
