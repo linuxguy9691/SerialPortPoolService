@@ -1,751 +1,859 @@
-# Sprint 4 - Industrial Integration & Communication Management
+# Sprint 5 Planning - Industrial Business Logic & Communication Sequences
 
-![Sprint](https://img.shields.io/badge/Sprint%204-🚀%20READY%20TO%20START-blue.svg)
-![Client](https://img.shields.io/badge/Client%20Focus-Industrial%20Automation-orange.svg)
-![Priority](https://img.shields.io/badge/Priority-CRITICAL%20BUSINESS%20VALUE-red.svg)
+![Sprint](https://img.shields.io/badge/Sprint%205-📋%20PLANNED-blue.svg)
+![Focus](https://img.shields.io/badge/Focus-EEPROM%20%2B%20Sequences-purple.svg)
+![Duration](https://img.shields.io/badge/Duration-4%20weeks-green.svg)
+![Foundation](https://img.shields.io/badge/Foundation-Sprint%204%20Complete-gold.svg)
 
-## 🎯 **Objectif Sprint 4 - FT4232H Optimized Integration**
+## 🎯 **Objectif Sprint 5 - Industrial Business Logic Layer**
 
-Créer la **couche industrielle FT4232H-optimized** au-dessus de la foundation Sprint 3 :
-- **FT4232H Hardware Identification** via EEPROM (système physique info)
-- **Bit Bang Port Management** (1 port bit-bang + 3 ports série normaux)
-- **Industrial UART Communication** pour les 3 ports série disponibles
-- **Windows Service Integration** maintenir le focus service Windows
+**OBJECTIF :** Implémenter la **couche business logic industrielle** complète en s'appuyant sur l'excellente foundation technique des Sprints 3-4.
+
+**FOUNDATION DISPONIBLE :**
+- ✅ **Service Windows** + Enhanced Discovery + Pool Management (Sprint 3)
+- ✅ **Device Grouping** + Multi-port awareness (Sprint 3)  
+- ✅ **Bit-Bang Communication** + Power signals (Sprint 4)
+- ✅ **Background Monitoring** + Service integration (Sprint 4)
+
+**BUSINESS VALUE SPRINT 5 :**
+- 📋 **Industrial EEPROM Parsing** : Extract BIB ID, DUT#, UART#, Slot Position
+- 🔄 **Communication Sequence Management** : Sequences spécifiques par BIB
+- 🏭 **Complete Industrial Workflow** : End-to-end automation ready
 
 ---
 
-## 📋 **Scope Sprint 4 - Industrial Requirements**
+## 📋 **Scope Sprint 5 - Business Logic Focused**
 
-### **🏭 ÉTAPE 1: FT4232H Hardware Optimization + EEPROM Design (1 semaine)**
-**Objectif :** Optimiser pour FT4232H avec 4e port bit-bang établi + définir format EEPROM
+### **✅ CORE DELIVERABLES**
+- 🔍 **Industrial EEPROM Parsing** : BIB/DUT/UART/Slot extraction
+- 📋 **Communication Sequence Engine** : Init → Polling → Shutdown sequences
+- 🏭 **BIB-to-Sequence Mapping** : Configuration-driven sequences
+- 🔧 **Enhanced Pool Integration** : Industrial allocation workflow
+- 🎬 **Complete Industrial Demo** : End-to-end workflow demonstration
 
-#### **Deliverables ÉTAPE 1:**
+### **🎯 BUSINESS ALIGNMENT**
+Addresses core client requirements :
+- ✅ *"Get information about Driver Board via USB2Serial"*
+- ✅ *"Extract BIB ID, DUT#, UART# from USB2Serial"*  
+- ✅ *"List of communication sequences specific to BIB"*
+- ✅ *"Power ON/OFF signals for UART polling"* (Sprint 4 ✅)
+
+---
+
+## 🏗️ **Architecture Sprint 5 - Business Logic Layer**
+
+```
+SerialPortPool.Core/                           ← Enhanced Core Library
+├── Models/
+│   ├── IndustrialInfo.cs                     ← NEW: BIB/DUT/UART/Slot data
+│   ├── CommunicationSequence.cs              ← NEW: Init/Polling/Shutdown
+│   ├── CommandStep.cs                        ← NEW: Individual command
+│   ├── SequenceConfiguration.cs              ← NEW: BIB-to-sequence mapping
+│   └── IndustrialWorkflow.cs                 ← NEW: Complete workflow state
+├── Services/
+│   ├── IndustrialEepromParser.cs             ← NEW: EEPROM business parsing
+│   ├── SequenceManager.cs                    ← NEW: Sequence execution engine
+│   ├── IndustrialPoolManager.cs              ← NEW: Industrial allocation
+│   ├── WorkflowOrchestrator.cs               ← NEW: Complete workflow
+│   └── SequenceConfigurationLoader.cs        ← NEW: Configuration management
+└── Interfaces/
+    ├── IIndustrialEepromParser.cs            ← NEW: EEPROM parsing contract
+    ├── ISequenceManager.cs                   ← NEW: Sequence execution
+    └── IIndustrialPoolManager.cs             ← NEW: Industrial pool contract
+
+SerialPortPoolService/                          ← Enhanced Windows Service
+├── Services/
+│   ├── IndustrialBackgroundService.cs        ← NEW: Industrial monitoring
+│   ├── SequenceExecutionService.cs           ← NEW: Background execution
+│   └── BitBangBackgroundService.cs           ← EXISTING: From Sprint 4
+├── Configuration/
+│   ├── IndustrialSettings.cs                 ← NEW: Industrial configuration
+│   └── SequenceSettings.cs                   ← NEW: Sequence configuration
+└── Controllers/ (Optional)
+    └── IndustrialController.cs               ← OPTIONAL: Simple API if needed
+
+tests/SerialPortPool.Core.Tests/               ← Enhanced Test Suite
+├── Services/
+│   ├── IndustrialEepromParserTests.cs        ← NEW: 10 tests
+│   ├── SequenceManagerTests.cs               ← NEW: 12 tests  
+│   ├── IndustrialPoolManagerTests.cs         ← NEW: 8 tests
+│   └── WorkflowOrchestratorTests.cs          ← NEW: 10 tests
+└── Integration/
+    └── IndustrialWorkflowIntegrationTests.cs ← NEW: 12 tests end-to-end
+```
+
+---
+
+## 📅 **Sprint 5 Planning - 4 Semaines Business Logic**
+
+### **🔹 SEMAINE 1: Industrial EEPROM Parsing (5 jours)**
+**Objectif :** Extract BIB ID, DUT#, UART#, Slot Position depuis EEPROM
+
+#### **Jour 1-2: Industrial Models**
 ```csharp
-// SerialPortPool.Core/Models/FT4232HInfo.cs - NEW
-public class FT4232HInfo
+// SerialPortPool.Core/Models/IndustrialInfo.cs
+public class IndustrialInfo
 {
-    public string DeviceSerialNumber { get; set; }
-    public FT4232HPort[] Ports { get; set; } = new FT4232HPort[4]; // Always 4 ports
-    public FT4232HPort BitBangPort => Ports[3];                   // 4th port = bit-bang
-    public FT4232HPort[] SerialPorts => Ports[0..3];              // First 3 = serial
-    
-    // EEPROM system info (we define the format)
-    public SystemInfo SystemInfo { get; set; }
-    public IndustrialProperties Industrial { get; set; }
-}
-
-public class FT4232HPort
-{
-    public string PortName { get; set; }           // COMx
-    public int PortIndex { get; set; }             // 0, 1, 2, 3
-    public bool IsBitBangPort => PortIndex == 3;   // Simple: 4th port always bit-bang
-    public bool IsAvailableForSerial => PortIndex < 3; // First 3 available
-}
-
-// SerialPortPool.Core/Models/IndustrialProperties.cs - NEW
-public class IndustrialProperties
-{
-    public string SlotPosition { get; set; } = string.Empty;
-    public string OvenId { get; set; } = string.Empty;
-    public string BibId { get; set; } = string.Empty;
-    public string TestBoardType { get; set; } = string.Empty;
+    public string BibId { get; set; } = "";           // "BIB_001"
+    public string DutNumber { get; set; } = "";       // "DUT_05"  
+    public string UartNumber { get; set; } = "";      // "UART_2"
+    public string SlotPosition { get; set; } = "";    // "Slot_01"
+    public string OvenId { get; set; } = "";          // "Oven_A"
+    public string TestBoardType { get; set; } = "";   // "TestBoard_v2"
     public Dictionary<string, string> CustomProperties { get; set; } = new();
     
-    // Static factory for EEPROM format definition
-    public static IndustrialProperties ParseFromEeprom(Dictionary<string, string> eepromData)
+    /// <summary>
+    /// Parse industrial info from EEPROM data
+    /// </summary>
+    public static IndustrialInfo ParseFromEeprom(Dictionary<string, string> eepromData)
     {
-        return new IndustrialProperties
+        return new IndustrialInfo
         {
-            SlotPosition = eepromData.GetValueOrDefault("SlotPosition", "Unknown"),
-            OvenId = eepromData.GetValueOrDefault("OvenId", "Default"),
-            BibId = eepromData.GetValueOrDefault("BibId", ""),
-            TestBoardType = eepromData.GetValueOrDefault("BoardType", "Generic"),
-            CustomProperties = eepromData.Where(kvp => !IsStandardProperty(kvp.Key))
-                                        .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+            BibId = ExtractValue(eepromData, "BibId", "BIB_ID", "BIB"),
+            DutNumber = ExtractValue(eepromData, "DutNumber", "DUT_NUMBER", "DUT"),
+            UartNumber = ExtractValue(eepromData, "UartNumber", "UART_NUMBER", "UART"),
+            SlotPosition = ExtractValue(eepromData, "SlotPosition", "SLOT_POSITION", "SLOT"),
+            OvenId = ExtractValue(eepromData, "OvenId", "OVEN_ID", "OVEN"),
+            TestBoardType = ExtractValue(eepromData, "TestBoardType", "BOARD_TYPE", "TYPE")
         };
     }
-}
-
-// SerialPortPool.Core/Services/FT4232HManager.cs - NEW
-public class FT4232HManager
-{
-    /// <summary>
-    /// Discover FT4232H devices (simple: 4 ports, 4th = bit-bang)
-    /// </summary>
-    public async Task<IEnumerable<FT4232HInfo>> DiscoverFT4232HDevicesAsync()
     
-    /// <summary>
-    /// Extract industrial info from EEPROM (our format)
-    /// </summary>
-    public async Task<FT4232HInfo> ExtractFT4232HInfoAsync(string deviceSerialNumber)
-    
-    /// <summary>
-    /// Define EEPROM format for industrial properties
-    /// </summary>
-    public static Dictionary<string, string> CreateEepromTemplate()
+    private static string ExtractValue(Dictionary<string, string> data, params string[] keys)
     {
-        return new Dictionary<string, string>
+        foreach (var key in keys)
         {
-            ["SlotPosition"] = "Slot_01",
-            ["OvenId"] = "Oven_A",
-            ["BibId"] = "BIB_001",
-            ["BoardType"] = "TestBoard_v2",
-            ["Manufacturer"] = "ClientCompany",
-            ["SerialNumber"] = "TB001234"
-        };
-    }
-}
-
-// Extension de SerialPortPool - SIMPLIFIED
-public class SerialPortPool : ISerialPortPool
-{
-    // Existing methods...
-    
-    /// <summary>
-    /// Allocate from FT4232H serial ports (first 3 ports only)
-    /// </summary>
-    public async Task<PortAllocation?> AllocateFT4232HSerialPortAsync(
-        PortValidationConfiguration? config = null, 
-        string? clientId = null)
-    {
-        // Simple: filter to only first 3 ports of FT4232H devices
-        var availablePorts = await GetAvailablePortsAsync();
-        var ft4232hSerialPorts = availablePorts.Where(p => 
-            p.DeviceInfo?.DeviceId?.Contains("0403") == true && // FTDI VID
-            !p.PortName.EndsWith("D"));  // Simple: assume 4th port has 'D' suffix
-        
-        return await AllocateFromPortsAsync(ft4232hSerialPorts, config, clientId);
+            if (data.TryGetValue(key, out var value) && !string.IsNullOrEmpty(value))
+                return value;
+        }
+        return "Unknown";
     }
     
     /// <summary>
-    /// Get industrial info for allocated port
+    /// Generate unique identifier for this industrial configuration
     /// </summary>
-    public async Task<IndustrialProperties?> GetPortIndustrialInfoAsync(string portName)
+    public string GetUniqueId() => $"{BibId}_{DutNumber}_{UartNumber}";
+    
+    /// <summary>
+    /// Check if this industrial info is valid for automation
+    /// </summary>
+    public bool IsValidForAutomation => 
+        !string.IsNullOrEmpty(BibId) && BibId != "Unknown" &&
+        !string.IsNullOrEmpty(DutNumber) && DutNumber != "Unknown";
 }
 ```
 
-#### **Tests ÉTAPE 1:** (8 tests)
-- Industrial info extraction from EEPROM
-- Port lookup by slot/oven/BIB
-- Error handling for missing industrial data
-- Integration with existing pool management
-
-### **📡 ÉTAPE 2: Serial Communication Management (FT4232H 3-Port) (1 semaine)**
-**Objectif :** Gérer les communications série sur les 3 ports série FT4232H
-
-#### **Deliverables ÉTAPE 2:**
+#### **Jour 3-4: EEPROM Parser Service**
 ```csharp
-// SerialPortPool.Core/Models/SerialConfiguration.cs - NEW
-public class SerialConfiguration
+// SerialPortPool.Core/Services/IndustrialEepromParser.cs
+public class IndustrialEepromParser : IIndustrialEepromParser
 {
-    public int BaudRate { get; set; } = 9600;
-    public Parity Parity { get; set; } = Parity.None;
-    public int DataBits { get; set; } = 8;
-    public StopBits StopBits { get; set; } = StopBits.One;
-    public Handshake Handshake { get; set; } = Handshake.None;
-    
-    // Timeouts
-    public int ReadTimeout { get; set; } = 1000;
-    public int WriteTimeout { get; set; } = 1000;
-    
-    // Buffer sizes
-    public int ReadBufferSize { get; set; } = 4096;
-    public int WriteBufferSize { get; set; } = 2048;
-}
-
-// SerialPortPool.Core/Services/FT4232HSerialService.cs - NEW
-public class FT4232HSerialService
-{
-    /// <summary>
-    /// Configure serial port with standard settings
-    /// </summary>
-    public void ConfigureSerialPort(SerialPort port, SerialConfiguration config)
+    private readonly IFtdiDeviceReader _ftdiReader;
+    private readonly ILogger<IndustrialEepromParser> _logger;
     
     /// <summary>
-    /// Open serial connection on FT4232H port (excluding bit-bang)
+    /// Extract industrial information from allocated port
     /// </summary>
-    public async Task<SerialPort?> OpenSerialConnectionAsync(string portName, SerialConfiguration config)
-    
-    /// <summary>
-    /// Send data to serial port with error handling
-    /// </summary>
-    public async Task<bool> SendDataAsync(SerialPort port, byte[] data)
-    
-    /// <summary>
-    /// Read data from serial port with timeout
-    /// </summary>
-    public async Task<byte[]?> ReadDataAsync(SerialPort port, int expectedBytes = -1)
-    
-    /// <summary>
-    /// Close serial connection properly
-    /// </summary>
-    public void CloseSerialConnection(SerialPort port)
-}
-
-// SerialPortPool.Core/Services/FT4232HConnectionPool.cs - NEW
-public class FT4232HConnectionPool
-{
-    private readonly ConcurrentDictionary<string, SerialPort> _activeConnections = new();
-    
-    /// <summary>
-    /// Get or create serial connection for allocated port
-    /// </summary>
-    public async Task<SerialPort?> GetConnectionAsync(PortAllocation allocation, SerialConfiguration config)
-    
-    /// <summary>
-    /// Release connection when port is deallocated
-    /// </summary>
-    public async Task ReleaseConnectionAsync(string portName)
-    
-    /// <summary>
-    /// Get connection statistics
-    /// </summary>
-    public ConnectionStatistics GetConnectionStatistics()
-}
-
-// Integration dans SerialPortPool
-public class SerialPortPool : ISerialPortPool
-{
-    // Existing methods...
-    
-    /// <summary>
-    /// Allocate FT4232H port and establish serial connection
-    /// </summary>
-    public async Task<(PortAllocation allocation, SerialPort? connection)> AllocateWithConnectionAsync(
-        SerialConfiguration serialConfig,
-        PortValidationConfiguration? validationConfig = null,
-        string? clientId = null)
-}
-```
-
-#### **Tests ÉTAPE 2:** (10 tests)
-- Sequence loading and parsing
-- BIB/DUT/UART mapping logic
-- Serial port configuration
-- Communication execution with timeout/retry
-
-### **⚡ ÉTAPE 3: Simple Bit Bang Communication (4e port) (1 semaine)**
-**Objectif :** Communication simple via 4e port FT4232H (volume réduit)
-
-#### **Deliverables ÉTAPE 3:**
-```csharp
-// SerialPortPool.Core/Models/SimpleBitBangMessage.cs - NEW
-public enum BitBangMessageType : byte
-{
-    PowerOn = 0x01,     // System power ON
-    PowerOff = 0x02,    // System power OFF  
-    TestStart = 0x03,   // Begin test
-    TestStop = 0x04,    // Stop test
-    ErrorSignal = 0x05, // Error condition
-    StatusRequest = 0x06, // Request status
-    Heartbeat = 0x07    // Keep-alive (simple)
-}
-
-public class SimpleBitBangMessage
-{
-    public BitBangMessageType MessageType { get; set; }
-    public DateTime Timestamp { get; set; } = DateTime.Now;
-    public byte[]? Data { get; set; }      // Optional data (small volume)
-    
-    // Simple serialization for reduced volume
-    public byte[] ToBytes()
-    {
-        var result = new List<byte> { (byte)MessageType };
-        if (Data != null && Data.Length > 0)
-        {
-            result.Add((byte)Data.Length); // Length prefix
-            result.AddRange(Data);
-        }
-        else
-        {
-            result.Add(0); // No data
-        }
-        return result.ToArray();
-    }
-    
-    public static SimpleBitBangMessage? FromBytes(byte[] bytes)
-    {
-        if (bytes.Length < 2) return null;
-        
-        var messageType = (BitBangMessageType)bytes[0];
-        var dataLength = bytes[1];
-        
-        byte[]? data = null;
-        if (dataLength > 0 && bytes.Length >= 2 + dataLength)
-        {
-            data = bytes[2..(2 + dataLength)];
-        }
-        
-        return new SimpleBitBangMessage
-        {
-            MessageType = messageType,
-            Data = data
-        };
-    }
-}
-
-// SerialPortPool.Core/Services/SimpleBitBangService.cs - NEW
-public class SimpleBitBangService
-{
-    private SerialPort? _bitBangPort;
-    private readonly string _bitBangPortName;
-    private readonly ILogger<SimpleBitBangService> _logger;
-    
-    public SimpleBitBangService(string bitBangPortName, ILogger<SimpleBitBangService> logger)
-    {
-        _bitBangPortName = bitBangPortName; // Always 4th port of FT4232H
-        _logger = logger;
-    }
-    
-    /// <summary>
-    /// Initialize simple bit-bang communication (low volume)
-    /// </summary>
-    public async Task<bool> InitializeAsync()
+    public async Task<IndustrialInfo?> ParseIndustrialInfoAsync(PortAllocation allocation)
     {
         try
         {
-            _bitBangPort = new SerialPort(_bitBangPortName)
+            _logger.LogDebug("Parsing industrial info for port {PortName}", allocation.PortName);
+            
+            // Read EEPROM data using existing Sprint 2 functionality
+            var eepromData = await _ftdiReader.ReadEepromDataAsync(allocation.PortName);
+            
+            if (!eepromData.Any())
             {
-                BaudRate = 9600,  // Simple, standard baud rate
-                Parity = Parity.None,
-                DataBits = 8,
-                StopBits = StopBits.One,
-                ReadTimeout = 1000,
-                WriteTimeout = 1000
-            };
-            
-            _bitBangPort.Open();
-            _logger.LogInformation("Simple bit-bang communication initialized on {Port}", _bitBangPortName);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to initialize bit-bang communication");
-            return false;
-        }
-    }
-    
-    /// <summary>
-    /// Send simple message (reduced volume)
-    /// </summary>
-    public async Task<bool> SendMessageAsync(BitBangMessageType messageType, byte[]? data = null)
-    {
-        if (_bitBangPort?.IsOpen != true) return false;
-        
-        try
-        {
-            var message = new SimpleBitBangMessage { MessageType = messageType, Data = data };
-            var bytes = message.ToBytes();
-            
-            await _bitBangPort.WriteAsync(bytes, 0, bytes.Length);
-            _logger.LogDebug("Sent bit-bang message: {MessageType} ({Bytes} bytes)", messageType, bytes.Length);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to send bit-bang message: {MessageType}", messageType);
-            return false;
-        }
-    }
-    
-    /// <summary>
-    /// Read simple message (reduced volume)
-    /// </summary>
-    public async Task<SimpleBitBangMessage?> ReadMessageAsync(int timeoutMs = 1000)
-    {
-        if (_bitBangPort?.IsOpen != true) return null;
-        
-        try
-        {
-            var buffer = new byte[256]; // Small buffer for reduced volume
-            var bytesToRead = await _bitBangPort.ReadAsync(buffer, 0, buffer.Length);
-            
-            if (bytesToRead > 0)
-            {
-                var messageBytes = buffer[0..bytesToRead];
-                var message = SimpleBitBangMessage.FromBytes(messageBytes);
-                _logger.LogDebug("Received bit-bang message: {MessageType}", message?.MessageType);
-                return message;
+                _logger.LogWarning("No EEPROM data found for port {PortName}", allocation.PortName);
+                return null;
             }
-        }
-        catch (TimeoutException)
-        {
-            // Normal timeout, not an error
+            
+            // Parse using business logic
+            var industrialInfo = IndustrialInfo.ParseFromEeprom(eepromData);
+            
+            _logger.LogInformation("Industrial info parsed: {UniqueId} for port {PortName}", 
+                industrialInfo.GetUniqueId(), allocation.PortName);
+                
+            return industrialInfo;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to read bit-bang message");
+            _logger.LogError(ex, "Error parsing industrial info for port {PortName}", allocation.PortName);
+            return null;
         }
+    }
+    
+    /// <summary>
+    /// Find devices by industrial criteria
+    /// </summary>
+    public async Task<IEnumerable<(DeviceGroup device, IndustrialInfo info)>> FindDevicesByIndustrialCriteriaAsync(
+        string? bibId = null, 
+        string? ovenId = null, 
+        string? slotPosition = null)
+    {
+        var results = new List<(DeviceGroup, IndustrialInfo)>();
         
-        return null;
-    }
-    
-    /// <summary>
-    /// Send heartbeat (simple keep-alive)
-    /// </summary>
-    public async Task<bool> SendHeartbeatAsync()
-    {
-        return await SendMessageAsync(BitBangMessageType.Heartbeat);
-    }
-}
-
-// SerialPortPool.Core/Services/SystemStateManager.cs - SIMPLIFIED
-public class SystemStateManager
-{
-    private readonly SimpleBitBangService _bitBangService;
-    private SystemState _currentState = SystemState.PowerOff;
-    
-    /// <summary>
-    /// Handle power signals (simple volume)
-    /// </summary>
-    public async Task HandlePowerSignalAsync(SimpleBitBangMessage message)
-    {
-        switch (message.MessageType)
+        // Use existing Sprint 3 device discovery
+        var deviceGroups = await _discovery.DiscoverDeviceGroupsAsync();
+        
+        foreach (var device in deviceGroups.Where(d => d.IsFtdiDevice))
         {
-            case BitBangMessageType.PowerOn:
-                _currentState = SystemState.PowerOn;
-                await OnSystemPoweredOnAsync();
-                break;
-                
-            case BitBangMessageType.PowerOff:
-                _currentState = SystemState.PowerOff;
-                await OnSystemPoweredOffAsync();
-                break;
-                
-            case BitBangMessageType.ErrorSignal:
-                _currentState = SystemState.Error;
-                await OnSystemErrorAsync(message.Data);
-                break;
-        }
-    }
-    
-    /// <summary>
-    /// Start simple monitoring (reduced overhead)
-    /// </summary>
-    public async Task StartMonitoringAsync()
-    {
-        // Simple background monitoring with reduced frequency
-        _ = Task.Run(async () =>
-        {
-            while (true)
+            try
             {
-                var message = await _bitBangService.ReadMessageAsync(5000);
-                if (message != null)
+                var firstPort = device.Ports.FirstOrDefault();
+                if (firstPort != null)
                 {
-                    await HandlePowerSignalAsync(message);
+                    var eepromData = await _ftdiReader.ReadEepromDataAsync(firstPort.PortName);
+                    var industrialInfo = IndustrialInfo.ParseFromEeprom(eepromData);
+                    
+                    // Apply filters
+                    if (MatchesCriteria(industrialInfo, bibId, ovenId, slotPosition))
+                    {
+                        results.Add((device, industrialInfo));
+                    }
                 }
-                await Task.Delay(1000); // Simple polling interval
             }
-        });
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not parse industrial info for device {DeviceId}", device.DeviceId);
+            }
+        }
+        
+        return results;
     }
-}
-
-// Simple system state enum
-public enum SystemState
-{
-    PowerOff,
-    PowerOn,
-    TestRunning,
-    Error
 }
 ```
 
-#### **Tests ÉTAPE 3:** (8 tests)
-- Power signal processing
-- UART polling start/stop logic
-- Emergency failure handling
-- Integration with port pool
-
-### **🌐 ÉTAPE 4: Windows Service Integration & Management API (1 semaine)**
-**Objectif :** Intégrer FT4232H management dans le Windows Service avec API simple
-
-#### **Deliverables ÉTAPE 4:**
+#### **Jour 5: Integration avec Pool Management**
 ```csharp
-// SerialPortPoolService/Services/FT4232HBackgroundService.cs - NEW
-public class FT4232HBackgroundService : BackgroundService
+// Extension de SerialPortPool.cs avec industrial awareness
+public class SerialPortPool : ISerialPortPool
 {
-    /// <summary>
-    /// Monitor FT4232H devices and bit-bang communications
-    /// </summary>
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    // Existing methods...
     
     /// <summary>
-    /// Handle FT4232H device connection/disconnection
+    /// Allocate port with industrial requirements
     /// </summary>
-    private async Task OnFT4232HDeviceChangedAsync(FT4232HInfo device, bool connected)
-    
-    /// <summary>
-    /// Monitor bit-bang port for system signals
-    /// </summary>
-    private async Task MonitorBitBangPortAsync(CancellationToken cancellationToken)
-}
-
-// SerialPortPoolService/Controllers/FT4232HController.cs - NEW (Simple REST API)
-[ApiController]
-[Route("api/ft4232h")]
-public class FT4232HController : ControllerBase
-{
-    /// <summary>
-    /// Get all FT4232H devices with port status
-    /// </summary>
-    [HttpGet("devices")]
-    public async Task<ActionResult<IEnumerable<FT4232HInfo>>> GetDevices()
-    
-    /// <summary>
-    /// Allocate serial port from FT4232H device
-    /// </summary>
-    [HttpPost("allocate")]
-    public async Task<ActionResult<PortAllocation>> AllocatePort([FromBody] FT4232HAllocationRequest request)
-    
-    /// <summary>
-    /// Release allocated port
-    /// </summary>
-    [HttpPost("release")]
-    public async Task<ActionResult> ReleasePort([FromBody] ReleasePortRequest request)
-    
-    /// <summary>
-    /// Get system status via bit-bang communication
-    /// </summary>
-    [HttpGet("status")]
-    public async Task<ActionResult<SystemState>> GetSystemStatus()
-    
-    /// <summary>
-    /// Send system command via bit-bang
-    /// </summary>
-    [HttpPost("command")]
-    public async Task<ActionResult> SendSystemCommand([FromBody] SystemCommand command)
-}
-
-// SerialPortPoolService/Program.cs - ENHANCED
-public class Program
-{
-    public static async Task Main(string[] args)
+    public async Task<(PortAllocation? allocation, IndustrialInfo? industrialInfo)> 
+        AllocateIndustrialPortAsync(
+            string? requiredBibId = null,
+            string? requiredOvenId = null,
+            string? clientId = null)
     {
-        // Enhanced DI for FT4232H services
-        var builder = Host.CreateApplicationBuilder(args);
+        // Use existing allocation with client config (FT4232H only)
+        var clientConfig = PortValidationConfiguration.CreateClientDefault();
+        var allocation = await AllocatePortAsync(clientConfig, clientId);
         
-        // Existing services from Sprint 3
-        builder.Services.AddScoped<ISerialPortPool, SerialPortPool>();
-        // ... existing DI
+        if (allocation == null)
+            return (null, null);
+            
+        // Parse industrial info
+        var industrialInfo = await _industrialParser.ParseIndustrialInfoAsync(allocation);
         
-        // NEW: FT4232H specific services
-        builder.Services.AddSingleton<FT4232HManager>();
-        builder.Services.AddSingleton<BitBangCommunicationService>();
-        builder.Services.AddSingleton<SystemStateManager>();
-        builder.Services.AddScoped<FT4232HSerialService>();
-        builder.Services.AddSingleton<FT4232HConnectionPool>();
+        // Validate industrial requirements
+        if (!string.IsNullOrEmpty(requiredBibId) && 
+            industrialInfo?.BibId != requiredBibId)
+        {
+            // Release and try next port
+            await ReleasePortAsync(allocation.PortName, allocation.SessionId);
+            return await AllocateIndustrialPortAsync(requiredBibId, requiredOvenId, clientId);
+        }
         
-        // Background services
-        builder.Services.AddHostedService<FT4232HBackgroundService>();
-        
-        // Simple web API
-        builder.Services.AddControllers();
-        builder.Services.AddEndpointsApiExplorer();
-        builder.Services.AddSwaggerGen();
-        
-        var host = builder.Build();
-        
-        // Start Windows Service with FT4232H integration
-        await host.RunAsync();
+        return (allocation, industrialInfo);
     }
 }
+```
 
-// Configuration/FT4232HSettings.cs - NEW
-public class FT4232HSettings
+**Deliverable Semaine 1 :** ✅ Industrial EEPROM parsing operational
+
+---
+
+### **🔹 SEMAINE 2: Communication Sequence Engine (5 jours)**
+**Objectif :** Business logic sequences (Init → Polling → Shutdown)
+
+#### **Jour 1-2: Sequence Models**
+```csharp
+// SerialPortPool.Core/Models/CommunicationSequence.cs
+public class CommunicationSequence
 {
-    public bool EnableBitBangMonitoring { get; set; } = true;
-    public int BitBangBaudRate { get; set; } = 9600;
-    public TimeSpan StatusUpdateInterval { get; set; } = TimeSpan.FromSeconds(30);
-    public int MaxConcurrentAllocations { get; set; } = 10;
+    public string SequenceId { get; set; } = "";       // "StandardTest_v1"
+    public string BibId { get; set; } = "";            // "BIB_001" 
+    public string Description { get; set; } = "";       // "Standard test sequence"
     
-    // Serial port defaults for FT4232H
-    public SerialConfiguration DefaultSerialConfig { get; set; } = new()
+    // Serial port configuration
+    public SerialConfiguration PortConfig { get; set; } = new()
     {
         BaudRate = 115200,
         Parity = Parity.None,
         DataBits = 8,
-        StopBits = StopBits.One
+        StopBits = StopBits.One,
+        ReadTimeout = 2000,
+        WriteTimeout = 2000
     };
+    
+    // Sequence phases
+    public List<CommandStep> InitializationCommands { get; set; } = new();
+    public List<CommandStep> PollingCommands { get; set; } = new();
+    public List<CommandStep> ShutdownCommands { get; set; } = new();
+    
+    // Timing configuration
+    public TimeSpan PollingInterval { get; set; } = TimeSpan.FromSeconds(1);
+    public TimeSpan MaxExecutionTime { get; set; } = TimeSpan.FromMinutes(30);
+    public int MaxPollingCycles { get; set; } = 1000;
+}
+
+// SerialPortPool.Core/Models/CommandStep.cs
+public class CommandStep
+{
+    public string StepId { get; set; } = "";            // "INIT_01"
+    public string Command { get; set; } = "";           // "AT+STATUS\r\n"
+    public string? ExpectedResponse { get; set; }       // "OK"
+    public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(2);
+    public int RetryCount { get; set; } = 3;
+    public TimeSpan DelayAfter { get; set; } = TimeSpan.FromMilliseconds(100);
+    public bool IsOptional { get; set; } = false;
+    public string Description { get; set; } = "";
+    
+    /// <summary>
+    /// Validate if response matches expected
+    /// </summary>
+    public bool ValidateResponse(string response)
+    {
+        if (string.IsNullOrEmpty(ExpectedResponse))
+            return true; // No validation required
+            
+        return response.Contains(ExpectedResponse, StringComparison.OrdinalIgnoreCase);
+    }
+}
+
+// SerialPortPool.Core/Models/SequenceConfiguration.cs
+public class SequenceConfiguration
+{
+    public Dictionary<string, CommunicationSequence> BibSequences { get; set; } = new();
+    public CommunicationSequence DefaultSequence { get; set; } = new();
+    
+    /// <summary>
+    /// Get sequence for specific BIB ID
+    /// </summary>
+    public CommunicationSequence GetSequenceForBib(string bibId)
+    {
+        return BibSequences.TryGetValue(bibId, out var sequence) ? sequence : DefaultSequence;
+    }
+    
+    /// <summary>
+    /// Load configuration from JSON file
+    /// </summary>
+    public static SequenceConfiguration LoadFromFile(string filePath)
+    {
+        var json = File.ReadAllText(filePath);
+        return JsonSerializer.Deserialize<SequenceConfiguration>(json) ?? new();
+    }
 }
 ```
 
-#### **Tests ÉTAPE 4:** (12 tests)
-- REST API endpoints functionality
-- Industrial allocation workflows
-- Communication sequence execution via API
-- Power management via API
-- EndZone integration scenarios
-
----
-
-## 🏗️ **Architecture Sprint 4 - FT4232H Optimized Service**
-
+#### **Jour 3-4: Sequence Manager**
+```csharp
+// SerialPortPool.Core/Services/SequenceManager.cs
+public class SequenceManager : ISequenceManager
+{
+    private readonly ILogger<SequenceManager> _logger;
+    private readonly SequenceConfiguration _configuration;
+    
+    /// <summary>
+    /// Execute complete communication sequence
+    /// </summary>
+    public async Task<SequenceExecutionResult> ExecuteSequenceAsync(
+        PortAllocation allocation, 
+        IndustrialInfo industrialInfo,
+        CancellationToken cancellationToken = default)
+    {
+        var sequence = _configuration.GetSequenceForBib(industrialInfo.BibId);
+        var result = new SequenceExecutionResult { StartTime = DateTime.Now };
+        
+        SerialPort? serialPort = null;
+        
+        try
+        {
+            _logger.LogInformation("Starting sequence {SequenceId} for {BibId} on port {PortName}", 
+                sequence.SequenceId, industrialInfo.BibId, allocation.PortName);
+                
+            // Configure and open serial port
+            serialPort = new SerialPort(allocation.PortName);
+            ConfigureSerialPort(serialPort, sequence.PortConfig);
+            serialPort.Open();
+            
+            // Phase 1: Initialization
+            result.InitializationResult = await ExecuteCommandPhaseAsync(
+                serialPort, sequence.InitializationCommands, "Initialization", cancellationToken);
+                
+            if (!result.InitializationResult.Success)
+            {
+                result.Success = false;
+                result.ErrorMessage = "Initialization phase failed";
+                return result;
+            }
+            
+            // Phase 2: Polling Loop
+            result.PollingResult = await ExecutePollingPhaseAsync(
+                serialPort, sequence, cancellationToken);
+                
+            // Phase 3: Shutdown (always execute)
+            result.ShutdownResult = await ExecuteCommandPhaseAsync(
+                serialPort, sequence.ShutdownCommands, "Shutdown", cancellationToken);
+                
+            result.Success = result.PollingResult.Success;
+            result.EndTime = DateTime.Now;
+            
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error executing sequence for {BibId}", industrialInfo.BibId);
+            result.Success = false;
+            result.ErrorMessage = ex.Message;
+            result.EndTime = DateTime.Now;
+            return result;
+        }
+        finally
+        {
+            serialPort?.Dispose();
+        }
+    }
+    
+    private async Task<PhaseResult> ExecutePollingPhaseAsync(
+        SerialPort serialPort, 
+        CommunicationSequence sequence,
+        CancellationToken cancellationToken)
+    {
+        var result = new PhaseResult { PhaseName = "Polling" };
+        var cycleCount = 0;
+        var startTime = DateTime.Now;
+        
+        while (!cancellationToken.IsCancellationRequested && 
+               cycleCount < sequence.MaxPollingCycles &&
+               DateTime.Now - startTime < sequence.MaxExecutionTime)
+        {
+            var cycleResult = await ExecuteCommandPhaseAsync(
+                serialPort, sequence.PollingCommands, $"Polling-{cycleCount}", cancellationToken);
+                
+            result.StepResults.AddRange(cycleResult.StepResults);
+            
+            if (!cycleResult.Success && !sequence.PollingCommands.All(c => c.IsOptional))
+            {
+                result.Success = false;
+                result.ErrorMessage = $"Polling cycle {cycleCount} failed";
+                break;
+            }
+            
+            cycleCount++;
+            await Task.Delay(sequence.PollingInterval, cancellationToken);
+        }
+        
+        result.Success = !cancellationToken.IsCancellationRequested;
+        return result;
+    }
+}
 ```
-SerialPortPoolService/                          ← Enhanced Windows Service
-├── Services/
-│   ├── FT4232HBackgroundService.cs            ← NEW: FT4232H monitoring
-│   └── PortDiscoveryBackgroundService.cs      ← EXISTING: Enhanced for FT4232H
-├── Controllers/
-│   └── FT4232HController.cs                   ← NEW: Simple management API
-├── Configuration/
-│   └── FT4232HSettings.cs                     ← NEW: FT4232H specific config
-└── Program.cs                                 ← ENHANCED: FT4232H DI integration
 
-SerialPortPool.Core/                           ← Enhanced Core Library
-├── Models/                                    ← NEW FT4232H Models
-│   ├── FT4232HInfo.cs                        ← FT4232H device representation
-│   ├── FT4232HPort.cs                        ← Port with bit-bang awareness
-│   ├── BitBangMessage.cs                     ← Bit-bang communication
-│   ├── SerialConfiguration.cs                ← Serial port configuration
-│   └── SystemState.cs                        ← System state management
-├── Services/                                  ← NEW FT4232H Services
-│   ├── FT4232HManager.cs                     ← Device discovery & management
-│   ├── BitBangCommunicationService.cs        ← Bit-bang port communication
-│   ├── SystemStateManager.cs                 ← System state coordination
-│   ├── FT4232HSerialService.cs               ← Serial communication on 3 ports
-│   ├── FT4232HConnectionPool.cs              ← Connection management
-│   └── SerialPortPool.cs                     ← ENHANCED: FT4232H integration
-└── Interfaces/
-    ├── IFT4232HManager.cs                    ← NEW: FT4232H contracts
-    └── IBitBangCommunicationService.cs       ← NEW: Bit-bang contracts
-
-tests/SerialPortPool.Core.Tests/               ← Enhanced Test Suite
-├── Services/
-│   ├── FT4232HManagerTests.cs                ← NEW: 8 tests
-│   ├── BitBangCommunicationTests.cs          ← NEW: 8 tests
-│   ├── FT4232HSerialServiceTests.cs          ← NEW: 6 tests
-│   └── SystemStateManagerTests.cs            ← NEW: 6 tests
-└── Integration/
-    └── FT4232HIntegrationTests.cs            ← NEW: 10 tests end-to-end
+#### **Jour 5: Configuration Management**
+```csharp
+// Default sequence configurations
+// SerialPortPoolService/Configuration/default-sequences.json
+{
+  "BibSequences": {
+    "BIB_001": {
+      "SequenceId": "BIB_001_Standard",
+      "BibId": "BIB_001",
+      "Description": "Standard test sequence for BIB 001",
+      "PortConfig": {
+        "BaudRate": 115200,
+        "Parity": "None",
+        "DataBits": 8,
+        "StopBits": "One"
+      },
+      "InitializationCommands": [
+        {
+          "StepId": "INIT_01",
+          "Command": "ATZ\r\n",
+          "ExpectedResponse": "OK",
+          "Timeout": "00:00:02",
+          "Description": "Reset device"
+        },
+        {
+          "StepId": "INIT_02", 
+          "Command": "AT+ECHO=0\r\n",
+          "ExpectedResponse": "OK",
+          "Description": "Disable echo"
+        }
+      ],
+      "PollingCommands": [
+        {
+          "StepId": "POLL_01",
+          "Command": "AT+STATUS\r\n",
+          "ExpectedResponse": "STATUS",
+          "Description": "Check device status"
+        }
+      ],
+      "ShutdownCommands": [
+        {
+          "StepId": "SHUT_01",
+          "Command": "AT+DISCONNECT\r\n",
+          "ExpectedResponse": "OK",
+          "Description": "Graceful disconnect"
+        }
+      ],
+      "PollingInterval": "00:00:01",
+      "MaxExecutionTime": "00:30:00"
+    }
+  },
+  "DefaultSequence": {
+    "SequenceId": "Default",
+    "BibId": "DEFAULT",
+    "Description": "Default sequence for unknown BIBs"
+  }
+}
 ```
 
----
-
-## 📊 **Business Value & Client Alignment**
-
-### **🎯 Addressing Client Needs Directly:**
-
-1. **✅ "Manage list of COMx from Windows Device Manager"**
-   → Already implemented in Sprint 1-3 with Enhanced Discovery
-
-2. **✅ "Get information about Driver Board via USB2Serial"**  
-   → ÉTAPE 1: IndustrialInfoExtractor extracts Slot, Oven, BIB ID from EEPROM
-
-3. **✅ "List of communication sequences specific to BIB"**
-   → ÉTAPE 2: CommunicationSequenceManager + BIB/DUT/UART mapping
-
-4. **✅ "Extract BIB ID, DUT#, UART# from USB2Serial"**
-   → ÉTAPE 1: Industrial info extraction integrated in pool allocation
-
-5. **✅ "Power ON/OFF signals for UART polling"**
-   → ÉTAPE 3: PowerManagementService + UartPollingService
-
-6. **✅ "Failure signal for power cut + test stop"**
-   → ÉTAPE 3: Emergency stop with EndZone integration
-
-### **🔥 Additional Business Value:**
-- **Industrial-grade error recovery** with power management
-- **REST API for EndZone integration** enabling ecosystem connectivity
-- **Comprehensive logging** with slot/oven/BIB correlation for traceability
-- **Thread-safe industrial operations** building on Sprint 3 foundation
+**Deliverable Semaine 2 :** ✅ Communication sequence engine operational
 
 ---
 
-## ⚡ **Performance Targets Sprint 4**
+### **🔹 SEMAINE 3: Complete Industrial Workflow (5 jours)**
+**Objectif :** End-to-end industrial automation workflow
 
-### **Industrial Operations:**
-- 🎯 **Industrial info extraction** : < 200ms (EEPROM + parsing)
-- 🎯 **Port allocation by criteria** : < 100ms (leveraging Sprint 3 pool)
-- 🎯 **Communication sequence execution** : < 500ms per sequence
-- 🎯 **Power signal response** : < 50ms (critical for safety)
-- 🎯 **REST API response** : < 200ms for industrial queries
+#### **Jour 1-2: Workflow Orchestrator**
+```csharp
+// SerialPortPool.Core/Services/WorkflowOrchestrator.cs
+public class WorkflowOrchestrator
+{
+    private readonly IIndustrialPoolManager _poolManager;
+    private readonly ISequenceManager _sequenceManager;
+    private readonly IBitBangService _bitBangService; // From Sprint 4
+    private readonly ILogger<WorkflowOrchestrator> _logger;
+    
+    /// <summary>
+    /// Execute complete industrial workflow for a BIB
+    /// </summary>
+    public async Task<IndustrialWorkflowResult> ExecuteIndustrialWorkflowAsync(
+        string bibId,
+        string clientId = "IndustrialWorkflow",
+        CancellationToken cancellationToken = default)
+    {
+        var workflowResult = new IndustrialWorkflowResult 
+        { 
+            BibId = bibId,
+            StartTime = DateTime.Now 
+        };
+        
+        try
+        {
+            _logger.LogInformation("Starting industrial workflow for BIB {BibId}", bibId);
+            
+            // Step 1: Allocate industrial port
+            var (allocation, industrialInfo) = await _poolManager
+                .AllocateIndustrialPortAsync(requiredBibId: bibId, clientId: clientId);
+                
+            if (allocation == null || industrialInfo == null)
+            {
+                workflowResult.Success = false;
+                workflowResult.ErrorMessage = $"Could not allocate port for BIB {bibId}";
+                return workflowResult;
+            }
+            
+            workflowResult.Allocation = allocation;
+            workflowResult.IndustrialInfo = industrialInfo;
+            
+            // Step 2: Send PowerOn signal (Sprint 4 bit-bang)
+            var deviceGroup = await FindDeviceGroupForPort(allocation.PortName);
+            if (deviceGroup != null)
+            {
+                await _bitBangService.SendPowerSignalAsync(
+                    deviceGroup.SerialNumber, PowerSignal.PowerOn);
+                workflowResult.PowerSignalsSent.Add("PowerOn");
+            }
+            
+            // Step 3: Execute communication sequence
+            workflowResult.SequenceResult = await _sequenceManager
+                .ExecuteSequenceAsync(allocation, industrialInfo, cancellationToken);
+                
+            // Step 4: Send TestStart signal
+            if (workflowResult.SequenceResult.InitializationResult.Success && deviceGroup != null)
+            {
+                await _bitBangService.SendPowerSignalAsync(
+                    deviceGroup.SerialNumber, PowerSignal.TestStart);
+                workflowResult.PowerSignalsSent.Add("TestStart");
+            }
+            
+            // Step 5: Wait for sequence completion or cancellation
+            // (Sequence manager handles the polling loop)
+            
+            // Step 6: Send TestStop signal
+            if (deviceGroup != null)
+            {
+                await _bitBangService.SendPowerSignalAsync(
+                    deviceGroup.SerialNumber, PowerSignal.TestStop);
+                workflowResult.PowerSignalsSent.Add("TestStop");
+            }
+            
+            // Step 7: Send PowerOff signal
+            if (deviceGroup != null)
+            {
+                await _bitBangService.SendPowerSignalAsync(
+                    deviceGroup.SerialNumber, PowerSignal.PowerOff);
+                workflowResult.PowerSignalsSent.Add("PowerOff");
+            }
+            
+            // Step 8: Release port
+            await _poolManager.ReleasePortAsync(allocation.PortName, allocation.SessionId);
+            workflowResult.PortReleased = true;
+            
+            workflowResult.Success = workflowResult.SequenceResult.Success;
+            workflowResult.EndTime = DateTime.Now;
+            
+            return workflowResult;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in industrial workflow for BIB {BibId}", bibId);
+            workflowResult.Success = false;
+            workflowResult.ErrorMessage = ex.Message;
+            workflowResult.EndTime = DateTime.Now;
+            return workflowResult;
+        }
+    }
+    
+    /// <summary>
+    /// Execute workflows for multiple BIBs concurrently
+    /// </summary>
+    public async Task<List<IndustrialWorkflowResult>> ExecuteMultipleBibWorkflowsAsync(
+        IEnumerable<string> bibIds,
+        int maxConcurrency = 3,
+        CancellationToken cancellationToken = default)
+    {
+        var semaphore = new SemaphoreSlim(maxConcurrency, maxConcurrency);
+        var tasks = bibIds.Select(async bibId =>
+        {
+            await semaphore.WaitAsync(cancellationToken);
+            try
+            {
+                return await ExecuteIndustrialWorkflowAsync(bibId, 
+                    $"MultiWorkflow-{bibId}", cancellationToken);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        });
+        
+        return (await Task.WhenAll(tasks)).ToList();
+    }
+}
+```
 
-### **Scalability:**
-- 🎯 **Support 50+ slots** simultaneously
-- 🎯 **Handle 200+ UARTs** in polling
-- 🎯 **Process 1000+ power signals/hour**
-- 🎯 **Maintain <1% failure rate** for critical operations
+#### **Jour 3-4: Service Integration**
+```csharp
+// SerialPortPoolService/Services/IndustrialBackgroundService.cs
+public class IndustrialBackgroundService : BackgroundService
+{
+    private readonly WorkflowOrchestrator _orchestrator;
+    private readonly ILogger<IndustrialBackgroundService> _logger;
+    private readonly IndustrialSettings _settings;
+    
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        _logger.LogInformation("🏭 Starting Industrial Background Service...");
+        
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                // Check for scheduled workflows
+                await ProcessScheduledWorkflowsAsync(stoppingToken);
+                
+                // Monitor ongoing workflows
+                await MonitorActiveWorkflowsAsync();
+                
+                // Cleanup completed workflows
+                await CleanupCompletedWorkflowsAsync();
+                
+                await Task.Delay(_settings.MonitoringInterval, stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in industrial background service");
+            }
+        }
+    }
+}
+
+// SerialPortPoolService/Program.cs - Enhanced DI
+services.AddSingleton<IndustrialSettings>();
+services.AddScoped<IIndustrialEepromParser, IndustrialEepromParser>();
+services.AddScoped<ISequenceManager, SequenceManager>();
+services.AddScoped<IIndustrialPoolManager, IndustrialPoolManager>();
+services.AddScoped<WorkflowOrchestrator>();
+services.AddHostedService<IndustrialBackgroundService>();
+
+// Load sequence configuration
+var sequenceConfig = SequenceConfiguration.LoadFromFile("Configuration/sequences.json");
+services.AddSingleton(sequenceConfig);
+```
+
+#### **Jour 5: Complete Integration Testing**
+```csharp
+// tests/SerialPortPool.Core.Tests/Integration/IndustrialWorkflowIntegrationTests.cs
+[Fact] EndToEnd_IndustrialWorkflow_BIB001_CompleteSuccess()
+[Fact] EndToEnd_MultipleWorkflows_ConcurrentExecution()
+[Fact] EndToEnd_WorkflowWithBitBang_PowerSignalsIntegrated()
+[Fact] EndToEnd_ErrorRecovery_GracefulFailure()
+```
+
+**Deliverable Semaine 3 :** ✅ Complete industrial workflow operational
 
 ---
 
-## 🧪 **Testing Strategy Sprint 4**
+### **🔹 SEMAINE 4: Production Polish & Demo (5 jours)**
+**Objectif :** Production readiness + impressive industrial demo
 
-### **Test Coverage Targets:**
-- **ÉTAPE 1:** 8 tests (Industrial info extraction)
-- **ÉTAPE 2:** 10 tests (Communication sequences)  
-- **ÉTAPE 3:** 8 tests (Power management)
-- **ÉTAPE 4:** 12 tests (REST API integration)
-- **Integration:** 10 tests (End-to-end industrial scenarios)
-- **Total:** 48+ new tests (vs current 65+ = 113+ total)
+#### **Jour 1-2: Enhanced Industrial Demo**
+```csharp
+// tests/IndustrialDemo/IndustrialDemo.cs
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        Console.WriteLine("🏭 Complete Industrial Automation Demo");
+        Console.WriteLine("====================================");
+        
+        // Phase 1: Discovery + Industrial Info (Sprint 3 + 5)
+        await DemoIndustrialDiscovery();
+        
+        // Phase 2: Bit-Bang Communication (Sprint 4)
+        await DemoBitBangCommunication();
+        
+        // Phase 3: Communication Sequences (Sprint 5)
+        await DemoCommunicationSequences();
+        
+        // Phase 4: Complete Industrial Workflow (Sprint 5)
+        await DemoCompleteWorkflow();
+        
+        Console.WriteLine("✅ Industrial automation demo completed!");
+    }
+    
+    static async Task DemoCompleteWorkflow()
+    {
+        Console.WriteLine("\n🏭 === COMPLETE INDUSTRIAL WORKFLOW ===");
+        
+        var bibIds = new[] { "BIB_001", "BIB_002" };
+        var results = await orchestrator.ExecuteMultipleBibWorkflowsAsync(bibIds);
+        
+        foreach (var result in results)
+        {
+            Console.WriteLine($"📋 BIB {result.BibId}: {(result.Success ? "✅ SUCCESS" : "❌ FAILED")}");
+            Console.WriteLine($"   Duration: {result.Duration.TotalSeconds:F1}s");
+            Console.WriteLine($"   Power Signals: {string.Join(", ", result.PowerSignalsSent)}");
+            Console.WriteLine($"   Sequence Steps: {result.SequenceResult?.StepResults.Count ?? 0}");
+        }
+    }
+}
+```
 
-### **Hardware Testing:**
-- ✅ **FTDI devices** with programmed EEPROM industrial data
-- ✅ **Multi-port scenarios** (FT4232H with 4 UARTs)
-- ✅ **Power signal simulation** for ON/OFF/Failure
-- ✅ **EndZone integration** with real REST API calls
+#### **Jour 3-4: Production Features**
+- **Enhanced Logging** : Structured logging pour workflows industriels
+- **Performance Monitoring** : Metrics pour sequence execution times
+- **Error Recovery** : Robust error handling et retry strategies
+- **Configuration Validation** : Startup validation des sequences
+- **Health Checks** : Industrial service health monitoring
 
----
+#### **Jour 5: Documentation & Deployment**
+- **User Guide** : Industrial workflow documentation
+- **Configuration Guide** : Sequence setup et BIB mapping
+- **Troubleshooting** : Common issues et solutions
+- **Performance Guide** : Optimization recommendations
 
-## 📅 **Timeline Sprint 4 FT4232H Simplified**
-
-| Semaine | Étape | Focus | Deliverable | Tests | Risk Level |
-|---------|-------|-------|-------------|-------|------------|
-| **Semaine 1** | ÉTAPE 1 | FT4232H + EEPROM Format Design | Hardware optimization + our format | 6 | 🟢 LOW |
-| **Semaine 2** | ÉTAPE 2 | Serial Communication (3 ports) | Simple serial service | 5 | 🟢 LOW |
-| **Semaine 3** | ÉTAPE 3 | Simple Bit-Bang (4th port) | Reduced volume communication | 6 | 🟢 LOW |  
-| **Semaine 4** | ÉTAPE 4 | Windows Service Integration | Service + minimal API | 5 | 🟢 LOW |
-| **Buffer** | Polish | End-to-end + Documentation | Complete scenarios | 8 | 🟢 LOW |
-
-**Total Duration:** 4 semaines (vs 4-5 original) - **ACCELERATED due to simplification**
-
-### **🚀 Timeline Benefits:**
-- **Reduced complexity** → Faster delivery
-- **Clear specifications** → No discovery phase needed  
-- **Our EEPROM lead** → No external dependencies
-- **Simple bit-bang** → Minimal protocol development
-
----
-
-## 🚨 **Risks & Mitigation**
-
-### **Technical Risks:**
-- ❌ **EEPROM data format unknown** → Work with client to define format
-- ❌ **EndZone integration complexity** → Start with simple API, iterate
-- ❌ **Power signal implementation** → Define clear protocol with client
-- ❌ **Performance under industrial load** → Extensive stress testing
-
-### **Business Risks:**
-- ❌ **Client expectations unclear** → Regular demos and validation
-- ❌ **Integration timeline pressure** → Prioritize MVP functionality first
-- ❌ **Hardware dependency** → Mock industrial scenarios for testing
-
----
-
-## 🎯 **Success Criteria Sprint 4**
-
-### **Must Have:**
-- ✅ Industrial information extraction functional
-- ✅ Communication sequences executable  
-- ✅ Power management operational
-- ✅ REST API responsive for EndZone
-- ✅ 48+ new tests passing
-- ✅ Zero regression on Sprint 3 functionality
-
-### **Nice to Have:**
-- 🎯 Advanced error recovery strategies
-- 🎯 Performance monitoring dashboards
-- 🎯 Configuration management UI
-- 🎯 Advanced logging and traceability
+**Deliverable Semaine 4 :** ✅ Production-ready industrial automation
 
 ---
 
-## 🚀 **Ready to Build Industrial Excellence!**
+## 🧪 **Testing Strategy Sprint 5**
 
-**Sprint 4 capitalizes perfectly on Sprint 3's enterprise foundation to deliver the exact industrial capabilities your client needs !**
+### **Test Coverage Targets :**
+- **Industrial EEPROM :** 10 tests parsing logic
+- **Sequence Management :** 12 tests execution engine
+- **Pool Integration :** 8 tests industrial allocation
+- **Workflow Orchestration :** 10 tests end-to-end
+- **Integration Tests :** 12 tests complete scenarios
+- **Total :** 52+ nouveaux tests
 
-- **Foundation:** Thread-safe pool ✅ (Sprint 3)
-- **Enhancement:** Industrial layer 🚀 (Sprint 4)  
-- **Integration:** EndZone ecosystem 🌐 (Sprint 4)
-- **Business Value:** Complete automation solution 💼 (Sprint 4)
+### **Business Logic Testing :**
+- ✅ **Real EEPROM data** avec BIB/DUT/UART scenarios
+- ✅ **Communication sequences** avec hardware simulation
+- ✅ **Multi-BIB workflows** concurrent execution
+- ✅ **Error scenarios** et recovery testing
 
-**Next Action:** Validate this plan with client and start ÉTAPE 1 - Industrial Info API !
+---
+
+## 🎯 **Success Criteria Sprint 5**
+
+### **Must Have :**
+- ✅ Industrial EEPROM parsing extracting BIB/DUT/UART
+- ✅ Communication sequences configurable par BIB
+- ✅ Complete workflow : allocation → sequence → bit-bang → release
+- ✅ Multi-BIB concurrent processing
+- ✅ 52+ nouveaux tests passing
+- ✅ Production logging et monitoring
+- ✅ Zero regression sur Sprints 3-4
+
+### **Nice to Have :**
+- 🎯 Advanced sequence debugging et tracing
+- 🎯 Real-time workflow monitoring dashboard
+- 🎯 Sequence performance optimization
+- 🎯 Configuration hot-reload capability
+
+---
+
+## 🚀 **Sprint 6 Foundation Ready**
+
+**Avec Sprint 5 completed :**
+- **Complete Industrial Layer** : EEPROM + Sequences ✅
+- **End-to-End Automation** : Workflow orchestration ✅
+- **Production Ready** : Monitoring + error handling ✅
+- **Client Requirements** : All core needs addressed ✅
+
+**Sprint 6 Focus Candidates :**
+- **Advanced Monitoring & Analytics** : Performance dashboards
+- **High Availability Features** : Clustering et fault tolerance
+- **Advanced Sequence Features** : Conditional logic, loops
+- **Client-Specific Customizations** : Additional BIB types
+
+---
+
+## 📈 **Expected Business Value**
+
+| Capability | Client Requirement | Sprint 5 Deliverable |
+|------------|-------------------|---------------------|
+| **Driver Board Info** | "Get information about Driver Board" | ✅ Industrial EEPROM parsing |
+| **BIB/DUT/UART Extraction** | "Extract BIB ID, DUT#, UART#" | ✅ IndustrialInfo.ParseFromEeprom() |
+| **BIB-Specific Sequences** | "Communication sequences specific to BIB" | ✅ SequenceConfiguration + Manager |
+| **UART Polling** | "Power ON/OFF signals for UART polling" | ✅ Integration with Sprint 4 bit-bang |
+| **Complete Automation** | End-to-end workflow | ✅ WorkflowOrchestrator |
+
+---
+
+## 🔥 **Sprint 5 - Industrial Business Logic Ready !**
+
+**Foundation Parfaite :**
+- **Technical Excellence** : Sprints 3-4 provide solid base
+- **Business Focus** : Direct client value delivery  
+- **Incremental Approach** : Build on proven components
+- **Production Ready** : Full industrial automation capability
+
+**Next Action après Sprint 4 :** Start with `IndustrialInfo` model and EEPROM parsing !
+
+---
+
+*Document créé : 22 Juillet 2025*  
+*Sprint 5 Status : 📋 PLANNED - Ready after Sprint 4*  
+*Focus : Industrial Business Logic (EEPROM + Sequences)*  
+*Duration : 4 semaines*  
+*Foundation : Sprint 3 + Sprint 4 Complete*
