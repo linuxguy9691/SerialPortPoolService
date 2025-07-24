@@ -149,6 +149,28 @@ try {
     Copy-Item "$serviceBinPath\*" $stagingDir -Recurse -Force
     Write-Success "Files staged successfully"
     
+    # 6.5. Copy PowerShell scripts for service installation
+    Write-Status "Copying PowerShell installation scripts..."
+
+    $installScriptSource = Join-Path $baseProjectPath "scripts\Install-Service.ps1"
+    $uninstallScriptSource = Join-Path $baseProjectPath "Uninstall-Service.ps1"
+
+    if (Test-Path $installScriptSource) {
+        Copy-Item $installScriptSource $stagingDir -Force
+        Write-Success "Install-Service.ps1 copied to staging"
+    } else {
+        Write-Error "Install-Service.ps1 not found at: $installScriptSource"
+        exit 1
+    }
+
+    if (Test-Path $uninstallScriptSource) {
+        Copy-Item $uninstallScriptSource $stagingDir -Force
+        Write-Success "Uninstall-Service.ps1 copied to staging"
+    } else {
+        Write-Error "Uninstall-Service.ps1 not found at: $uninstallScriptSource"
+        exit 1
+    }
+
     # 7. Create minimal config and docs
     $configDir = Join-Path $stagingDir "Configuration"
     $docsDir = Join-Path $stagingDir "Documentation"
@@ -173,7 +195,8 @@ try {
     New-Item (Split-Path $wixObject -Parent) -ItemType Directory -Force | Out-Null
     
     # Compile
-    & candle.exe $wixSource -out $wixObject -dSourceDir=$stagingDir -ext WixUtilExtension
+    #& candle.exe $wixSource -out $wixObject -dSourceDir=$stagingDir -ext WixUtilExtension
+    & candle.exe $wixSource -out $wixObject -dSourceDir="$stagingDir" -ext WixUtilExtension
     if ($LASTEXITCODE -ne 0) {
         Write-Error "WiX compilation failed"
         exit 1

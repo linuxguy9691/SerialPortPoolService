@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- SerialPortPool-Setup-Simple.wxs - Simplified version without problematic elements -->
+<!-- SerialPortPool-Setup with Custom Action for Service Installation -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
 
   <!-- Product Definition -->
@@ -36,6 +36,9 @@
           <!-- Documentation Directory -->
           <Directory Id="DocsDir" Name="Documentation" />
           
+          <!-- Scripts Directory -->
+          <Directory Id="ScriptsDir" Name="Scripts" />
+          
         </Directory>
       </Directory>
 
@@ -47,70 +50,74 @@
       </Directory>
     </Directory>
 
-    <!-- Components -->
+    <!-- Components with Fixed GUIDs -->
     
-    <!-- Main Service Component -->
-    <Component Id="ServiceExecutable" Guid="*" Directory="ServiceDir">
+    <!-- Main Service Executable Component (NO SERVICE INSTALL HERE) -->
+    <Component Id="ServiceExecutable" Guid="A1B2C3D4-E5F6-7890-ABCD-1234567890AB" Directory="ServiceDir">
       <File Id="ServiceExe" 
             Source="$(var.SourceDir)\SerialPortPoolService.exe" 
             KeyPath="yes" />
-      <File Id="NLogConfig" 
-            Source="$(var.SourceDir)\NLog.config" />
-      
-      <!-- Service Dependencies -->
-      <File Id="CoreLibrary" 
-            Source="$(var.SourceDir)\SerialPortPool.Core.dll" />
-      <File Id="NLogDll" 
-            Source="$(var.SourceDir)\NLog.dll" />
-      <File Id="NLogExtensions" 
-            Source="$(var.SourceDir)\NLog.Extensions.Logging.dll" />
-      
-      <!-- Windows Service Installation -->
-      <ServiceInstall Id="SerialPortPoolServiceInstall"
-                      Name="SerialPortPoolService"
-                      DisplayName="SerialPortPool Service"
-                      Description="Professional serial port pool management service"
-                      Type="ownProcess"
-                      Start="auto"
-                      Account="LocalSystem"
-                      ErrorControl="normal"
-                      Interactive="no" />
-      
-      <!-- Service Control -->
-      <ServiceControl Id="SerialPortPoolServiceControl"
-                      Name="SerialPortPoolService"
-                      Start="install"
-                      Stop="both"
-                      Remove="uninstall"
-                      Wait="yes" />
     </Component>
 
-    <!-- Configuration Component -->
-    <Component Id="DefaultConfiguration" Guid="*" Directory="ConfigDir">
+    <!-- Configuration Files Component -->
+    <Component Id="ConfigFiles" Guid="B2C3D4E5-F6A7-8901-BCDE-2345678901BC" Directory="ServiceDir">
+      <File Id="NLogConfig" 
+            Source="$(var.SourceDir)\NLog.config" 
+            KeyPath="yes" />
+    </Component>
+    
+    <!-- Core Library Component -->
+    <Component Id="CoreLibrary" Guid="C3D4E5F6-A7B8-9012-CDEF-3456789012CD" Directory="ServiceDir">
+      <File Id="CoreDll" 
+            Source="$(var.SourceDir)\SerialPortPool.Core.dll" 
+            KeyPath="yes" />
+    </Component>
+    
+    <!-- NLog Dependencies Component -->
+    <Component Id="NLogDependencies" Guid="D4E5F6A7-B8C9-0123-DEF0-4567890123DE" Directory="ServiceDir">
+      <File Id="NLogDll" 
+            Source="$(var.SourceDir)\NLog.dll" 
+            KeyPath="yes" />
+      <File Id="NLogExtensions" 
+            Source="$(var.SourceDir)\NLog.Extensions.Logging.dll" />
+    </Component>
+
+    <!-- Installation Scripts Component -->
+    <Component Id="InstallationScripts" Guid="E5F6A7B8-C9D0-1234-EF01-5678901234EF" Directory="ScriptsDir">
+      <File Id="InstallScript" 
+            Source="$(var.SourceDir)\Install-Service.ps1" 
+            KeyPath="yes" />
+      <File Id="UninstallScript" 
+            Source="$(var.SourceDir)\Uninstall-Service.ps1" />
+    </Component>
+
+    <!-- Default Configuration Component -->
+    <Component Id="DefaultConfiguration" Guid="F6A7B8C9-D0E1-2345-F012-6789012345F0" Directory="ConfigDir">
       <File Id="DefaultSettings" 
             Source="$(var.SourceDir)\default-settings.json" 
             KeyPath="yes" />
     </Component>
 
     <!-- Documentation Component -->
-    <Component Id="Documentation" Guid="*" Directory="DocsDir">
+    <Component Id="Documentation" Guid="A7B8C9D0-E1F2-3456-0123-7890123456A0" Directory="DocsDir">
       <File Id="ReadmeMVP" 
             Source="$(var.SourceDir)\README-MVP.txt" 
             KeyPath="yes" />
     </Component>
 
-    <!-- Logs Directory Component - Simplified without PermissionEx -->
-    <Component Id="LogsDirectory" Guid="*" Directory="LogsDir">
+    <!-- Logs Directory Component -->
+    <Component Id="LogsDirectory" Guid="B8C9D0E1-F2A3-4567-1234-8901234567B1" Directory="LogsDir">
       <CreateFolder />
     </Component>
 
     <!-- Registry Component for Configuration -->
-    <Component Id="RegistryEntries" Guid="*" Directory="TARGETDIR">
+    <Component Id="RegistryEntries" Guid="C9D0E1F2-A3B4-5678-2345-9012345678C2" Directory="TARGETDIR">
       <!-- Installation Path -->
       <RegistryKey Root="HKLM" Key="SOFTWARE\SerialPortPool">
         <RegistryValue Name="InstallPath" 
                        Type="string" 
-                       Value="[INSTALLFOLDER]" />
+                       Value="[INSTALLFOLDER]" 
+                       KeyPath="yes" />
         <RegistryValue Name="Version" 
                        Type="string" 
                        Value="1.0.0.0" />
@@ -118,23 +125,28 @@
                        Type="string" 
                        Value="SerialPortPoolService" />
       </RegistryKey>
-      
-      <!-- Uninstall Information -->
-      <RegistryKey Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\SerialPortPool">
-        <RegistryValue Name="DisplayName" 
-                       Type="string" 
-                       Value="SerialPortPool Service" />
-        <RegistryValue Name="DisplayVersion" 
-                       Type="string" 
-                       Value="1.0.0.0" />
-        <RegistryValue Name="Publisher" 
-                       Type="string" 
-                       Value="SerialPortPool Solutions" />
-        <RegistryValue Name="InstallLocation" 
-                       Type="string" 
-                       Value="[INSTALLFOLDER]" />
-      </RegistryKey>
     </Component>
+
+    <!-- Custom Actions for Service Management -->
+    <CustomAction Id="InstallService" 
+                  Directory="ScriptsDir" 
+                  ExeCommand="powershell.exe -ExecutionPolicy Bypass -File &quot;Install-Service.ps1&quot; -ServicePath &quot;[ServiceDir]SerialPortPoolService.exe&quot;" 
+                  Execute="deferred" 
+                  Impersonate="no" 
+                  Return="check" />
+
+    <CustomAction Id="UninstallService" 
+                  Directory="ScriptsDir" 
+                  ExeCommand="powershell.exe -ExecutionPolicy Bypass -File &quot;Uninstall-Service.ps1&quot;" 
+                  Execute="deferred" 
+                  Impersonate="no" 
+                  Return="ignore" />
+
+    <!-- Install Sequence -->
+    <InstallExecuteSequence>
+      <Custom Action="InstallService" After="InstallFiles">NOT Installed</Custom>
+      <Custom Action="UninstallService" After="InstallInitialize">REMOVE="ALL"</Custom>
+    </InstallExecuteSequence>
 
     <!-- Features -->
     <Feature Id="MainFeature" 
@@ -143,6 +155,10 @@
              Level="1"
              ConfigurableDirectory="INSTALLFOLDER">
       <ComponentRef Id="ServiceExecutable" />
+      <ComponentRef Id="ConfigFiles" />
+      <ComponentRef Id="CoreLibrary" />
+      <ComponentRef Id="NLogDependencies" />
+      <ComponentRef Id="InstallationScripts" />
       <ComponentRef Id="LogsDirectory" />
       <ComponentRef Id="RegistryEntries" />
     </Feature>
@@ -161,17 +177,9 @@
       <ComponentRef Id="Documentation" />
     </Feature>
 
-    <!-- Installation Properties -->
-    <Property Id="MSIUSEREALADMINDETECTION" Value="1" />
-    
-    <!-- Prevent installation on non-Windows platforms -->
-    <Condition Message="This application requires Windows 10 or later.">
-      <![CDATA[Installed OR (VersionNT >= 1000)]]>
-    </Condition>
-    
-    <!-- Require administrator privileges -->
-    <Condition Message="This application requires administrator privileges.">
-      <![CDATA[Installed OR Privileged]]>
+    <!-- Simplified Conditions -->
+    <Condition Message="This application requires Windows 8.1 or later.">
+      <![CDATA[Installed OR (VersionNT >= 603)]]>
     </Condition>
 
   </Product>

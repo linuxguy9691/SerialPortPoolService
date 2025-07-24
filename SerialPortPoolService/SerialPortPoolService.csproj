@@ -46,4 +46,14 @@
   </None>
 </ItemGroup>
 
+<!-- Ajouter dans SerialPortPoolService.csproj -->
+<ItemGroup>
+  <None Update="Install-Service.ps1">
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+  </None>
+  <None Update="Uninstall-Service.ps1">
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+  </None>
+</ItemGroup>
+
 </Project>
