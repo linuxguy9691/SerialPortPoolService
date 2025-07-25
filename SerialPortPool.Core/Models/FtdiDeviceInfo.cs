@@ -1,7 +1,9 @@
+// SerialPortPool.Core/Models/FtdiDeviceInfo.cs - UPDATED for FT4232HL Support
 namespace SerialPortPool.Core.Models;
 
 /// <summary>
 /// Detailed information about an FTDI device
+/// UPDATED: Added support for FT4232HL (PID 6048) variant
 /// </summary>
 public class FtdiDeviceInfo
 {
@@ -52,10 +54,13 @@ public class FtdiDeviceInfo
     public bool IsMultiPortDevice => ChipType.Contains("4232") || ChipType.Contains("2232");
     
     /// <summary>
-    /// Whether this is specifically a 4232H chip (client requirement)
+    /// Whether this is specifically a 4232H chip or variant (client requirement)
+    /// UPDATED: Now supports both FT4232H (6011) and FT4232HL (6048)
     /// </summary>
     public bool Is4232H => ChipType.Equals("FT4232H", StringComparison.OrdinalIgnoreCase) ||
-                          ProductId.Equals("6011", StringComparison.OrdinalIgnoreCase);
+                          ChipType.Equals("FT4232HL", StringComparison.OrdinalIgnoreCase) ||
+                          ProductId.Equals("6011", StringComparison.OrdinalIgnoreCase) ||
+                          ProductId.Equals("6048", StringComparison.OrdinalIgnoreCase); // ← NEW: Added 6048 support
     
     /// <summary>
     /// Additional data from EEPROM if available
@@ -106,13 +111,15 @@ public class FtdiDeviceInfo
     
     /// <summary>
     /// Get human-readable chip type from Product ID
+    /// UPDATED: Added support for FT4232HL (6048)
     /// </summary>
     private static string GetChipTypeFromPid(string productId)
     {
         return productId.ToUpper() switch
         {
             "6001" => "FT232R",        // Single port, common USB-to-serial
-            "6011" => "FT4232H",       // 4-port, high speed (CLIENT REQUIREMENT)
+            "6011" => "FT4232H",       // 4-port, high speed (original)
+            "6048" => "FT4232HL",      // 4-port, high speed, low power ← NEW: Added support
             "6014" => "FT232H",        // Single port, high speed
             "6010" => "FT2232H",       // 2-port, high speed
             "6015" => "FT X-Series",   // Various X-Series chips
@@ -125,7 +132,7 @@ public class FtdiDeviceInfo
     
     public override string ToString()
     {
-        var status = Is4232H ? "✅ VALID (4232H)" : "❌ INVALID (Not 4232H)";
+        var status = Is4232H ? "✅ VALID (4232H/4232HL)" : "❌ INVALID (Not 4232H)";
         return $"FTDI {ChipType} (VID: {VendorId}, PID: {ProductId}) - {status}";
     }
 }

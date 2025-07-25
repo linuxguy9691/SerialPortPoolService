@@ -203,9 +203,9 @@ public class PortValidationConfiguration
     public bool StrictValidation { get; set; } = true;
     
     /// <summary>
-    /// Allowed FTDI Product IDs (PIDs) - for client, only 6011 (4232H)
+    /// Allowed FTDI Product IDs (PIDs) - for client, only 6048 (4232H)
     /// </summary>
-    public string[] AllowedFtdiProductIds { get; set; } = { "6011" }; // Only FT4232H
+    public string[] AllowedFtdiProductIds { get; set; } = { "6048" }; // Only FT4232H
     
     /// <summary>
     /// Create default configuration for client requirements
@@ -217,7 +217,7 @@ public class PortValidationConfiguration
             RequireFtdiDevice = true,
             Require4232HChip = true,
             ExpectedManufacturer = "FTDI",
-            AllowedFtdiProductIds = new[] { "6011" }, // Only FT4232H
+            AllowedFtdiProductIds = new[] { "6048" }, // Only FT4232H
             ExcludedPortNames = new[] { "COM1", "COM2" },
             MinimumValidationScore = 100, // Must be perfect match
             StrictValidation = true
@@ -234,7 +234,7 @@ public class PortValidationConfiguration
             RequireFtdiDevice = true,
             Require4232HChip = false, // Allow other FTDI chips for testing
             ExpectedManufacturer = "FTDI",
-            AllowedFtdiProductIds = new[] { "6001", "6011", "6014" }, // Multiple chips allowed
+            AllowedFtdiProductIds = new[] { "6001", "6048", "6014" }, // Multiple chips allowed
             ExcludedPortNames = new[] { "COM1" },
             MinimumValidationScore = 70, // More lenient
             StrictValidation = false
