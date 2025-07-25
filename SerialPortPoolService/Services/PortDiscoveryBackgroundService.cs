@@ -1,243 +1,185 @@
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.DependencyInjection;
-using SerialPortPool.Core.Interfaces;
-using SerialPortPool.Core.Models;
-
-namespace SerialPortPoolService.Services;
+// SerialPortPoolService/Services/PortDiscoveryBackgroundService.cs - ENHANCED
+// Ajouter cette méthode à la classe PortDiscoveryBackgroundService
 
 /// <summary>
-/// Background service for continuous serial port discovery and monitoring
+/// Enhanced discovery with device grouping (ÉTAPE 5 integration)
 /// </summary>
-public class PortDiscoveryBackgroundService : BackgroundService
+private async Task PerformEnhancedDiscoveryAsync(bool isInitial)
 {
-    private readonly ILogger<PortDiscoveryBackgroundService> _logger;
-    private readonly IServiceProvider _serviceProvider;
-    private readonly TimeSpan _discoveryInterval = TimeSpan.FromSeconds(30);
-    
-    // State tracking for change detection
-    private List<SerialPortInfo> _lastKnownPorts = new();
-    private DateTime _lastDiscoveryTime = DateTime.MinValue;
-
-    public PortDiscoveryBackgroundService(
-        ILogger<PortDiscoveryBackgroundService> logger,
-        IServiceProvider serviceProvider)
+    try
     {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
-    }
+        var discoveryStartTime = DateTime.Now;
+        
+        _logger.LogDebug($"🔍 Starting enhanced discovery with device grouping (Initial: {isInitial})...");
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        _logger.LogInformation("🔄 Background Discovery Service starting...");
-        _logger.LogInformation($"📊 Discovery interval: {_discoveryInterval.TotalSeconds} seconds");
+        // Create a new scope for DI services
+        using var scope = _serviceProvider.CreateScope();
+        var discovery = scope.ServiceProvider.GetRequiredService<ISerialPortDiscovery>() as EnhancedSerialPortDiscoveryService;
 
-        try
+        if (discovery == null)
         {
-            // Initial discovery
-            await PerformDiscoveryAsync(isInitial: true);
-
-            // Periodic discovery loop
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                try
-                {
-                    await Task.Delay(_discoveryInterval, stoppingToken);
-                    await PerformDiscoveryAsync(isInitial: false);
-                }
-                catch (OperationCanceledException)
-                {
-                    _logger.LogInformation("Background Discovery Service cancellation requested");
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error in background discovery loop - continuing...");
-                    // Continue the loop even if one iteration fails
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.LogInformation("Background Discovery Service stopped via cancellation");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Fatal error in Background Discovery Service");
-            throw; // Re-throw fatal errors
-        }
-        finally
-        {
-            _logger.LogInformation("🛑 Background Discovery Service stopped");
-        }
-    }
-
-    /// <summary>
-    /// Perform a single discovery cycle
-    /// </summary>
-    private async Task PerformDiscoveryAsync(bool isInitial)
-    {
-        try
-        {
-            var discoveryStartTime = DateTime.Now;
-            
-            _logger.LogDebug($"🔍 Starting discovery cycle (Initial: {isInitial})...");
-
-            // Create a new scope for DI services (important for background services)
-            using var scope = _serviceProvider.CreateScope();
-            var discovery = scope.ServiceProvider.GetRequiredService<ISerialPortDiscovery>();
-
-            // Perform discovery
-            var discoveredPorts = await discovery.DiscoverPortsAsync();
-            var portList = discoveredPorts.ToList();
-
-            var discoveryDuration = DateTime.Now - discoveryStartTime;
-            _logger.LogDebug($"⏱️ Discovery completed in {discoveryDuration.TotalMilliseconds:F0}ms");
-
-            if (isInitial)
-            {
-                await HandleInitialDiscovery(portList);
-            }
-            else
-            {
-                await HandlePeriodicDiscovery(portList);
-            }
-
-            // Update state
-            _lastKnownPorts = portList;
-            _lastDiscoveryTime = discoveryStartTime;
-
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error during discovery cycle");
-            // Don't re-throw - let the service continue
-        }
-    }
-
-    /// <summary>
-    /// Handle initial discovery on service startup
-    /// </summary>
-    private async Task HandleInitialDiscovery(List<SerialPortInfo> ports)
-    {
-        _logger.LogInformation("📡 Initial Discovery Results:");
-        _logger.LogInformation($"📊 Found {ports.Count} serial port(s)");
-
-        if (ports.Count == 0)
-        {
-            _logger.LogInformation("❌ No serial ports detected");
+            _logger.LogWarning("Enhanced Discovery Service not available, falling back to basic discovery");
+            await PerformDiscoveryAsync(isInitial); // Fallback
             return;
         }
 
-        // Log details of each port
-        foreach (var port in ports)
+        // PHASE 1: Traditional port discovery
+        var discoveredPorts = await discovery.DiscoverPortsAsync();
+        var portList = discoveredPorts.ToList();
+
+        // PHASE 2: Device grouping discovery (NEW)
+        var deviceGroups = await discovery.DiscoverDeviceGroupsAsync();
+        var groupList = deviceGroups.ToList();
+
+        var discoveryDuration = DateTime.Now - discoveryStartTime;
+        _logger.LogDebug($"⏱️ Enhanced discovery completed in {discoveryDuration.TotalMilliseconds:F0}ms");
+
+        if (isInitial)
         {
-            var ftdiStatus = port.IsFtdiDevice ? $"FTDI {port.FtdiChipType}" : "Non-FTDI";
-            var validStatus = port.IsValidForPool ? "VALID" : "INVALID";
-            
-            _logger.LogInformation($"  📍 {port.PortName}: {port.FriendlyName}");
-            _logger.LogInformation($"      🏭 Type: {ftdiStatus} | Status: {validStatus}");
-            
-            if (port.IsFtdiDevice && port.FtdiInfo != null)
-            {
-                _logger.LogDebug($"      🔍 VID/PID: {port.FtdiInfo.VendorId}/{port.FtdiInfo.ProductId}, Serial: {port.FtdiInfo.SerialNumber}");
-            }
-
-            if (port.ValidationResult != null)
-            {
-                _logger.LogDebug($"      📋 Validation: {port.ValidationResult.Reason} (Score: {port.ValidationResult.ValidationScore}%)");
-            }
-        }
-
-        // Summary
-        var ftdiCount = ports.Count(p => p.IsFtdiDevice);
-        var validCount = ports.Count(p => p.IsValidForPool);
-        
-        _logger.LogInformation($"📊 Summary: {ftdiCount} FTDI devices, {validCount} valid for pool");
-
-        await Task.CompletedTask; // Placeholder for async operations
-    }
-
-    /// <summary>
-    /// Handle periodic discovery and detect changes
-    /// </summary>
-    private async Task HandlePeriodicDiscovery(List<SerialPortInfo> currentPorts)
-    {
-        _logger.LogDebug($"🔄 Periodic discovery: {currentPorts.Count} ports found");
-
-        // Detect changes
-        var changes = DetectPortChanges(_lastKnownPorts, currentPorts);
-        
-        if (changes.HasChanges)
-        {
-            _logger.LogInformation("📡 Port changes detected:");
-            
-            // Log new ports
-            foreach (var newPort in changes.NewPorts)
-            {
-                var ftdiStatus = newPort.IsFtdiDevice ? $"FTDI {newPort.FtdiChipType}" : "Non-FTDI";
-                _logger.LogInformation($"  ➕ CONNECTED: {newPort.PortName} ({newPort.FriendlyName}) [{ftdiStatus}]");
-                
-                if (newPort.IsFtdiDevice && newPort.FtdiInfo != null)
-                {
-                    _logger.LogInformation($"      🔍 VID/PID: {newPort.FtdiInfo.VendorId}/{newPort.FtdiInfo.ProductId}, Serial: {newPort.FtdiInfo.SerialNumber}");
-                }
-            }
-            
-            // Log removed ports
-            foreach (var removedPort in changes.RemovedPorts)
-            {
-                var ftdiStatus = removedPort.IsFtdiDevice ? $"FTDI {removedPort.FtdiChipType}" : "Non-FTDI";
-                _logger.LogInformation($"  ➖ DISCONNECTED: {removedPort.PortName} ({removedPort.FriendlyName}) [{ftdiStatus}]");
-            }
-            
-            // Log summary
-            _logger.LogInformation($"📊 Changes: +{changes.NewPorts.Count} added, -{changes.RemovedPorts.Count} removed");
+            await HandleInitialEnhancedDiscovery(portList, groupList);
         }
         else
         {
-            _logger.LogDebug("📊 No port changes detected");
+            await HandlePeriodicEnhancedDiscovery(portList, groupList);
         }
 
-        await Task.CompletedTask; // Placeholder for async operations
+        // Update state
+        _lastKnownPorts = portList;
+        _lastDiscoveryTime = discoveryStartTime;
+
     }
-
-    /// <summary>
-    /// Detect changes between previous and current port lists
-    /// </summary>
-    private PortChanges DetectPortChanges(List<SerialPortInfo> previousPorts, List<SerialPortInfo> currentPorts)
+    catch (Exception ex)
     {
-        var previousPortNames = previousPorts.Select(p => p.PortName).ToHashSet();
-        var currentPortNames = currentPorts.Select(p => p.PortName).ToHashSet();
-
-        var newPortNames = currentPortNames.Except(previousPortNames).ToList();
-        var removedPortNames = previousPortNames.Except(currentPortNames).ToList();
-
-        var newPorts = currentPorts.Where(p => newPortNames.Contains(p.PortName)).ToList();
-        var removedPorts = previousPorts.Where(p => removedPortNames.Contains(p.PortName)).ToList();
-
-        return new PortChanges
-        {
-            NewPorts = newPorts,
-            RemovedPorts = removedPorts,
-            HasChanges = newPorts.Any() || removedPorts.Any()
-        };
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        _logger.LogInformation("🛑 Background Discovery Service stop requested...");
-        await base.StopAsync(cancellationToken);
-        _logger.LogInformation("✅ Background Discovery Service stopped successfully");
+        _logger.LogError(ex, "Error during enhanced discovery cycle with device grouping");
+        // Fallback to basic discovery
+        await PerformDiscoveryAsync(isInitial);
     }
 }
 
 /// <summary>
-/// Represents changes in port discovery between two scans
+/// Handle initial enhanced discovery with device grouping
 /// </summary>
-public class PortChanges
+private async Task HandleInitialEnhancedDiscovery(List<SerialPortInfo> ports, List<DeviceGroup> deviceGroups)
 {
-    public List<SerialPortInfo> NewPorts { get; set; } = new();
-    public List<SerialPortInfo> RemovedPorts { get; set; } = new();
+    _logger.LogInformation("📡 Initial Enhanced Discovery Results with Device Grouping:");
+    _logger.LogInformation($"📊 Found {ports.Count} individual ports in {deviceGroups.Count} physical devices");
+
+    if (deviceGroups.Count == 0)
+    {
+        _logger.LogInformation("❌ No device groups detected");
+        return;
+    }
+
+    // Log device groups
+    foreach (var group in deviceGroups.OrderBy(g => g.DeviceId))
+    {
+        var deviceIcon = group.IsFtdiDevice ? "🏭" : "🔌";
+        var validIcon = group.IsClientValidDevice ? "✅" : "❌";
+        var multiPortIcon = group.IsMultiPortDevice ? "🔀" : "📌";
+        
+        _logger.LogInformation($"  {deviceIcon} {validIcon} {multiPortIcon} {group.DeviceTypeDescription}");
+        _logger.LogInformation($"      📍 Ports ({group.PortCount}): {string.Join(", ", group.GetPortNames())}");
+        
+        if (group.IsFtdiDevice && group.DeviceInfo != null)
+        {
+            _logger.LogDebug($"      🔍 VID/PID: {group.DeviceInfo.VendorId}/{group.DeviceInfo.ProductId}, Serial: {group.SerialNumber}");
+        }
+    }
+
+    // Summary statistics
+    var ftdiCount = deviceGroups.Count(g => g.IsFtdiDevice);
+    var multiPortCount = deviceGroups.Count(g => g.IsMultiPortDevice);
+    var clientValidCount = deviceGroups.Count(g => g.IsClientValidDevice);
+    
+    _logger.LogInformation($"📊 Device Summary: {ftdiCount} FTDI, {multiPortCount} multi-port, {clientValidCount} client-valid");
+
+    await Task.CompletedTask;
+}
+
+/// <summary>
+/// Handle periodic enhanced discovery with device grouping change detection
+/// </summary>
+private async Task HandlePeriodicEnhancedDiscovery(List<SerialPortInfo> currentPorts, List<DeviceGroup> currentDeviceGroups)
+{
+    _logger.LogDebug($"🔄 Enhanced periodic discovery: {currentPorts.Count} ports in {currentDeviceGroups.Count} devices");
+
+    // Enhanced change detection at device level
+    var changes = DetectDeviceGroupChanges(_lastKnownPorts, currentPorts, currentDeviceGroups);
+    
+    if (changes.HasChanges)
+    {
+        _logger.LogInformation("📡 Device-level changes detected:");
+        
+        // Log new devices
+        foreach (var newDevice in changes.NewDevices)
+        {
+            var deviceType = newDevice.IsFtdiDevice ? $"FTDI {newDevice.DeviceInfo?.ChipType}" : "Non-FTDI";
+            var portNames = string.Join(", ", newDevice.GetPortNames());
+            _logger.LogInformation($"  ➕ NEW DEVICE: {newDevice.DeviceTypeDescription} - Ports: {portNames}");
+        }
+        
+        // Log removed devices
+        foreach (var removedDevice in changes.RemovedDevices)
+        {
+            var deviceType = removedDevice.IsFtdiDevice ? $"FTDI {removedDevice.DeviceInfo?.ChipType}" : "Non-FTDI";
+            var portNames = string.Join(", ", removedDevice.GetPortNames());
+            _logger.LogInformation($"  ➖ REMOVED DEVICE: {removedDevice.DeviceTypeDescription} - Ports: {portNames}");
+        }
+        
+        _logger.LogInformation($"📊 Device Changes: +{changes.NewDevices.Count} devices, -{changes.RemovedDevices.Count} devices");
+    }
+    else
+    {
+        _logger.LogDebug("📊 No device-level changes detected");
+    }
+
+    await Task.CompletedTask;
+}
+
+/// <summary>
+/// Detect device-level changes (enhanced version)
+/// </summary>
+private DeviceGroupChanges DetectDeviceGroupChanges(List<SerialPortInfo> previousPorts, List<SerialPortInfo> currentPorts, List<DeviceGroup> currentDeviceGroups)
+{
+    // For now, detect at port level and infer device changes
+    var portChanges = DetectPortChanges(previousPorts, currentPorts);
+    
+    // Convert to device group changes
+    var newDevices = new List<DeviceGroup>();
+    var removedDevices = new List<DeviceGroup>();
+    
+    // Find devices with new ports
+    foreach (var group in currentDeviceGroups)
+    {
+        var groupPortNames = group.GetPortNames();
+        var hasNewPort = portChanges.NewPorts.Any(p => groupPortNames.Contains(p.PortName));
+        
+        if (hasNewPort)
+        {
+            newDevices.Add(group);
+        }
+    }
+    
+    // For removed devices, we'd need to track previous device groups
+    // For now, approximate based on removed ports
+    
+    return new DeviceGroupChanges
+    {
+        NewDevices = newDevices,
+        RemovedDevices = removedDevices,
+        HasChanges = newDevices.Any() || removedDevices.Any()
+    };
+}
+
+/// <summary>
+/// Device group change tracking
+/// </summary>
+public class DeviceGroupChanges
+{
+    public List<DeviceGroup> NewDevices { get; set; } = new();
+    public List<DeviceGroup> RemovedDevices { get; set; } = new();
     public bool HasChanges { get; set; }
 }
+
+// MODIFIER la méthode ExecuteAsync pour utiliser l'enhanced discovery:
+// Remplacer l'appel à PerformDiscoveryAsync par PerformEnhancedDiscoveryAsync dans ExecuteAsync
