@@ -74,5 +74,5 @@ try {
     exit 1
 } finally {
     # Cleanup
-    #Remove-Item "staging" -Recurse -ErrorAction SilentlyContinue
+    Remove-Item "staging" -Recurse -ErrorAction SilentlyContinue
 }

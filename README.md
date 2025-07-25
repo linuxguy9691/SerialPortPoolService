@@ -138,6 +138,19 @@ cd SerialPortPoolService
 Get-Service SerialPortPoolService
 ```
 
+## 🔨 **Build & Deployment**
+
+### **Complete Project Build**
+```bash
+# Build entire solution (5 projects)
+dotnet build SerialPortPoolService.sln --configuration Release
+
+# Run all tests (90+ tests across Sprint 1-3)
+dotnet test SerialPortPoolService.sln --configuration Release --verbosity normal
+
+# Expected: All tests pass, no warnings
+
+
 ## 🔧 **Usage**
 
 ### **Enhanced Discovery Demo with Device Grouping (Sprint 3)**
