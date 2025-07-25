@@ -6,24 +6,25 @@
 ![Platform](https://img.shields.io/badge/platform-Windows-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Sprint](https://img.shields.io/badge/Sprint%203-✅%20COMPLETED-brightgreen.svg)
+![Hardware](https://img.shields.io/badge/Hardware-FT4232HL%20VALIDATED-gold.svg)
 
-A professional Windows service for centralized and secure serial port pool management, featuring intelligent FTDI discovery, advanced hardware validation, thread-safe pool management, and multi-port device awareness.
+A professional Windows service for centralized and secure serial port pool management, featuring intelligent FTDI discovery, advanced hardware validation, thread-safe pool management, and **validated multi-port device awareness** with real industrial hardware.
 
 ## 🎯 **Overview**
 
 SerialPortPoolService is an enterprise-grade solution that provides:
 - 🔍 **Automatic discovery** of serial ports with complete WMI enrichment
 - 🏭 **Intelligent identification** of FTDI devices (VID_0403) with detailed chip analysis
-- 🎯 **Hardware-specific filtering** (FTDI 4232H required for client)
+- 🎯 **Hardware-specific filtering** (FTDI 4232H/4232HL required for client)
 - 📊 **Advanced validation** with 0-100% scoring and configurable criteria
 - 🏗️ **Professional Windows Service** with logging and automated installation
 - 🏊 **Thread-safe Pool Management** for port allocation/release ✅ **COMPLETED**
-- 🔀 **Multi-Port Device Awareness** with device grouping ✅ **COMPLETED**
+- 🔀 **Multi-Port Device Awareness** with device grouping ✅ **COMPLETED & VALIDATED**
 - 💾 **EEPROM System Info** with intelligent caching ✅ **COMPLETED**
 - 🌐 **REST API** for port allocation/release (Sprint 4)
 - ⚡ **Automatic management** of reconnections and fault tolerance
 
-## 📋 **Project Status**
+## 📋 **Project Status - SPRINT 3 COMPLETED WITH EXCELLENCE ✅**
 
 ### **✅ Sprint 1 - Windows Service Foundation** 
 **Status:** 🎉 **COMPLETED AND INTEGRATED**
@@ -43,7 +44,7 @@ SerialPortPoolService is an enterprise-grade solution that provides:
 - [x] **12 unit tests** with real hardware validation
 
 ### **✅ Sprint 3 - Service Integration & Pool Management** 
-**Status:** 🎉 **COMPLETED WITH EXCEPTIONAL SUCCESS**
+**Status:** 🎉 **COMPLETED WITH EXCEPTIONAL SUCCESS + HARDWARE VALIDATION**
 
 #### **✅ ÉTAPE 1-2: Service Integration Foundation**
 - [x] **Complete DI Integration**: Enhanced Discovery → Windows Service
@@ -64,13 +65,13 @@ SerialPortPoolService is an enterprise-grade solution that provides:
 - [x] **58 comprehensive tests**: Thread-safety + performance + stress testing
 - [x] **Performance Validated**: <100ms allocation, memory leak free
 
-#### **✅ ÉTAPE 5: Multi-Port Device Awareness**
-- [x] **MultiPortDeviceAnalyzer**: Device grouping by serial number
+#### **✅ ÉTAPE 5: Multi-Port Device Awareness - HARDWARE VALIDATED**
+- [x] **MultiPortDeviceAnalyzer**: Device grouping by serial number ✅ **FIXED & WORKING**
 - [x] **DeviceGroup Model**: Complete multi-port device representation
 - [x] **Enhanced Discovery Integration**: Device grouping in discovery workflow
 - [x] **Port-to-Device Lookup**: Find device groups by port name
 - [x] **Device Grouping Statistics**: Comprehensive analysis and reporting
-- [x] **Live Demo Functional**: Real hardware testing with COM6 (FT232R)
+- [x] **Hardware Validation**: ✅ **FT4232HL (COM11-14) + FT232R (COM6) VALIDATED**
 
 ### **🔮 Sprint 4 - REST API & Advanced Features**
 **Status:** 🚀 **READY TO START**
@@ -94,23 +95,82 @@ SerialPortPoolService/                    ← Git Repository Root
 │   │   ├── SerialPortValidator.cs                  ← Configurable validation
 │   │   ├── SerialPortPool.cs                       ← Thread-safe pool ✅ COMPLETED
 │   │   ├── SystemInfoCache.cs                      ← Smart caching ✅ COMPLETED
-│   │   └── MultiPortDeviceAnalyzer.cs              ← Device grouping ✅ COMPLETED
+│   │   └── MultiPortDeviceAnalyzer.cs              ← Device grouping ✅ VALIDATED
 │   ├── Models/
 │   │   ├── PortAllocation.cs            ├─ Pool allocation model
 │   │   ├── SystemInfo.cs                ├─ EEPROM system info
-│   │   ├── DeviceGroup.cs               ├─ Multi-port device grouping
+│   │   ├── DeviceGroup.cs               ├─ Multi-port device grouping ✅ WORKING
+│   │   ├── DeviceGroupingStatistics.cs  ├─ Device grouping analytics ✅ ADDED
 │   │   └── PoolStatistics.cs            └─ Pool monitoring
 │   └── Interfaces/
 │       ├── ISerialPortPool.cs           ├─ Pool contract ✅ IMPLEMENTED
-│       └── IMultiPortDeviceAnalyzer.cs  └─ Device grouping interface
+│       └── IMultiPortDeviceAnalyzer.cs  └─ Device grouping interface ✅ WORKING
 ├── 🧪 tests/
 │   ├── SerialPortPool.Core.Tests/       ├─ 65+ comprehensive tests ✅
-│   ├── PortDiscoveryDemo/              ├─ Interactive demo with device grouping
+│   ├── PortDiscoveryDemo/              ├─ Interactive demo with device grouping ✅ VALIDATED
 │   └── SerialPortPool.Tests/           └─ Service integration tests
 ├── 📊 SerialPortPoolService.sln         ← Unified solution (5 projects)
 ├── 🚀 .github/workflows/                ← CI/CD automation
 └── 📚 docs/sprint3/                     ← Complete Sprint 3 documentation
 ```
+
+## 🎉 **MAJOR SUCCESS: Multi-Port Device Grouping Hardware Validation**
+
+### **🔥 Real Hardware Testing Results:**
+Our multi-port device grouping algorithm has been **successfully validated** with real industrial hardware:
+
+#### **✅ Hardware Configuration Tested:**
+- **FT4232HL**: 4-port FTDI device (COM11, COM12, COM13, COM14)
+- **FT232R**: Single-port FTDI device (COM6) 
+- **Total**: 5 individual ports across 2 physical devices
+
+#### **✅ Device Grouping Results:**
+```
+🔍 Found 2 physical device(s): ✅ PERFECT
+
+🏭 ✅ 🔀 FTDI FT4232HL (4 ports)
+   📍 Ports (4): COM11, COM12, COM13, COM14
+   🆔 Device ID: FTDI_FT9A9OFO
+   🔑 Serial: FT9A9OFOA (base: FT9A9OFO)
+   💎 Client Valid: YES (FT4232H)
+   📊 Utilization: 0% (0/4 allocated)
+
+🏭 ❌ 📌 FTDI FT232R  
+   📍 Ports (1): COM6
+   🆔 Device ID: FTDI_AG0JU7O1A
+   🔑 Serial: AG0JU7O1A
+   💎 Client Valid: NO (Other chip)
+   📊 Utilization: 0% (0/1 allocated)
+```
+
+#### **✅ Device Grouping Statistics:**
+```
+📱 Total Physical Devices: 2
+📍 Total Individual Ports: 5
+🔀 Multi-Port Devices: 1
+📌 Single-Port Devices: 1  
+🏭 FTDI Devices: 2
+🎯 Largest Device: 4 ports
+📊 Average Ports/Device: 2.5
+```
+
+#### **✅ Port-to-Device Lookup:**
+```
+📍 Port COM11: 🏠 Belongs to: FTDI FT4232HL (4 ports)
+   👥 Shares device with: COM12, COM13, COM14
+
+📍 Port COM12: 🏠 Belongs to: FTDI FT4232HL (4 ports)  
+   👥 Shares device with: COM11, COM13, COM14
+```
+
+### **🔧 Technical Achievement:**
+Our algorithm successfully handles **FT4232HL multi-port chips** where each port has a unique serial number suffix:
+- `FT9A9OFOA` (Port A) → `FT9A9OFO` (base serial)
+- `FT9A9OFOB` (Port B) → `FT9A9OFO` (base serial)  
+- `FT9A9OFOC` (Port C) → `FT9A9OFO` (base serial)
+- `FT9A9OFOD` (Port D) → `FT9A9OFO` (base serial)
+
+**Result**: All 4 ports correctly grouped as **one physical device** ✅
 
 ## 🚀 **Quick Installation**
 
@@ -149,7 +209,7 @@ dotnet build SerialPortPoolService.sln --configuration Release
 dotnet test SerialPortPoolService.sln --configuration Release --verbosity normal
 
 # Expected: All tests pass, no warnings
-
+```
 
 ## 🔧 **Usage**
 
@@ -159,19 +219,13 @@ dotnet test SerialPortPoolService.sln --configuration Release --verbosity normal
 # Complete FTDI discovery with device grouping and multi-port awareness
 dotnet run --project tests/PortDiscoveryDemo/
 
-# Example output with real FTDI device (COM6) + Device Grouping:
+# Example output with real FTDI devices (FT4232HL + FT232R):
 # 🔍 Enhanced Serial Port Discovery Demo - ÉTAPE 5 Phase 2
 # 📡 Features: FTDI Analysis + Validation + Device Grouping + Multi-Port Awareness
-# === PHASE 1: TRADITIONAL PORT DISCOVERY ===
-# ✅ Found 1 individual serial port(s):
-#   🏭 ✅ COM6 - USB Serial Port (COM6) (FT232R)
-# === PHASE 2: DEVICE GROUPING DISCOVERY (NEW) ===
-# 🔍 Found 1 physical device(s):
-# 🏭 ❌ 📌 FTDI FT232R
-#    📍 Ports (1): COM6
-#    🏭 FTDI Info: VID/PID 0403/6001
-#    🔑 Serial: AG0JU7O1A
-#    💾 System Info: ✅ AG0JU7O1A (Fresh, 6 properties)
+# === PHASE 2: DEVICE GROUPING DISCOVERY ===
+# 🔍 Found 2 physical device(s):
+# 🏭 ✅ 🔀 FTDI FT4232HL (4 ports) - COM11, COM12, COM13, COM14
+# 🏭 ❌ 📌 FTDI FT232R (1 port) - COM6
 ```
 
 ### **Thread-Safe Pool Management Usage (Sprint 3)**
@@ -208,6 +262,30 @@ var stats = await pool.GetStatisticsAsync();
 Console.WriteLine($"Pool: {stats.AllocatedPorts}/{stats.TotalPorts} allocated ({stats.UtilizationPercentage:F1}%)");
 ```
 
+### **Device Grouping Usage (NEW)**
+
+```csharp
+// Get device groups with multi-port awareness
+var discovery = serviceProvider.GetRequiredService<EnhancedSerialPortDiscoveryService>();
+var deviceGroups = await discovery.DiscoverDeviceGroupsAsync();
+
+foreach (var group in deviceGroups)
+{
+    Console.WriteLine($"Device: {group.DeviceTypeDescription}");
+    Console.WriteLine($"Ports: {string.Join(", ", group.GetPortNames())}");
+    Console.WriteLine($"Client Valid: {group.IsClientValidDevice}");
+    Console.WriteLine($"Utilization: {group.UtilizationPercentage:F1}%");
+}
+
+// Find device group for specific port
+var deviceGroup = await discovery.FindDeviceGroupByPortAsync("COM11");
+if (deviceGroup != null)
+{
+    Console.WriteLine($"COM11 belongs to: {deviceGroup.DeviceTypeDescription}");
+    Console.WriteLine($"Shares device with: {string.Join(", ", deviceGroup.GetPortNames().Where(p => p != "COM11"))}");
+}
+```
+
 ## 🧪 **Testing and Quality**
 
 ### **Complete Test Coverage Sprint 1+2+3**
@@ -215,7 +293,7 @@ Console.WriteLine($"Pool: {stats.AllocatedPorts}/{stats.TotalPorts} allocated ({
 ![Tests Sprint 2](https://img.shields.io/badge/Sprint%202%20Tests-12%2F12%20PASSED-brightgreen.svg)
 ![Tests Sprint 3](https://img.shields.io/badge/Sprint%203%20Tests-65%2B%2F65%2B%20PASSED-brightgreen.svg)
 ![Integration](https://img.shields.io/badge/Repository%20Integration-COMPLETE-brightgreen.svg)
-![Production](https://img.shields.io/badge/Production%20Ready-VALIDATED-brightgreen.svg)
+![Hardware](https://img.shields.io/badge/Hardware%20Validation-FT4232HL%20✅-gold.svg)
 
 ```bash
 # Complete test suite Sprint 1 + Sprint 2 + Sprint 3 (90+ tests)
@@ -231,33 +309,41 @@ dotnet test tests/SerialPortPool.Tests/ --verbosity normal
 ```
 
 ### **Real Hardware Validation Complete**
+- ✅ **Tested with FTDI FT4232HL** (COM11-14, VID_0403+PID_6048+FT9A9OFO*)
 - ✅ **Tested with FTDI FT232R** (COM6, VID_0403+PID_6001+AG0JU7O1A)
 - ✅ **Enhanced Discovery with Device Grouping** working on real hardware
 - ✅ **Thread-safe Pool Management** validated with stress testing
 - ✅ **EEPROM System Info** reading with smart caching functional
-- ✅ **Multi-port Device Awareness** (tested with single-port, ready for multi-port)
+- ✅ **Multi-port Device Awareness** fully validated with 4-port FT4232HL
 - ✅ **Service Integration** with background discovery operational
 - ✅ **Production deployment** validated with Windows Service
 
-## 🎉 **Sprint 3 Achievements**
+## 🎉 **Sprint 3 Achievements - EXCEPTIONAL SUCCESS**
 
-### **🏆 Exceptional Success Metrics**
+### **🏆 Outstanding Success Metrics**
 - **📊 Test Coverage**: 65+ tests (vs 25+ planned = **160% exceeded**)
 - **⚡ Performance**: Thread-safe allocation <100ms, memory leak free
 - **🔧 Architecture**: Enterprise-grade with dependency injection
-- **🏭 FTDI Intelligence**: Complete chip analysis + device grouping
+- **🏭 FTDI Intelligence**: Complete chip analysis + device grouping ✅ **VALIDATED**
 - **🎯 Pool Management**: Thread-safe allocation/release with smart caching
-- **🔀 Multi-Port Awareness**: Device grouping functional and tested
+- **🔀 Multi-Port Awareness**: Device grouping functional and **hardware tested** ✅
 - **💾 EEPROM Integration**: System info reading with TTL caching
 - **🚀 Production Ready**: Windows Service + background discovery
 
 ### **🔥 Technical Innovations**
-- **Device Grouping Algorithm**: Multi-port device detection by serial number
+- **Device Grouping Algorithm**: Multi-port device detection by serial number ✅ **WORKING**
 - **Smart SystemInfo Caching**: TTL-based with background cleanup
 - **Thread-Safe Pool Design**: ConcurrentDictionary + SemaphoreSlim
 - **Enhanced Discovery Integration**: Device grouping in discovery workflow
 - **Validation Metadata Storage**: Complete allocation tracking
 - **Background Service Architecture**: Continuous monitoring without performance impact
+
+### **🎯 Hardware Validation Results**
+- **FT4232HL Detection**: ✅ **4 ports correctly grouped as 1 device**
+- **Serial Number Algorithm**: ✅ **FT9A9OFOA/B/C/D → FT9A9OFO grouping**
+- **Client Validation**: ✅ **FT4232HL valid for production, FT232R for development**
+- **Port-to-Device Lookup**: ✅ **Perfect mapping and utilization tracking**
+- **Real-time Discovery**: ✅ **Background service detecting hardware changes**
 
 ## 📞 **Support and Documentation**
 
@@ -266,11 +352,12 @@ dotnet test tests/SerialPortPool.Tests/ --verbosity normal
 - 🚀 **Installation Guide**: [Windows Service Installation](SerialPortPoolService/scripts/)
 - 🧪 **Testing Guide**: [Comprehensive Test Suite](tests/)
 - 📊 **Performance Metrics**: [Sprint 3 Performance Validation](docs/sprint3/ETAPES3-4-README.md)
+- 🔀 **Device Grouping**: [Multi-Port Device Awareness Guide](docs/sprint3/ETAPES5-6-README.md)
 
 ### **Hardware & Software Support**
-- 🔌 **FTDI Support**: All chips (FT232R, FT4232H, FT232H, FT2232H, etc.)
+- 🔌 **FTDI Support**: All chips (FT232R, FT4232H/HL, FT232H, FT2232H, etc.)
 - 🏊 **Pool Management**: Thread-safe allocation with session tracking
-- 🔀 **Device Grouping**: Multi-port device awareness and management
+- 🔀 **Device Grouping**: Multi-port device awareness and management ✅ **VALIDATED**
 - 💾 **EEPROM Data**: System info extension with smart caching
 - 🎯 **Flexible Validation**: Client strict vs dev permissive
 - 🏗️ **Service Integration**: Complete DI + Background Discovery
@@ -281,16 +368,16 @@ dotnet test tests/SerialPortPool.Tests/ --verbosity normal
 
 > **Sprint 1:** Windows Service foundation ✅ COMPLETED  
 > **Sprint 2:** Enhanced Discovery + FTDI Intelligence ✅ COMPLETED  
-> **Sprint 3:** Pool Management + Device Grouping ✅ COMPLETED WITH EXCELLENCE  
+> **Sprint 3:** Pool Management + Device Grouping ✅ COMPLETED WITH HARDWARE VALIDATION  
 > **Sprint 4:** REST API + Monitoring + High Availability 🚀 READY TO START  
 
-**Sprint 3 Complete: Enterprise-grade thread-safe pool with multi-port awareness!** 🔥
+**Sprint 3 Complete: Enterprise-grade thread-safe pool with validated multi-port awareness!** 🔥
 
 ---
 
-*Last updated: July 22, 2025 - Sprint 3 COMPLETED*  
+*Last updated: July 25, 2025 - Sprint 3 COMPLETED WITH HARDWARE VALIDATION*  
 *Current Status: Production Ready - Sprint 4 Ready*  
 *Version: 3.0.0 - Complete Pool Management with Device Grouping*  
 *Tests: 90+ tests (Sprint 1: 13 + Sprint 2: 12 + Sprint 3: 65+)*  
-*Hardware Validated: FTDI FT232R (COM6) + Complete Integration*  
+*Hardware Validated: FTDI FT4232HL (COM11-14) + FT232R (COM6) + Complete Integration*  
 *Ready for Sprint 4: REST API + Advanced Monitoring + High Availability*
