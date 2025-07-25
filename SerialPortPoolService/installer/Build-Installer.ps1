@@ -12,7 +12,7 @@ try {
     
     # 2. Publish self-contained single-file
     Write-Host "Publishing self-contained application..." -ForegroundColor Yellow
-    dotnet publish SerialPortPoolService.sln `
+    dotnet publish SerialPortPoolService.csproj  `
         --configuration $Configuration `
         --runtime win-x64 `
         --self-contained true `
@@ -31,12 +31,12 @@ try {
     # Copy ONLY the main executable and config files
     Copy-Item "publish\self-contained\SerialPortPoolService.exe" $stagingDir
     Copy-Item "publish\self-contained\NLog.config" $stagingDir -ErrorAction SilentlyContinue
-    Copy-Item "SerialPortPoolService\default-settings.json" $stagingDir -ErrorAction SilentlyContinue
+    Copy-Item "default-settings.json" $stagingDir -ErrorAction SilentlyContinue
     
     # Configuration files
-    if (Test-Path "Configuration\bib-configurations.json") {
-        Copy-Item "Configuration\bib-configurations.json" $stagingDir
-    }
+    #if (Test-Path "Configuration\bib-configurations.json") {
+    #    Copy-Item "Configuration\bib-configurations.json" $stagingDir
+    #}
     
     Write-Host "Staging complete. Files:" -ForegroundColor Green
     Get-ChildItem $stagingDir | ForEach-Object { 
@@ -46,7 +46,7 @@ try {
     # 4. Build MSI with WiX
     Write-Host "Building MSI..." -ForegroundColor Yellow
     
-    $wixSource = "installer\SerialPortPool-Setup-SingleFile.wxs"
+    $wixSource = "installer\SerialPortPool-Setup.wxs"
     $wixObject = "installer\obj\SerialPortPool-Setup.wixobj"
     $msiOutput = "installer\bin\SerialPortPool-Setup.msi"
     
@@ -74,5 +74,5 @@ try {
     exit 1
 } finally {
     # Cleanup
-    Remove-Item "staging" -Recurse -ErrorAction SilentlyContinue
+    #Remove-Item "staging" -Recurse -ErrorAction SilentlyContinue
 }

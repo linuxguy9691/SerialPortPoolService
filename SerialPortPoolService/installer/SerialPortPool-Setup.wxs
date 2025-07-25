@@ -1,7 +1,24 @@
-<!-- SerialPortPool-Setup-SingleFile.wxs -->
+<?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Product Id="*" Name="SerialPortPool Service" Version="1.0.0.0">
+  <Product Id="*" 
+           Name="SerialPortPool Service" 
+           Version="1.0.0.0"
+           Manufacturer="YourCompany"
+           Language="1033"
+           UpgradeCode="{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}">
     
+    <Package Id="*"
+             Keywords="Installer"
+             Description="SerialPortPool Service Installer"
+             Comments="Industrial Serial Port Pool Management"
+             Manufacturer="YourCompany"
+             InstallerVersion="200"
+             Languages="1033"
+             Compressed="yes"
+             SummaryCodepage="1252" />
+             
+    <Media Id="1" Cabinet="SerialPortPool.cab" EmbedCab="yes" />
+
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFilesFolder">
         <Directory Id="INSTALLFOLDER" Name="SerialPortPool">
@@ -11,23 +28,26 @@
       </Directory>
     </Directory>
 
-    <!-- SIMPLIFIÉ : Un seul exécutable ! -->
+    <!-- FICHIERS PRINCIPAUX DU SERVICE -->
     <Component Id="ServiceExecutable" Guid="*" Directory="ServiceDir">
+      <!-- FIXED: Ajouté backslash après $(var.SourceDir) -->
       <File Id="ServiceExe" 
-            Source="$(var.SourceDir)\SerialPortPoolService.exe" 
+            Source=".\staging\SerialPortPoolService.exe" 
             KeyPath="yes" />
       
-      <!-- Seulement les fichiers de config -->
+      <!-- Configuration NLog -->
       <File Id="NLogConfig" 
-            Source="$(var.SourceDir)\NLog.config" />
+            Source=".\staging\NLog.config" />
       
-      <!-- Service Installation -->
+      <!-- Installation du Service Windows -->
       <ServiceInstall Id="SerialPortPoolServiceInstall"
                       Name="SerialPortPoolService"
                       DisplayName="SerialPortPool Service"
+                      Description="Industrial Serial Port Pool Management Service"
                       Type="ownProcess"
                       Start="auto"
-                      Account="LocalSystem" />
+                      Account="LocalSystem"
+                      ErrorControl="normal" />
       
       <ServiceControl Id="SerialPortPoolServiceControl"
                       Name="SerialPortPoolService"
@@ -36,14 +56,13 @@
                       Remove="uninstall" />
     </Component>
 
-    <!-- Configuration Files -->
+    <!-- FICHIERS DE CONFIGURATION -->
     <Component Id="ConfigFiles" Guid="*" Directory="ConfigDir">
       <File Id="DefaultSettings" 
-            Source="$(var.SourceDir)\default-settings.json" />
-      <File Id="BibConfigurations" 
-            Source="$(var.SourceDir)\bib-configurations.json" />
+            Source=".\staging\default-settings.json" />
     </Component>
 
+    <!-- INSTALLATION FEATURES -->
     <Feature Id="MainFeature" Title="SerialPortPool Service" Level="1">
       <ComponentRef Id="ServiceExecutable" />
       <ComponentRef Id="ConfigFiles" />
