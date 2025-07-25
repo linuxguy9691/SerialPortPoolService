@@ -1,3 +1,4 @@
+// SerialPortPool.Core/Models/PortValidation.cs - COMPLETE FILE with all classes
 namespace SerialPortPool.Core.Models;
 
 /// <summary>
@@ -102,7 +103,7 @@ public enum ValidationCriteria
     WrongFtdiChip,
     
     /// <summary>
-    /// FTDI device is not a 4232H chip (client requirement)
+    /// FTDI device is not a 4232H/HL chip (client requirement)
     /// </summary>
     Not4232HChip,
     
@@ -142,7 +143,7 @@ public enum ValidationCriteria
     GenuineFtdiDevice,
     
     /// <summary>
-    /// Device is the required 4232H chip
+    /// Device is the required 4232H/HL chip
     /// </summary>
     Is4232HChip,
     
@@ -164,6 +165,7 @@ public enum ValidationCriteria
 
 /// <summary>
 /// Configuration for port validation rules
+/// ENHANCED: Added FT4232HL (PID 6048) support for your hardware
 /// </summary>
 public class PortValidationConfiguration
 {
@@ -173,7 +175,7 @@ public class PortValidationConfiguration
     public bool RequireFtdiDevice { get; set; } = true;
     
     /// <summary>
-    /// Whether to require specifically 4232H chips
+    /// Whether to require specifically 4232H/HL chips
     /// </summary>
     public bool Require4232HChip { get; set; } = true;
     
@@ -203,12 +205,14 @@ public class PortValidationConfiguration
     public bool StrictValidation { get; set; } = true;
     
     /// <summary>
-    /// Allowed FTDI Product IDs (PIDs) - for client, only 6048 (4232H)
+    /// Allowed FTDI Product IDs (PIDs) 
+    /// ENHANCED: Now includes both FT4232H (6011) and FT4232HL (6048) for your hardware
     /// </summary>
-    public string[] AllowedFtdiProductIds { get; set; } = { "6048" }; // Only FT4232H
+    public string[] AllowedFtdiProductIds { get; set; } = { "6011", "6048" }; // Both FT4232H variants
     
     /// <summary>
     /// Create default configuration for client requirements
+    /// ENHANCED: Now supports your FT4232HL hardware
     /// </summary>
     public static PortValidationConfiguration CreateClientDefault()
     {
@@ -217,7 +221,7 @@ public class PortValidationConfiguration
             RequireFtdiDevice = true,
             Require4232HChip = true,
             ExpectedManufacturer = "FTDI",
-            AllowedFtdiProductIds = new[] { "6048" }, // Only FT4232H
+            AllowedFtdiProductIds = new[] { "6011", "6048" }, // Both FT4232H and FT4232HL ✅
             ExcludedPortNames = new[] { "COM1", "COM2" },
             MinimumValidationScore = 100, // Must be perfect match
             StrictValidation = true
@@ -226,6 +230,7 @@ public class PortValidationConfiguration
     
     /// <summary>
     /// Create permissive configuration for development/testing
+    /// ENHANCED: Supports all your devices (FT232R + FT4232HL)
     /// </summary>
     public static PortValidationConfiguration CreateDevelopmentDefault()
     {
@@ -234,9 +239,45 @@ public class PortValidationConfiguration
             RequireFtdiDevice = true,
             Require4232HChip = false, // Allow other FTDI chips for testing
             ExpectedManufacturer = "FTDI",
-            AllowedFtdiProductIds = new[] { "6001", "6048", "6014" }, // Multiple chips allowed
+            AllowedFtdiProductIds = new[] { "6001", "6011", "6048", "6014" }, // Your devices: FT232R + FT4232HL ✅
             ExcludedPortNames = new[] { "COM1" },
             MinimumValidationScore = 70, // More lenient
+            StrictValidation = false
+        };
+    }
+    
+    /// <summary>
+    /// Create specific configuration for your FT4232HL testing
+    /// NEW: Optimized for your exact hardware setup
+    /// </summary>
+    public static PortValidationConfiguration CreateFT4232HLTestingDefault()
+    {
+        return new PortValidationConfiguration
+        {
+            RequireFtdiDevice = true,
+            Require4232HChip = true,
+            ExpectedManufacturer = "FTDI",
+            AllowedFtdiProductIds = new[] { "6048" }, // Only FT4232HL for focused testing
+            ExcludedPortNames = new[] { "COM1", "COM2", "COM6" }, // Exclude your FT232R for focused testing
+            MinimumValidationScore = 100,
+            StrictValidation = true
+        };
+    }
+    
+    /// <summary>
+    /// Create configuration that accepts all your devices for comprehensive testing
+    /// NEW: Perfect for testing both single-port and multi-port scenarios
+    /// </summary>
+    public static PortValidationConfiguration CreateComprehensiveTestingDefault()
+    {
+        return new PortValidationConfiguration
+        {
+            RequireFtdiDevice = true,
+            Require4232HChip = false, // Accept both FT232R and FT4232HL
+            ExpectedManufacturer = "FTDI",
+            AllowedFtdiProductIds = new[] { "6001", "6048" }, // Your exact devices: COM6 (FT232R) + COM11-14 (FT4232HL)
+            ExcludedPortNames = new[] { "COM1", "COM2" },
+            MinimumValidationScore = 80, // Balanced
             StrictValidation = false
         };
     }
