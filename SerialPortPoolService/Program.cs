@@ -106,6 +106,14 @@ class Program
 
         try
         {
+            // FIXED: Add logging configuration for interactive mode
+            services.AddLogging(builder =>
+            {
+                builder.ClearProviders()
+                       .AddNLog()
+                       .SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Information);
+            });
+
             // Configuration setup
             var clientConfig = PortValidationConfiguration.CreateClientDefault();
             var devConfig = PortValidationConfiguration.CreateDevelopmentDefault();
