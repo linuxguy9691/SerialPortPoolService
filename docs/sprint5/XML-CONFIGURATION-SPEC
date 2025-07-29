@@ -1,0 +1,649 @@
+# XML Configuration Specification
+
+![Status](https://img.shields.io/badge/Status-SPECIFICATION%20COMPLETE-brightgreen.svg)
+![Version](https://img.shields.io/badge/Version-1.0-blue.svg)
+![Protocols](https://img.shields.io/badge/Protocols-6%20SUPPORTED-purple.svg)
+
+## 🎯 **Overview**
+
+This document specifies the XML configuration format for the SerialPortPool multi-protocol communication system. The configuration supports the hierarchical structure: **BIB → UUT → PORT → PROTOCOL** with complete 3-phase workflow definition.
+
+**Sprint 5 Implementation:** RS232 protocol only  
+**Sprint 6 Expansion:** All 6 protocols (RS232, RS485, USB, CAN, I2C, SPI)
+
+---
+
+## 📋 **XML Schema Structure**
+
+### **Hierarchical Organization**
+```xml
+<root>
+  <bib id="bib_001">               <!-- Board In Board (Physical test board) -->
+    <uut id="uut_001">             <!-- Unit Under Test (Device being tested) -->
+      <port number="1">            <!-- Physical port on the UUT -->
+        <protocol>rs232</protocol> <!-- Communication protocol -->
+        <!-- Protocol-specific settings -->
+        <!-- 3-phase command sequences -->
+      </port>
+    </uut>
+  </bib>
+</root>
+```
+
+### **Complete XML Schema Definition**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  
+  <!-- Root element -->
+  <xs:element name="root">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="bib" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="uut" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="port" maxOccurs="unbounded">
+                      <xs:complexType>
+                        <xs:sequence>
+                          <xs:element name="protocol" type="xs:string"/>
+                          <xs:element name="speed" type="xs:int"/>
+                          <xs:element name="data_pattern" type="xs:string" minOccurs="0"/>
+                          <xs:element name="start" type="CommandSequence"/>
+                          <xs:element name="test" type="CommandSequence"/>
+                          <xs:element name="stop" type="CommandSequence"/>
+                        </xs:sequence>
+                        <xs:attribute name="number" type="xs:int" use="required"/>
+                      </xs:complexType>
+                    </xs:element>
+                  </xs:sequence>
+                  <xs:attribute name="id" type="xs:string" use="required"/>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+            <xs:attribute name="id" type="xs:string" use="required"/>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  
+  <!-- Command sequence type -->
+  <xs:complexType name="CommandSequence">
+    <xs:sequence>
+      <xs:element name="command" type="xs:string"/>
+      <xs:element name="expected_response" type="xs:string"/>
+      <xs:element name="timeout_ms" type="xs:int" minOccurs="0"/>
+      <xs:element name="retry_count" type="xs:int" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+  
+</xs:schema>
+```
+
+---
+
+## 🔧 **Protocol-Specific Configuration**
+
+### **1. RS232 Protocol (Sprint 5 ✅)**
+```xml
+<port number="1">
+  <protocol>rs232</protocol>
+  <speed>115200</speed>                    <!-- Baud rate: 1200-115200 -->
+  <data_pattern>n81</data_pattern>         <!-- None, 8 bits, 1 stop bit -->
+  <start>
+    <command>ATZ\r\n</command>
+    <expected_response>^OK$</expected_response>
+    <timeout_ms>3000</timeout_ms>
+    <retry_count>3</retry_count>
+  </start>
+  <test>
+    <command>AT+STATUS\r\n</command>
+    <expected_response>^STATUS_OK$</expected_response>
+    <timeout_ms>2000</timeout_ms>
+    <retry_count>2</retry_count>
+  </test>
+  <stop>
+    <command>AT+SHUTDOWN\r\n</command>
+    <expected_response>^SHUTDOWN_OK$</expected_response>
+    <timeout_ms>5000</timeout_ms>
+    <retry_count>1</retry_count>
+  </stop>
+</port>
+```
+
+**RS232 Data Pattern Options:**
+- `n81` - No parity, 8 data bits, 1 stop bit
+- `e71` - Even parity, 7 data bits, 1 stop bit  
+- `n82` - No parity, 8 data bits, 2 stop bits
+- `o81` - Odd parity, 8 data bits, 1 stop bit
+
+**RS232 Speed Range:** 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200
+
+### **2. RS485 Protocol (Sprint 6 Planned)**
+```xml
+<port number="2">
+  <protocol>rs485</protocol>
+  <speed>9600</speed>                      <!-- Baud rate: 9600-115200 -->
+  <data_pattern>e71</data_pattern>         <!-- Even parity, 7 bits, 1 stop -->
+  <termination>true</termination>          <!-- RS485-specific: Bus termination -->
+  <address>01</address>                    <!-- RS485-specific: Device address -->
+  <start>
+    <command>:01030001\r\n</command>       <!-- Modbus-style command -->
+    <expected_response>:010301</expected_response>
+  </start>
+  <test>
+    <command>:01040001\r\n</command>
+    <expected_response>:010401</expected_response>
+  </test>
+  <stop>
+    <command>:010600FF\r\n</command>
+    <expected_response>:010600</expected_response>
+  </stop>
+</port>
+```
+
+### **3. USB Protocol (Sprint 6 Planned)**
+```xml
+<port number="3">
+  <protocol>usb</protocol>
+  <speed>9600</speed>                      <!-- Virtual baud rate -->
+  <data_pattern>n81</data_pattern>         <!-- Virtual serial settings -->
+  <vendor_id>0x0403</vendor_id>            <!-- USB-specific: Vendor ID -->
+  <product_id>0x6001</product_id>          <!-- USB-specific: Product ID -->
+  <interface>0</interface>                 <!-- USB-specific: Interface number -->
+  <start>
+    <command>USB_INIT\r\n</command>
+    <expected_response>^USB_OK$</expected_response>
+  </start>
+  <test>
+    <command>USB_TEST\r\n</command>
+    <expected_response>^USB_PASS$</expected_response>
+  </test>
+  <stop>
+    <command>USB_STOP\r\n</command>
+    <expected_response>^USB_BYE$</expected_response>
+  </stop>
+</port>
+```
+
+### **4. CAN Protocol (Sprint 6 Planned)**
+```xml
+<port number="4">
+  <protocol>can</protocol>
+  <speed>125000</speed>                    <!-- Bit rate: 125k, 250k, 500k, 1M -->
+  <data_pattern>n/a</data_pattern>         <!-- Not applicable for CAN -->
+  <can_id>0x123</can_id>                   <!-- CAN-specific: Message ID -->
+  <extended_id>false</extended_id>         <!-- CAN-specific: Standard/Extended -->
+  <start>
+    <command>0x123:01020304</command>      <!-- CAN frame: ID:DATA -->
+    <expected_response>0x124:05060708</expected_response>
+  </start>
+  <test>
+    <command>0x123:0A0B0C0D</command>
+    <expected_response>0x124:0E0F1011</expected_response>
+  </test>
+  <stop>
+    <command>0x123:FFFEFDFC</command>
+    <expected_response>0x124:FBFAF9F8</expected_response>
+  </stop>
+</port>
+```
+
+### **5. I2C Protocol (Sprint 6 Planned)**
+```xml
+<port number="5">
+  <protocol>i2c</protocol>
+  <speed>100000</speed>                    <!-- Clock speed: 100kHz, 400kHz -->
+  <data_pattern>n/a</data_pattern>         <!-- Not applicable for I2C -->
+  <slave_address>0x48</slave_address>      <!-- I2C-specific: 7-bit address -->
+  <addressing_mode>7bit</addressing_mode>   <!-- I2C-specific: 7bit/10bit -->
+  <start>
+    <command>W:0x48:0x01:0xAA</command>    <!-- Write to register -->
+    <expected_response>ACK</expected_response>
+  </start>
+  <test>
+    <command>R:0x48:0x01</command>         <!-- Read from register -->
+    <expected_response>0xAA</expected_response>
+  </test>
+  <stop>
+    <command>W:0x48:0x01:0x00</command>    <!-- Reset register -->
+    <expected_response>ACK</expected_response>
+  </stop>
+</port>
+```
+
+### **6. SPI Protocol (Sprint 6 Planned)**
+```xml
+<port number="6">
+  <protocol>spi</protocol>
+  <speed>1000000</speed>                   <!-- Clock speed: 1MHz, 10MHz -->
+  <data_pattern>n/a</data_pattern>         <!-- Not applicable for SPI -->
+  <mode>0</mode>                           <!-- SPI mode: 0, 1, 2, 3 -->
+  <bit_order>MSBFirst</bit_order>          <!-- MSBFirst or LSBFirst -->
+  <cs_pin>0</cs_pin>                       <!-- Chip Select pin -->
+  <start>
+    <command>TX:0x01:0xAA</command>        <!-- SPI transaction -->
+    <expected_response>RX:0x02:0xBB</expected_response>
+  </start>
+  <test>
+    <command>TX:0x03:0xCC</command>
+    <expected_response>RX:0x04:0xDD</expected_response>
+  </test>
+  <stop>
+    <command>TX:0xFF:0x00</command>
+    <expected_response>RX:0x00:0xFF</expected_response>
+  </stop>
+</port>
+```
+
+---
+
+## 📊 **Complete Example Configuration**
+
+### **Multi-Protocol System Example**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<root>
+  <!-- Production Test Board 1 -->
+  <bib id="bib_001">
+    <uut id="uut_001">
+      <!-- RS232 Communication Port -->
+      <port number="1">
+        <protocol>rs232</protocol>
+        <speed>115200</speed>
+        <data_pattern>n81</data_pattern>
+        <start>
+          <command>INIT_RS232\r\n</command>
+          <expected_response>^OK$</expected_response>
+          <timeout_ms>3000</timeout_ms>
+          <retry_count>3</retry_count>
+        </start>
+        <test>
+          <command>RUN_TEST_1\r\n</command>
+          <expected_response>^PASS$</expected_response>
+          <timeout_ms>5000</timeout_ms>
+          <retry_count>2</retry_count>
+        </test>
+        <stop>
+          <command>STOP_RS232\r\n</command>
+          <expected_response>^BYE$</expected_response>
+          <timeout_ms>2000</timeout_ms>
+          <retry_count>1</retry_count>
+        </stop>
+      </port>
+      
+      <!-- RS485 Modbus Port -->
+      <port number="2">
+        <protocol>rs485</protocol>
+        <speed>9600</speed>
+        <data_pattern>e71</data_pattern>
+        <termination>true</termination>
+        <address>01</address>
+        <start>
+          <command>INIT_RS485\r\n</command>
+          <expected_response>^READY$</expected_response>
+          <timeout_ms>2000</timeout_ms>
+          <retry_count>2</retry_count>
+        </start>
+        <test>
+          <command>RUN_TEST_2\r\n</command>
+          <expected_response>^DONE$</expected_response>
+          <timeout_ms>3000</timeout_ms>
+          <retry_count>2</retry_count>
+        </test>
+        <stop>
+          <command>STOP_RS485\r\n</command>
+          <expected_response>^GOODBYE$</expected_response>
+          <timeout_ms>2000</timeout_ms>
+          <retry_count>1</retry_count>
+        </stop>
+      </port>
+      
+      <!-- USB Virtual Serial Port -->
+      <port number="3">
+        <protocol>usb</protocol>
+        <speed>4800</speed>
+        <data_pattern>n82</data_pattern>
+        <vendor_id>0x0403</vendor_id>
+        <product_id>0x6001</product_id>
+        <start>
+          <command>USB_INIT\r\n</command>
+          <expected_response>^USB_OK$</expected_response>
+          <timeout_ms>3000</timeout_ms>
+          <retry_count>2</retry_count>
+        </start>
+        <test>
+          <command>USB_TEST\r\n</command>
+          <expected_response>^USB_PASS$</expected_response>
+          <timeout_ms>2000</timeout_ms>
+          <retry_count>2</retry_count>
+        </test>
+        <stop>
+          <command>USB_STOP\r\n</command>
+          <expected_response>^USB_BYE$</expected_response>
+          <timeout_ms>2000</timeout_ms>
+          <retry_count>1</retry_count>
+        </stop>
+      </port>
+    </uut>
+  </bib>
+  
+  <!-- Development Test Board 2 -->
+  <bib id="bib_002">
+    <uut id="uut_002">
+      <!-- Different RS232 Configuration -->
+      <port number="1">
+        <protocol>rs232</protocol>
+        <speed>2400</speed>
+        <data_pattern>n81</data_pattern>
+        <start>
+          <command>BOOT_RS232\r\n</command>
+          <expected_response>^OK$</expected_response>
+        </start>
+        <test>
+          <command>TEST_RS232\r\n</command>
+          <expected_response>^RESULT:PASS$</expected_response>
+        </test>
+        <stop>
+          <command>CLOSE_RS232\r\n</command>
+          <expected_response>^CLOSED$</expected_response>
+        </stop>
+      </port>
+      
+      <!-- CAN Bus Communication -->
+      <port number="2">
+        <protocol>can</protocol>
+        <speed>125000</speed>
+        <data_pattern>n/a</data_pattern>
+        <can_id>0x123</can_id>
+        <extended_id>false</extended_id>
+        <start>
+          <command>START_CAN</command>
+          <expected_response>^CAN_OK$</expected_response>
+        </start>
+        <test>
+          <command>CAN_TEST</command>
+          <expected_response>^CAN_PASS$</expected_response>
+        </test>
+        <stop>
+          <command>STOP_CAN</command>
+          <expected_response>^CAN_END$</expected_response>
+        </stop>
+      </port>
+    </uut>
+  </bib>
+  
+  <!-- Advanced Protocol Test Board -->
+  <bib id="bib_003">
+    <uut id="uut_003">
+      <!-- I2C Communication -->
+      <port number="1">
+        <protocol>i2c</protocol>
+        <speed>100000</speed>
+        <data_pattern>n/a</data_pattern>
+        <slave_address>0x48</slave_address>
+        <addressing_mode>7bit</addressing_mode>
+        <start>
+          <command>I2C_INIT</command>
+          <expected_response>^I2C_OK$</expected_response>
+        </start>
+        <test>
+          <command>I2C_TEST</command>
+          <expected_response>^I2C_PASS$</expected_response>
+        </test>
+        <stop>
+          <command>I2C_STOP</command>
+          <expected_response>^I2C_BYE$</expected_response>
+        </stop>
+      </port>
+      
+      <!-- SPI Communication -->
+      <port number="2">
+        <protocol>spi</protocol>
+        <speed>500000</speed>
+        <data_pattern>n/a</data_pattern>
+        <mode>0</mode>
+        <bit_order>MSBFirst</bit_order>
+        <cs_pin>0</cs_pin>
+        <start>
+          <command>SPI_INIT</command>
+          <expected_response>^SPI_OK$</expected_response>
+        </start>
+        <test>
+          <command>SPI_TEST</command>
+          <expected_response>^SPI_PASS$</expected_response>
+        </test>
+        <stop>
+          <command>SPI_STOP</command>
+          <expected_response>^SPI_END$</expected_response>
+        </stop>
+      </port>
+    </uut>
+  </bib>
+</root>
+```
+
+---
+
+## 🔧 **Configuration Validation Rules**
+
+### **Required Elements**
+- ✅ **BIB ID** - Must be unique across configuration
+- ✅ **UUT ID** - Must be unique within BIB
+- ✅ **Port Number** - Must be unique within UUT
+- ✅ **Protocol** - Must be supported protocol name
+- ✅ **Speed** - Must be valid for protocol
+- ✅ **3-Phase Commands** - Start, Test, Stop sequences required
+
+### **Optional Elements**
+- 🔧 **Data Pattern** - Defaults based on protocol
+- 🔧 **Timeout** - Defaults to 2000ms
+- 🔧 **Retry Count** - Defaults to 0 (no retries)
+- 🔧 **Protocol-Specific Settings** - Depends on protocol type
+
+### **Validation Logic**
+```csharp
+// SerialPortPool.Core/Services/ConfigurationValidator.cs - NEW
+public class ConfigurationValidator
+{
+    public ValidationResult ValidateConfiguration(XmlDocument config)
+    {
+        var result = new ValidationResult();
+        
+        // 1. Schema validation
+        result.Merge(ValidateAgainstSchema(config));
+        
+        // 2. Business rules validation
+        result.Merge(ValidateBusinessRules(config));
+        
+        // 3. Protocol-specific validation
+        result.Merge(ValidateProtocolSettings(config));
+        
+        return result;
+    }
+    
+    private ValidationResult ValidateBusinessRules(XmlDocument config)
+    {
+        var result = new ValidationResult();
+        
+        // Check unique BIB IDs
+        var bibIds = config.SelectNodes("//bib/@id").Cast<XmlAttribute>().Select(a => a.Value);
+        if (bibIds.Count() != bibIds.Distinct().Count())
+            result.AddError("Duplicate BIB IDs found");
+        
+        // Check unique UUT IDs within BIB
+        foreach (XmlNode bibNode in config.SelectNodes("//bib"))
+        {
+            var uutIds = bibNode.SelectNodes("uut/@id").Cast<XmlAttribute>().Select(a => a.Value);
+            if (uutIds.Count() != uutIds.Distinct().Count())
+                result.AddError($"Duplicate UUT IDs in BIB {bibNode.Attributes["id"]?.Value}");
+        }
+        
+        return result;
+    }
+}
+```
+
+---
+
+## 📋 **Sprint 5 vs Sprint 6 Support**
+
+### **Sprint 5 Implementation (POC) ✅**
+```xml
+<!-- SUPPORTED: RS232 only -->
+<port number="1">
+  <protocol>rs232</protocol>
+  <speed>115200</speed>
+  <data_pattern>n81</data_pattern>
+  <!-- 3-phase commands supported -->
+</port>
+```
+
+### **Sprint 6 Expansion Plan 🚀**
+```xml
+<!-- PLANNED: All 6 protocols -->
+<port number="1"><protocol>rs232</protocol></port>  <!-- ✅ Sprint 5 -->
+<port number="2"><protocol>rs485</protocol></port>  <!-- 🚀 Sprint 6 -->
+<port number="3"><protocol>usb</protocol></port>    <!-- 🚀 Sprint 6 -->
+<port number="4"><protocol>can</protocol></port>    <!-- 🚀 Sprint 6 -->
+<port number="5"><protocol>i2c</protocol></port>    <!-- 🚀 Sprint 6 -->
+<port number="6"><protocol>spi</protocol></port>    <!-- 🚀 Sprint 6 -->
+```
+
+---
+
+## 🎯 **Usage Examples**
+
+### **Sprint 5 POC Configuration**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Minimal configuration for Sprint 5 POC -->
+<root>
+  <bib id="bib_poc_test">
+    <uut id="uut_rs232_demo">
+      <port number="1">
+        <protocol>rs232</protocol>
+        <speed>115200</speed>
+        <data_pattern>n81</data_pattern>
+        <start>
+          <command>ATZ\r\n</command>
+          <expected_response>OK</expected_response>
+          <timeout_ms>3000</timeout_ms>
+        </start>
+        <test>
+          <command>AT+STATUS\r\n</command>
+          <expected_response>STATUS_OK</expected_response>
+          <timeout_ms>2000</timeout_ms>
+        </test>
+        <stop>
+          <command>AT+QUIT\r\n</command>
+          <expected_response>GOODBYE</expected_response>
+          <timeout_ms>2000</timeout_ms>
+        </stop>
+      </port>
+    </uut>
+  </bib>
+</root>
+```
+
+### **Hardware Test Configuration**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Configuration for FT4232H hardware validation -->
+<root>
+  <bib id="bib_hardware_validation">
+    <uut id="uut_ft4232h">
+      <port number="1">
+        <protocol>rs232</protocol>
+        <speed>115200</speed>
+        <data_pattern>n81</data_pattern>
+        <start>
+          <command>INIT\r\n</command>
+          <expected_response>READY</expected_response>
+          <timeout_ms>5000</timeout_ms>
+          <retry_count>3</retry_count>
+        </start>
+        <test>
+          <command>TEST\r\n</command>
+          <expected_response>PASS</expected_response>
+          <timeout_ms>10000</timeout_ms>
+          <retry_count>2</retry_count>
+        </test>
+        <stop>
+          <command>EXIT\r\n</command>
+          <expected_response>BYE</expected_response>
+          <timeout_ms>2000</timeout_ms>
+          <retry_count>1</retry_count>
+        </stop>
+      </port>
+    </uut>
+  </bib>
+</root>
+```
+
+---
+
+## 📝 **Implementation Notes**
+
+### **C# Configuration Model**
+```csharp
+// SerialPortPool.Core/Models/Configuration/
+public class SystemConfiguration
+{
+    public List<BibConfiguration> Bibs { get; set; } = new();
+}
+
+public class BibConfiguration
+{
+    public string BibId { get; set; } = string.Empty;
+    public List<UutConfiguration> Uuts { get; set; } = new();
+}
+
+public class UutConfiguration
+{
+    public string UutId { get; set; } = string.Empty;
+    public List<PortConfiguration> Ports { get; set; } = new();
+}
+
+public class PortConfiguration
+{
+    public int PortNumber { get; set; }
+    public string Protocol { get; set; } = string.Empty;
+    public int Speed { get; set; }
+    public string DataPattern { get; set; } = string.Empty;
+    public Dictionary<string, object> ProtocolSettings { get; set; } = new();
+    public CommandSequence StartCommands { get; set; } = new();
+    public CommandSequence TestCommands { get; set; } = new();
+    public CommandSequence StopCommands { get; set; } = new();
+}
+```
+
+### **XML Loading Implementation**
+```csharp
+// SerialPortPool.Core/Services/XmlConfigurationLoader.cs
+public async Task<SystemConfiguration> LoadConfigurationAsync(string xmlPath)
+{
+    var xmlDoc = new XmlDocument();
+    xmlDoc.Load(xmlPath);
+    
+    // Validate against schema
+    var validator = new ConfigurationValidator();
+    var validationResult = validator.ValidateConfiguration(xmlDoc);
+    if (!validationResult.IsValid)
+        throw new ConfigurationException(validationResult.GetErrorSummary());
+    
+    // Parse configuration
+    return ParseSystemConfiguration(xmlDoc);
+}
+```
+
+---
+
+*Document créé : 28 Juillet 2025*  
+*Version : 1.0 - Complete XML Specification*  
+*Sprint 5 Status : RS232 Ready*  
+*Sprint 6 Status : 5 Protocols Planned*  
+*Validation : Schema + Business Rules + Protocol-Specific*
