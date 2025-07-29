@@ -1,5 +1,4 @@
-// SerialPortPool.Core/Services/PortReservationService.cs - NEW POC
-// ZERO TOUCH - Composition pattern implementation
+// SerialPortPool.Core/Services/PortReservationService.cs - CORRECT REFERENCES
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;

@@ -448,7 +448,7 @@ class Program
                 else
                 {
                     Console.WriteLine("❌ WARNING: Underlying pool allocation not found");
-                    nlogLogger.Warning("❌ Underlying pool allocation not found - potential composition issue");
+                    nlogLogger.Warn("❌ Underlying pool allocation not found - potential composition issue");
                 }
                 
                 // Test 4: Statistics
@@ -481,7 +481,7 @@ class Program
                 else
                 {
                     Console.WriteLine("❌ WARNING: Reservation release failed");
-                    nlogLogger.Warning("❌ Reservation release failed");
+                    nlogLogger.Warn("❌ Reservation release failed");
                 }
             }
             else

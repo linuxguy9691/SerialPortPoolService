@@ -1,7 +1,4 @@
-// SerialPortPool.Core/Models/PortReservation.cs - NEW POC
-// ZERO TOUCH - Composition pattern wrapping existing PortAllocation
-using SerialPortPool.Core.Models;
-
+// SerialPortPool.Core/Models/PortReservation.cs - CORRECT NAMESPACE
 namespace SerialPortPool.Core.Models;
 
 /// <summary>
