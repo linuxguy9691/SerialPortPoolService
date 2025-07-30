@@ -1,4 +1,6 @@
-// SerialPortPool.Core/Interfaces/IProtocolHandler.cs - NEW Sprint 5
+// SerialPortPool.Core/Interfaces/IProtocolHandler.cs - FIXED Sprint 5
+using SerialPortPool.Core.Models;
+
 namespace SerialPortPool.Core.Interfaces;
 
 /// <summary>
@@ -206,7 +208,7 @@ public class CommandResult
     /// <summary>
     /// Whether command executed successfully
     /// </summary>
-    public bool Success { get; set; }
+    public bool IsSuccess { get; set; }
 
     /// <summary>
     /// Error message if command failed
@@ -261,7 +263,7 @@ public class CommandResult
         {
             Command = command,
             Response = response,
-            Success = true,
+            IsSuccess = true,
             Duration = duration,
             EndTime = DateTime.Now,
             StartTime = DateTime.Now - duration
@@ -280,7 +282,7 @@ public class CommandResult
         return new CommandResult
         {
             Command = command,
-            Success = false,
+            IsSuccess = false,
             ErrorMessage = errorMessage,
             Duration = duration,
             EndTime = DateTime.Now,
@@ -290,9 +292,9 @@ public class CommandResult
 
     public override string ToString()
     {
-        var status = Success ? "✅ SUCCESS" : "❌ FAILED";
+        var status = IsSuccess ? "✅ SUCCESS" : "❌ FAILED";
         var response = !string.IsNullOrEmpty(Response) ? $" → {Response.Trim()}" : "";
-        var error = !Success && !string.IsNullOrEmpty(ErrorMessage) ? $" ({ErrorMessage})" : "";
+        var error = !IsSuccess && !string.IsNullOrEmpty(ErrorMessage) ? $" ({ErrorMessage})" : "";
         return $"{status}: {Command.Trim()}{response}{error} [{Duration.TotalMilliseconds:F0}ms]";
     }
 }
@@ -310,7 +312,7 @@ public class CommandSequenceResult
     /// <summary>
     /// Overall sequence success (all commands succeeded)
     /// </summary>
-    public bool Success => CommandResults.All(r => r.Success);
+    public bool IsSuccess => CommandResults.All(r => r.IsSuccess);
 
     /// <summary>
     /// Total execution duration
@@ -321,12 +323,12 @@ public class CommandSequenceResult
     /// <summary>
     /// Number of successful commands
     /// </summary>
-    public int SuccessfulCommands => CommandResults.Count(r => r.Success);
+    public int SuccessfulCommands => CommandResults.Count(r => r.IsSuccess);
 
     /// <summary>
     /// Number of failed commands
     /// </summary>
-    public int FailedCommands => CommandResults.Count(r => !r.Success);
+    public int FailedCommands => CommandResults.Count(r => !r.IsSuccess);
 
     /// <summary>
     /// Total number of commands
@@ -336,14 +338,14 @@ public class CommandSequenceResult
     /// <summary>
     /// First command that failed (if any)
     /// </summary>
-    public CommandResult? FirstFailure => CommandResults.FirstOrDefault(r => !r.Success);
+    public CommandResult? FirstFailure => CommandResults.FirstOrDefault(r => !r.IsSuccess);
 
     /// <summary>
     /// Sequence execution summary
     /// </summary>
     public string GetSummary()
     {
-        var status = Success ? "✅ SUCCESS" : "❌ FAILED";
+        var status = IsSuccess ? "✅ SUCCESS" : "❌ FAILED";
         return $"{status}: {SuccessfulCommands}/{TotalCommands} commands succeeded [{TotalDuration.TotalMilliseconds:F0}ms]";
     }
 
@@ -358,7 +360,7 @@ public class ProtocolTestResult
     /// <summary>
     /// Whether connectivity test passed
     /// </summary>
-    public bool Success { get; set; }
+    public bool IsSuccess { get; set; }
 
     /// <summary>
     /// Test error message if failed
@@ -382,7 +384,7 @@ public class ProtocolTestResult
 
     public override string ToString()
     {
-        var status = Success ? "✅ CONNECTED" : "❌ FAILED";
+        var status = IsSuccess ? "✅ CONNECTED" : "❌ FAILED";
         var responseTime = ResponseTime.HasValue ? $" ({ResponseTime.Value.TotalMilliseconds:F0}ms)" : "";
         return $"{status}{responseTime}";
     }
