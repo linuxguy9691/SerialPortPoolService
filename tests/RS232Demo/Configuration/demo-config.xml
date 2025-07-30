@@ -1,18 +1,324 @@
-<!-- Simple config pour commencer -->
-<port number="1">
-  <protocol>rs232</protocol>
-  <speed>115200</speed>
-  <data_pattern>n81</data_pattern>
-  <start>
-    <command>INIT\r\n</command>
-    <expected_response>READY</expected_response>
-  </start>
-  <test>
-    <command>TEST\r\n</command>
-    <expected_response>PASS</expected_response>
-  </test>
-  <stop>
-    <command>EXIT\r\n</command>
-    <expected_response>BYE</expected_response>
-  </stop>
-</port>
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SerialPortPool Sprint 5 Demo Configuration
+  BIB → UUT → PORT → PROTOCOL hierarchy for comprehensive testing
+  
+  This configuration supports multiple demo scenarios:
+  1. Python Dummy UUT simulation (safe testing)
+  2. Real hardware validation (FT4232H)
+  3. Custom protocol testing
+  4. Performance benchmarking
+-->
+<root>
+  
+  <!-- =============================================== -->
+  <!-- BIB_DEMO: Python Dummy UUT Simulator Scenario -->
+  <!-- =============================================== -->
+  <bib id="bib_demo">
+    <description>Demo scenario using Python dummy UUT for safe testing</description>
+    
+    <uut id="uut_python_simulator">
+      <description>Python dummy UUT simulator - predictable responses</description>
+      
+      <!-- Primary demo port with full 3-phase workflow -->
+      <port number="1">
+        <protocol>rs232</protocol>
+        <speed>115200</speed>
+        <data_pattern>n81</data_pattern>
+        <description>Main demo port - Python simulator on COM8</description>
+        
+        <!-- PowerOn Phase: Initialize the UUT -->
+        <start>
+          <description>Initialize RS232 communication with dummy UUT</description>
+          <command>INIT_RS232\r\n</command>
+          <expected_response>READY</expected_response>
+          <timeout_ms>3000</timeout_ms>
+          <retry_count>2</retry_count>
+        </start>
+        
+        <!-- Test Phase: Execute test commands -->
+        <test>
+          <description>Run primary test sequence</description>
+          <command>RUN_TEST_1\r\n</command>
+          <expected_response>PASS</expected_response>
+          <timeout_ms>5000</timeout_ms>
+          <retry_count>1</retry_count>
+        </test>
+        
+        <!-- PowerOff Phase: Graceful shutdown -->
+        <stop>
+          <description>Gracefully shutdown UUT communication</description>
+          <command>STOP_RS232\r\n</command>
+          <expected_response>BYE</expected_response>
+          <timeout_ms>2000</timeout_ms>
+          <retry_count>1</retry_count>
+        </stop>
+      </port>
+      
+      <!-- Alternative demo port for multi-port testing -->
+      <port number="2">
+        <protocol>rs232</protocol>
+        <speed>9600</speed>
+        <data_pattern>n81</data_pattern>
+        <description>Secondary demo port - different baud rate</description>
+        
+        <start>
+          <description>Alternative initialization sequence</description>
+          <command>ATZ\r\n</command>
+          <expected_response>OK</expected_response>
+          <timeout_ms>3000</timeout_ms>
+          <retry_count>3</retry_count>
+        </start>
+        
+        <test>
+          <description>Status check test</description>
+          <command>AT+STATUS\r\n</command>
+          <expected_response>STATUS_OK</expected_response>
+          <timeout_ms>2000</timeout_ms>
+          <retry_count>2</retry_count>
+        </test>
+        
+        <stop>
+          <description>Standard AT quit sequence</description>
+          <command>AT+QUIT\r\n</command>
+          <expected_response>GOODBYE</expected_response>
+          <timeout_ms>2000</timeout_ms>
+          <retry_count>1</retry_count>
+        </stop>
+      </port>
+    </uut>
+    
+    <!-- Additional UUT for complex scenarios -->
+    <uut id="uut_advanced_demo">
+      <description>Advanced demo with extended command sequences</description>
+      
+      <port number="1">
+        <protocol>rs232</protocol>
+        <speed>115200</speed>
+        <data_pattern>n81</data_pattern>
+        <description>Advanced testing port with multiple commands per phase</description>
+        
+        <!-- Multi-command PowerOn sequence -->
+        <start>
+          <description>Extended initialization with multiple steps</description>
+          <!-- Note: Multiple commands in future enhancement -->
+          <command>INIT_RS232\r\n</command>
+          <expected_response>READY</expected_response>
+          <timeout_ms>3000</timeout_ms>
+          <retry_count>2</retry_count>
+        </start>
+        
+        <test>
+          <description>Comprehensive test sequence</description>
+          <command>RUN_TEST_1\r\n</command>
+          <expected_response>PASS</expected_response>
+          <timeout_ms>10000</timeout_ms>
+          <retry_count>1</retry_count>
+        </test>
+        
+        <stop>
+          <description>Extended shutdown sequence</description>
+          <command>STOP_RS232\r\n</command>
+          <expected_response>BYE</expected_response>
+          <timeout_ms>3000</timeout_ms>
+          <retry_count>1</retry_count>
+        </stop>
+      </port>
+    </uut>
+  </bib>
+  
+  <!-- ================================================== -->
+  <!-- BIB_HARDWARE: Real Hardware Validation Scenario  -->
+  <!-- ================================================== -->
+  <bib id="bib_hardware">
+    <description>Real hardware testing scenario for FT4232H devices</description>
+    
+    <uut id="uut_ft4232h">
+      <description>FTDI FT4232H multi-port device validation</description>
+      
+      <!-- Real hardware port configuration -->
+      <port number="1">
+        <protocol>rs232</protocol>
+        <speed>115200</speed>
+        <data_pattern>n81</data_pattern>
+        <description>FT4232H port 1 - real hardware testing</description>
+        
+        <start>
+          <description>Hardware initialization sequence</description>
+          <command>INIT\r\n</command>
+          <expected_response>READY</expected_response>
+          <timeout_ms>5000</timeout_ms>
+          <retry_count>3</retry_count>
+        </start>
+        
+        <test>
+          <description>Hardware validation test</description>
+          <command>TEST\r\n</command>
+          <expected_response>PASS</expected_response>
+          <timeout_ms>10000</timeout_ms>
+          <retry_count>2</retry_count>
+        </test>
+        
+        <stop>
+          <description>Hardware shutdown sequence</description>
+          <command>EXIT\r\n</command>
+          <expected_response>BYE</expected_response>
+          <timeout_ms>3000</timeout_ms>
+          <retry_count>1</retry_count>
+        </stop>
+      </port>
+      
+      <!-- Multi-port device testing -->
+      <port number="2">
+        <protocol>rs232</protocol>
+        <speed>57600</speed>
+        <data_pattern>e71</data_pattern>
+        <description>FT4232H port 2 - different configuration</description>
+        
+        <start>
+          <description>Port 2 initialization</description>
+          <command>INIT_PORT2\r\n</command>
+          <expected_response>PORT2_READY</expected_response>
+          <timeout_ms>4000</timeout_ms>
+          <retry_count>2</retry_count>
+        </start>
+        
+        <test>
+          <description>Port 2 functionality test</description>
+          <command>TEST_PORT2\r\n</command>
+          <expected_response>PORT2_PASS</expected_response>
+          <timeout_ms>8000</timeout_ms>
+          <retry_count>2</retry_count>
+        </test>
+        
+        <stop>
+          <description>Port 2 shutdown</description>
+          <command>EXIT_PORT2\r\n</command>
+          <expected_response>PORT2_BYE</expected_response>
+          <timeout_ms>2000</timeout_ms>
+          <retry_count>1</retry_count>
+        </stop>
+      </port>
+    </uut>
+  </bib>
+  
+  <!-- ================================================ -->
+  <!-- BIB_PERFORMANCE: Performance Testing Scenario  -->
+  <!-- ================================================ -->
+  <bib id="bib_performance">
+    <description>Performance testing and benchmarking scenarios</description>
+    
+    <uut id="uut_speed_test">
+      <description>High-speed communication testing</description>
+      
+      <port number="1">
+        <protocol>rs232</protocol>
+        <speed>115200</speed>
+        <data_pattern>n81</data_pattern>
+        <description>High-speed performance testing port</description>
+        
+        <start>
+          <description>Performance test initialization</description>
+          <command>PERF_INIT\r\n</command>
+          <expected_response>PERF_READY</expected_response>
+          <timeout_ms>1000</timeout_ms>
+          <retry_count>1</retry_count>
+        </start>
+        
+        <test>
+          <description>Rapid command execution test</description>
+          <command>PERF_TEST\r\n</command>
+          <expected_response>PERF_PASS</expected_response>
+          <timeout_ms>500</timeout_ms>
+          <retry_count>0</retry_count>
+        </test>
+        
+        <stop>
+          <description>Performance test cleanup</description>
+          <command>PERF_STOP\r\n</command>
+          <expected_response>PERF_DONE</expected_response>
+          <timeout_ms>500</timeout_ms>
+          <retry_count>0</retry_count>
+        </stop>
+      </port>
+    </uut>
+    
+    <uut id="uut_stress_test">
+      <description>Stress testing with extended sequences</description>
+      
+      <port number="1">
+        <protocol>rs232</protocol>
+        <speed>9600</speed>
+        <data_pattern>n81</data_pattern>
+        <description>Stress testing with slower baud rate</description>
+        
+        <start>
+          <description>Stress test initialization</description>
+          <command>STRESS_INIT\r\n</command>
+          <expected_response>STRESS_READY</expected_response>
+          <timeout_ms>5000</timeout_ms>
+          <retry_count>3</retry_count>
+        </start>
+        
+        <test>
+          <description>Extended stress test sequence</description>
+          <command>STRESS_TEST\r\n</command>
+          <expected_response>STRESS_PASS</expected_response>
+          <timeout_ms>30000</timeout_ms>
+          <retry_count>1</retry_count>
+        </test>
+        
+        <stop>
+          <description>Stress test cleanup</description>
+          <command>STRESS_STOP\r\n</command>
+          <expected_response>STRESS_DONE</expected_response>
+          <timeout_ms>5000</timeout_ms>
+          <retry_count>1</retry_count>
+        </stop>
+      </port>
+    </uut>
+  </bib>
+  
+  <!-- ============================================== -->
+  <!-- BIB_CUSTOM: Template for Custom Scenarios    -->
+  <!-- ============================================== -->
+  <bib id="bib_custom">
+    <description>Template for custom user configurations</description>
+    
+    <uut id="uut_custom">
+      <description>Custom UUT configuration template</description>
+      
+      <port number="1">
+        <protocol>rs232</protocol>
+        <speed>115200</speed>
+        <data_pattern>n81</data_pattern>
+        <description>Customizable port configuration</description>
+        
+        <start>
+          <description>Custom initialization command</description>
+          <command>CUSTOM_INIT\r\n</command>
+          <expected_response>CUSTOM_READY</expected_response>
+          <timeout_ms>3000</timeout_ms>
+          <retry_count>2</retry_count>
+        </start>
+        
+        <test>
+          <description>Custom test command</description>
+          <command>CUSTOM_TEST\r\n</command>
+          <expected_response>CUSTOM_PASS</expected_response>
+          <timeout_ms>5000</timeout_ms>
+          <retry_count>1</retry_count>
+        </test>
+        
+        <stop>
+          <description>Custom shutdown command</description>
+          <command>CUSTOM_STOP\r\n</command>
+          <expected_response>CUSTOM_BYE</expected_response>
+          <timeout_ms>2000</timeout_ms>
+          <retry_count>1</retry_count>
+        </stop>
+      </port>
+    </uut>
+  </bib>
+
+</root>
