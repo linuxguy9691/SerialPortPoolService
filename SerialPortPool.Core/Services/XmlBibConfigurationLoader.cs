@@ -1,4 +1,5 @@
-// SerialPortPool.Core/Services/XmlBibConfigurationLoader.cs - NEW Week 2
+// SerialPortPool.Core/Services/XmlBibConfigurationLoader.cs - NEW Week 2 CORRECTED COMPLETE FILE
+// DEBUGGED: Fixed async warnings and compilation issues
 using System.Xml;
 using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
@@ -67,26 +68,26 @@ public class XmlBibConfigurationLoader : IBibConfigurationLoader
     /// <summary>
     /// Load single BIB configuration by ID
     /// </summary>
-    public async Task<BibConfiguration?> LoadBibConfigurationAsync(string bibId)
+    public Task<BibConfiguration?> LoadBibConfigurationAsync(string bibId)
     {
         if (string.IsNullOrEmpty(bibId))
-            return null;
+            return Task.FromResult<BibConfiguration?>(null);
 
         try
         {
             if (_loadedConfigurations.TryGetValue(bibId, out var cachedConfig))
             {
                 _logger.LogDebug($"📄 Returning cached configuration for BIB: {bibId}");
-                return cachedConfig;
+                return Task.FromResult<BibConfiguration?>(cachedConfig);
             }
 
             _logger.LogWarning($"⚠️ BIB configuration not found: {bibId}");
-            return null;
+            return Task.FromResult<BibConfiguration?>(null);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, $"❌ Error loading BIB configuration: {bibId}");
-            return null;
+            return Task.FromResult<BibConfiguration?>(null);
         }
     }
 
@@ -512,20 +513,19 @@ public class XmlBibConfigurationLoader : IBibConfigurationLoader
     /// <summary>
     /// Get all loaded configurations
     /// </summary>
-    public async Task<Dictionary<string, BibConfiguration>> GetLoadedConfigurationsAsync()
+    public Task<Dictionary<string, BibConfiguration>> GetLoadedConfigurationsAsync()
     {
-        await Task.CompletedTask;
-        return new Dictionary<string, BibConfiguration>(_loadedConfigurations);
+        return Task.FromResult(new Dictionary<string, BibConfiguration>(_loadedConfigurations));
     }
 
     /// <summary>
     /// Clear loaded configurations
     /// </summary>
-    public async Task ClearConfigurationsAsync()
+    public Task ClearConfigurationsAsync()
     {
-        await Task.CompletedTask;
         _loadedConfigurations.Clear();
         _logger.LogInformation("🗑️ All loaded configurations cleared");
+        return Task.CompletedTask;
     }
 }
 

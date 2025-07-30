@@ -1,4 +1,5 @@
-// SerialPortPool.Core/Models/BibConfiguration.cs - NEW Week 2
+// SerialPortPool.Core/Models/BibConfiguration.cs - NEW Week 2 CORRECTED COMPLETE FILE
+// DEBUGGED: Fixed ValidationResult → BibValidationResult
 namespace SerialPortPool.Core.Models;
 
 /// <summary>
@@ -279,10 +280,11 @@ public class PortConfiguration
 
     /// <summary>
     /// Validate this port configuration
+    /// FIXED: Using BibValidationResult instead of ValidationResult
     /// </summary>
-    public ValidationResult Validate()
+    public BibValidationResult Validate()
     {
-        var result = new ValidationResult();
+        var result = new BibValidationResult();
 
         if (PortNumber <= 0)
             result.AddError("Port number must be positive");
@@ -370,6 +372,7 @@ public class CommandSequence
 
 /// <summary>
 /// Validation result for configuration validation
+/// FIXED: Using our custom BibValidationResult class
 /// </summary>
 public class BibValidationResult
 {

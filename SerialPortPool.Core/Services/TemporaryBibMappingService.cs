@@ -1,4 +1,5 @@
-// SerialPortPool.Core/Services/TemporaryBibMappingService.cs - NEW Week 2
+// SerialPortPool.Core/Services/TemporaryBibMappingService.cs - NEW Week 2 CORRECTED COMPLETE FILE
+// DEBUGGED: Fixed async warnings and compilation issues
 using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
 using SerialPortPool.Core.Models;
@@ -209,43 +210,43 @@ public class TemporaryBibMappingService : IBibMappingService
     /// <summary>
     /// Get all mapped ports for a specific BIB
     /// </summary>
-    public async Task<List<BibPortMapping>> GetBibPortsAsync(string bibId)
+    public Task<List<BibPortMapping>> GetBibPortsAsync(string bibId)
     {
-        await Task.CompletedTask;
-        
-        return _portMappings.Values
+        var mappings = _portMappings.Values
             .Where(m => m.BibId.Equals(bibId, StringComparison.OrdinalIgnoreCase))
             .OrderBy(m => m.UutId)
             .ThenBy(m => m.PortNumber)
             .ToList();
+            
+        return Task.FromResult(mappings);
     }
 
     /// <summary>
     /// Get all mapped ports for a specific UUT
     /// </summary>
-    public async Task<List<BibPortMapping>> GetUutPortsAsync(string bibId, string uutId)
+    public Task<List<BibPortMapping>> GetUutPortsAsync(string bibId, string uutId)
     {
-        await Task.CompletedTask;
-        
-        return _portMappings.Values
+        var mappings = _portMappings.Values
             .Where(m => m.BibId.Equals(bibId, StringComparison.OrdinalIgnoreCase) && 
                        m.UutId.Equals(uutId, StringComparison.OrdinalIgnoreCase))
             .OrderBy(m => m.PortNumber)
             .ToList();
+            
+        return Task.FromResult(mappings);
     }
 
     /// <summary>
     /// Get all available BIB IDs
     /// </summary>
-    public async Task<List<string>> GetAvailableBibIdsAsync()
+    public Task<List<string>> GetAvailableBibIdsAsync()
     {
-        await Task.CompletedTask;
-        
-        return _portMappings.Values
+        var bibIds = _portMappings.Values
             .Select(m => m.BibId)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(b => b)
             .ToList();
+            
+        return Task.FromResult(bibIds);
     }
 
     /// <summary>
@@ -285,16 +286,14 @@ public class TemporaryBibMappingService : IBibMappingService
     /// <summary>
     /// Get mapping statistics
     /// </summary>
-    public async Task<BibMappingStatistics> GetMappingStatisticsAsync()
+    public Task<BibMappingStatistics> GetMappingStatisticsAsync()
     {
-        await Task.CompletedTask;
-        
         var bibIds = _portMappings.Values.Select(m => m.BibId).Distinct().Count();
         var uutIds = _portMappings.Values.Select(m => $"{m.BibId}.{m.UutId}").Distinct().Count();
         var ft4232hPorts = _portMappings.Values.Count(m => m.DeviceType == "FT4232HL");
         var otherPorts = _portMappings.Values.Count(m => m.DeviceType != "FT4232HL");
         
-        return new BibMappingStatistics
+        var statistics = new BibMappingStatistics
         {
             TotalMappings = _portMappings.Count,
             TotalBibs = bibIds,
@@ -303,46 +302,48 @@ public class TemporaryBibMappingService : IBibMappingService
             OtherDevicePorts = otherPorts,
             GeneratedAt = DateTime.Now
         };
+        
+        return Task.FromResult(statistics);
     }
 
     /// <summary>
     /// Manually add or update a port mapping
     /// </summary>
-    public async Task<bool> AddOrUpdateMappingAsync(BibPortMapping mapping)
+    public Task<bool> AddOrUpdateMappingAsync(BibPortMapping mapping)
     {
         try
         {
             _portMappings[mapping.PhysicalPort] = mapping;
             _logger.LogInformation($"✅ Mapping added/updated: {mapping.PhysicalPort} → {mapping.BibId}.{mapping.UutId}.{mapping.PortNumber}");
-            return true;
+            return Task.FromResult(true);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, $"❌ Error adding/updating mapping for {mapping.PhysicalPort}");
-            return false;
+            return Task.FromResult(false);
         }
     }
 
     /// <summary>
     /// Remove a port mapping
     /// </summary>
-    public async Task<bool> RemoveMappingAsync(string physicalPort)
+    public Task<bool> RemoveMappingAsync(string physicalPort)
     {
         try
         {
             if (_portMappings.Remove(physicalPort))
             {
                 _logger.LogInformation($"✅ Mapping removed: {physicalPort}");
-                return true;
+                return Task.FromResult(true);
             }
             
             _logger.LogWarning($"⚠️ No mapping found to remove: {physicalPort}");
-            return false;
+            return Task.FromResult(false);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, $"❌ Error removing mapping for {physicalPort}");
-            return false;
+            return Task.FromResult(false);
         }
     }
 }
