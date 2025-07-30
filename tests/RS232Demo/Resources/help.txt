@@ -1,0 +1,30 @@
+📋 RS232Demo Help & Documentation
+
+🎯 Quick Start Guide:
+   1. 🤖 For safe testing: Start Python dummy UUT first
+      python ../DummyUUT/dummy_uut.py --port COM8
+   2. 🎬 Launch this demo application
+      dotnet run
+   3. 📋 Select scenario 1 (Python Dummy UUT)
+   4. 🚀 Watch the workflow execute
+   5. ✅ See complete 3-phase results
+
+🔧 Troubleshooting:
+   ❌ "Port COM8 not available"
+      → Check if Python dummy UUT is running
+      → Try different port: python dummy_uut.py --port COM9
+      → Check available ports in Scenario 5
+
+   ❌ "Build errors"
+      → Ensure SerialPortPool.Core is built first
+      → Run: dotnet build ../../SerialPortPool.Core/
+
+📚 Documentation Links:
+   📖 Complete Demo Guide: README.md (this directory)
+   🏗️ Sprint 5 Architecture: ../../docs/sprint5/
+   🤖 Dummy UUT Setup: ../DummyUUT/README.md
+
+⚡ Pro Tips:
+   💡 Use Scenario 5 to check available ports before testing
+   💡 Keep Python dummy UUT running in separate terminal
+   💡 Check logs in C:\Logs\SerialPortPool\ for detailed info

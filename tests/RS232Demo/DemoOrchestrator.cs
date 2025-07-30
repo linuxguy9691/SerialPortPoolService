@@ -315,11 +315,11 @@ public class DemoOrchestrator
             _consoleHelper.DisplayStatus(statsMessage, ConsoleColor.Green);
             
             var discoveryResult = await _discovery.DiscoverPortsAsync();
-            var discoveryMessage = "🔍 Discovery found " + discoveryResult.Count.ToString() + " ports";
+            var discoveryMessage = "🔍 Discovery found " + discoveryResult.Count().ToString() + " ports";
             _consoleHelper.DisplayStatus(discoveryMessage, ConsoleColor.Green);
             
             var deviceGroups = await _deviceAnalyzer.AnalyzeDeviceGroupsAsync(discoveryResult);
-            var groupingMessage = "🔀 Device grouping found " + deviceGroups.Count.ToString() + " device groups";
+            var groupingMessage = "🔀 Device grouping found " + deviceGroups.Count().ToString() + " device groups";
             _consoleHelper.DisplayStatus(groupingMessage, ConsoleColor.Green);
             
         }
