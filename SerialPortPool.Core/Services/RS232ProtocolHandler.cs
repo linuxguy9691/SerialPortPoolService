@@ -1,4 +1,4 @@
-// SerialPortPool.Core/Services/RS232ProtocolHandler.cs - NEW Week 2
+// SerialPortPool.Core/Services/RS232ProtocolHandler.cs - FIXED Week 2
 using System.IO.Ports;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -14,6 +14,7 @@ namespace SerialPortPool.Core.Services;
 public class RS232ProtocolHandler : IProtocolHandler
 {
     private readonly ILogger<RS232ProtocolHandler> _logger;
+    private bool _disposed = false;
 
     public RS232ProtocolHandler(ILogger<RS232ProtocolHandler> logger)
     {
@@ -84,7 +85,7 @@ public class RS232ProtocolHandler : IProtocolHandler
     /// </summary>
     public async Task<CommandResult> ExecuteCommandAsync(
         ProtocolSession session, 
-        ProtocolCommand command,
+        Models.ProtocolCommand command,  // ← FIXED: Explicitly use Models.ProtocolCommand
         CancellationToken cancellationToken = default)
     {
         if (session == null)
@@ -165,7 +166,7 @@ public class RS232ProtocolHandler : IProtocolHandler
     /// </summary>
     public async Task<CommandSequenceResult> ExecuteCommandSequenceAsync(
         ProtocolSession session,
-        IEnumerable<ProtocolCommand> commands,
+        IEnumerable<Models.ProtocolCommand> commands,  // ← FIXED: Explicitly use Models.ProtocolCommand
         CancellationToken cancellationToken = default)
     {
         var result = new CommandSequenceResult();
@@ -301,6 +302,32 @@ public class RS232ProtocolHandler : IProtocolHandler
             GeneratedAt = DateTime.Now
         };
     }
+
+    #region IDisposable Implementation
+
+    /// <summary>
+    /// Dispose the protocol handler
+    /// </summary>
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Protected dispose method
+    /// </summary>
+    /// <param name="disposing">Whether disposing from Dispose() call</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposed && disposing)
+        {
+            _logger.LogDebug("Disposing RS232ProtocolHandler");
+            _disposed = true;
+        }
+    }
+
+    #endregion
 
     #region Private Helper Methods
 

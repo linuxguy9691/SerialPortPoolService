@@ -371,7 +371,7 @@ public class CommandSequence
 /// <summary>
 /// Validation result for configuration validation
 /// </summary>
-public class ValidationResult
+public class BibValidationResult
 {
     public List<string> Errors { get; set; } = new();
     public List<string> Warnings { get; set; } = new();

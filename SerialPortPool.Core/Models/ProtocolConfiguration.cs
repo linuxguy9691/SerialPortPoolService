@@ -391,50 +391,6 @@ public class ProtocolConfiguration
 
     #region Validation
 
-    /// <summary>
-    /// Validate protocol configuration
-    /// </summary>
-    /// <returns>Validation result with errors if any</returns>
-    public ValidationResult Validate()
-    {
-        var result = new ValidationResult();
-
-        // Basic validation
-        if (string.IsNullOrWhiteSpace(PortName))
-            result.Errors.Add("PortName cannot be empty");
-
-        if (string.IsNullOrWhiteSpace(Protocol))
-            result.Errors.Add("Protocol cannot be empty");
-
-        if (Speed <= 0)
-            result.Errors.Add("Speed must be positive");
-
-        // Protocol-specific validation
-        switch (Protocol.ToLowerInvariant())
-        {
-            case "rs232":
-            case "rs485":
-                ValidateSerialProtocol(result);
-                break;
-            case "usb":
-                ValidateUSBProtocol(result);
-                break;
-            case "can":
-                ValidateCANProtocol(result);
-                break;
-            case "i2c":
-                ValidateI2CProtocol(result);
-                break;
-            case "spi":
-                ValidateSPIProtocol(result);
-                break;
-            default:
-                result.Errors.Add($"Unknown protocol: {Protocol}");
-                break;
-        }
-
-        return result;
-    }
 
     private void ValidateSerialProtocol(ValidationResult result)
     {
