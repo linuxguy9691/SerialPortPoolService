@@ -1,0 +1,18 @@
+<!-- Simple config pour commencer -->
+<port number="1">
+  <protocol>rs232</protocol>
+  <speed>115200</speed>
+  <data_pattern>n81</data_pattern>
+  <start>
+    <command>INIT\r\n</command>
+    <expected_response>READY</expected_response>
+  </start>
+  <test>
+    <command>TEST\r\n</command>
+    <expected_response>PASS</expected_response>
+  </test>
+  <stop>
+    <command>EXIT\r\n</command>
+    <expected_response>BYE</expected_response>
+  </stop>
+</port>
