@@ -62,7 +62,7 @@ public class Program
         Console.ForegroundColor = ConsoleColor.Cyan;
         
         Console.WriteLine("🏭 SerialPortPool Sprint 5 Demo - Multi-Protocol Communication");
-        Console.WriteLine("=" * 65);
+        Console.WriteLine(new string('=', 65));
         Console.ForegroundColor = ConsoleColor.White;
         Console.WriteLine("🚀 Demonstrating: BIB → UUT → PORT → RS232 workflow");
         Console.WriteLine("🤖 Integration: Python dummy UUT + Real hardware support");
@@ -115,59 +115,35 @@ public class Program
         services.AddScoped<ISerialPortValidator, SerialPortValidator>();
         services.AddScoped<ISerialPortDiscovery, EnhancedSerialPortDiscoveryService>();
         services.AddScoped<SystemInfoCache>();
-        services.AddScoped<ISerialPortPool, SerialPortPool>();
+        services.AddScoped<ISerialPortPool, SerialPortPool.Core.Services.SerialPortPool>();
         services.AddScoped<IMultiPortDeviceAnalyzer, MultiPortDeviceAnalyzer>();
         
         // ================================
-        // SPRINT 5 EXTENSION LAYER (NEW - COMPOSITION PATTERN)
+        // SPRINT 5 EXTENSION LAYER (PLANNED - Will be implemented)
         // ================================
         
-        // Port reservation wrapper (wraps existing pool)
-        services.AddScoped<IPortReservationService, PortReservationService>();
-        
-        // Protocol abstraction layer
-        services.AddScoped<IProtocolHandlerFactory, ProtocolHandlerFactory>();
-        services.AddScoped<RS232ProtocolHandler>();
-        
-        // Configuration system
-        services.AddScoped<IXmlConfigurationLoader, XmlConfigurationLoader>();
-        
-        // Workflow orchestration
-        services.AddScoped<IBibWorkflowOrchestrator, BibWorkflowOrchestrator>();
+        // TODO: These services will be implemented in Week 3
+        // services.AddScoped<IPortReservationService, PortReservationService>();
+        // services.AddScoped<IProtocolHandlerFactory, ProtocolHandlerFactory>();
+        // services.AddScoped<RS232ProtocolHandler>();
+        // services.AddScoped<IXmlConfigurationLoader, XmlConfigurationLoader>();
+        // services.AddScoped<IBibWorkflowOrchestrator, BibWorkflowOrchestrator>();
         
         // Demo-specific services
         services.AddScoped<DemoOrchestrator>();
         services.AddSingleton<ConsoleHelper>();
         
-        // Configuration loading
-        services.AddSingleton<Dictionary<string, BibConfiguration>>(provider =>
+        // Basic configuration (simplified for now)
+        services.AddSingleton<Dictionary<string, object>>(provider =>
         {
-            var loader = provider.GetRequiredService<IXmlConfigurationLoader>();
             var logger = provider.GetRequiredService<ILogger<Program>>();
+            logger.LogInformation("📋 Using basic demo configuration (Sprint 5 services pending)");
             
-            try
+            return new Dictionary<string, object>
             {
-                var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, 
-                    "Configuration", "demo-config.xml");
-                
-                if (File.Exists(configPath))
-                {
-                    logger.LogInformation("📋 Loading demo configuration from: {ConfigPath}", configPath);
-                    return loader.LoadConfigurationsAsync(configPath).GetAwaiter().GetResult();
-                }
-                else
-                {
-                    logger.LogWarning("⚠️ Demo configuration not found at: {ConfigPath}", configPath);
-                    logger.LogInformation("📋 Using minimal default configuration");
-                    return CreateDefaultDemoConfiguration();
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "❌ Failed to load demo configuration");
-                logger.LogInformation("📋 Using minimal default configuration");
-                return CreateDefaultDemoConfiguration();
-            }
+                ["demo_mode"] = "foundation_only",
+                ["sprint5_services"] = "pending_implementation"
+            };
         });
         
         var serviceProvider = services.BuildServiceProvider();
@@ -176,78 +152,6 @@ public class Program
         ValidateServiceRegistration(serviceProvider);
         
         return serviceProvider;
-    }
-
-    /// <summary>
-    /// Create default demo configuration if XML file not available
-    /// </summary>
-    private static Dictionary<string, BibConfiguration> CreateDefaultDemoConfiguration()
-    {
-        var defaultConfig = new BibConfiguration
-        {
-            BibId = "bib_demo_default",
-            Uuts = new List<UutConfiguration>
-            {
-                new UutConfiguration
-                {
-                    UutId = "uut_default",
-                    Ports = new List<PortConfiguration>
-                    {
-                        new PortConfiguration
-                        {
-                            PortNumber = 1,
-                            Protocol = "rs232",
-                            Settings = new Dictionary<string, object>
-                            {
-                                ["speed"] = 115200,
-                                ["data_pattern"] = "n81"
-                            },
-                            StartCommands = new CommandSequence
-                            {
-                                Commands = new List<ProtocolCommand>
-                                {
-                                    new ProtocolCommand 
-                                    { 
-                                        Command = "INIT_RS232\\r\\n", 
-                                        ExpectedResponse = "READY",
-                                        TimeoutMs = 3000 
-                                    }
-                                }
-                            },
-                            TestCommands = new CommandSequence
-                            {
-                                Commands = new List<ProtocolCommand>
-                                {
-                                    new ProtocolCommand 
-                                    { 
-                                        Command = "TEST\\r\\n", 
-                                        ExpectedResponse = "PASS",
-                                        TimeoutMs = 5000 
-                                    }
-                                }
-                            },
-                            StopCommands = new CommandSequence
-                            {
-                                Commands = new List<ProtocolCommand>
-                                {
-                                    new ProtocolCommand 
-                                    { 
-                                        Command = "EXIT\\r\\n", 
-                                        ExpectedResponse = "BYE",
-                                        TimeoutMs = 2000 
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        };
-        
-        return new Dictionary<string, BibConfiguration>
-        {
-            ["bib_demo_default"] = defaultConfig
-        };
     }
 
     /// <summary>
@@ -268,20 +172,17 @@ public class Program
             var validator = serviceProvider.GetRequiredService<ISerialPortValidator>();
             var analyzer = serviceProvider.GetRequiredService<IMultiPortDeviceAnalyzer>();
             
-            // Validate Sprint 5 extension services
-            var reservationService = serviceProvider.GetRequiredService<IPortReservationService>();
-            var protocolFactory = serviceProvider.GetRequiredService<IProtocolHandlerFactory>();
-            var configLoader = serviceProvider.GetRequiredService<IXmlConfigurationLoader>();
-            var orchestrator = serviceProvider.GetRequiredService<IBibWorkflowOrchestrator>();
+            // Validate demo services
             var demoOrchestrator = serviceProvider.GetRequiredService<DemoOrchestrator>();
+            var consoleHelper = serviceProvider.GetRequiredService<ConsoleHelper>();
             
             // Validate configuration
-            var configurations = serviceProvider.GetRequiredService<Dictionary<string, BibConfiguration>>();
+            var configurations = serviceProvider.GetRequiredService<Dictionary<string, object>>();
             
-            logger.LogInformation("✅ All services registered successfully");
+            logger.LogInformation("✅ All foundation services registered successfully");
             logger.LogInformation("📊 Foundation services: 5 (Sprint 3-4 preserved)");
-            logger.LogInformation("📊 Extension services: 5 (Sprint 5 added)");
-            logger.LogInformation("📊 BIB configurations: {ConfigCount}", configurations.Count);
+            logger.LogInformation("📊 Demo services: 2 (Console demo ready)");
+            logger.LogInformation("📊 Sprint 5 services: Pending implementation in Week 3");
         }
         catch (Exception ex)
         {
@@ -318,7 +219,7 @@ public class Program
                 await ExecuteSelectedScenarioAsync(orchestrator, consoleHelper, selection);
                 
                 // Pause before next iteration
-                Console.WriteLine("\n" + "=".PadRight(65, '='));
+                Console.WriteLine("\n" + new string('=', 65));
                 Console.WriteLine("Press any key to continue, or 'q' + Enter to quit...");
                 var key = Console.ReadKey(true);
                 if (key.KeyChar == 'q')
@@ -418,136 +319,6 @@ public class Program
     }
 }
 
-/// <summary>
-/// Console helper for rich formatting and display
-/// Basic implementation - will be expanded in ConsoleHelper.cs
-/// </summary>
-public class ConsoleHelper
-{
-    public void DisplayHelpInformation()
-    {
-        Console.ForegroundColor = ConsoleColor.Cyan;
-        Console.WriteLine("❓ RS232Demo Help & Documentation");
-        Console.WriteLine("=" * 40);
-        Console.ForegroundColor = ConsoleColor.White;
-        
-        Console.WriteLine();
-        Console.WriteLine("📋 Quick Start:");
-        Console.WriteLine("   1. For safe testing: Start Python dummy UUT first");
-        Console.WriteLine("      python ../DummyUUT/dummy_uut.py --port COM8");
-        Console.WriteLine("   2. Select scenario 1 (Python Dummy UUT)");
-        Console.WriteLine("   3. Watch the 3-phase workflow execute");
-        Console.WriteLine();
-        
-        Console.WriteLine("🔧 Troubleshooting:");
-        Console.WriteLine("   • Port not available: Check if dummy UUT is running");
-        Console.WriteLine("   • Build errors: Ensure SerialPortPool.Core is built");
-        Console.WriteLine("   • Config errors: Check Configuration/demo-config.xml");
-        Console.WriteLine();
-        
-        Console.WriteLine("📚 Documentation:");
-        Console.WriteLine("   • Full guide: README.md in this directory");
-        Console.WriteLine("   • Sprint 5 docs: ../../docs/sprint5/");
-        Console.WriteLine("   • Dummy UUT setup: ../DummyUUT/README.md");
-        Console.WriteLine();
-    }
-}
-
-/// <summary>
-/// Demo orchestrator - Basic stub implementation
-/// Full implementation will be in DemoOrchestrator.cs
-/// </summary>
-public class DemoOrchestrator
-{
-    private readonly ILogger<DemoOrchestrator> _logger;
-    private readonly IBibWorkflowOrchestrator _workflowOrchestrator;
-    
-    public DemoOrchestrator(
-        ILogger<DemoOrchestrator> logger,
-        IBibWorkflowOrchestrator workflowOrchestrator)
-    {
-        _logger = logger;
-        _workflowOrchestrator = workflowOrchestrator;
-    }
-    
-    public async Task RunPythonDummyUUTDemoAsync()
-    {
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine("🤖 Demo Scenario: Python Dummy UUT Simulator");
-        Console.WriteLine("=" * 45);
-        Console.ForegroundColor = ConsoleColor.White;
-        
-        Console.WriteLine("📍 Expected setup: Python dummy UUT running on COM8");
-        Console.WriteLine("📋 Configuration: BIB_DEMO → UUT_PYTHON_SIMULATOR → RS232");
-        Console.WriteLine();
-        
-        // TODO: Implement full demo workflow
-        Console.WriteLine("⚠️ Full implementation coming in DemoOrchestrator.cs");
-        Console.WriteLine("🚀 This will execute complete BIB workflow with dummy UUT");
-        
-        await Task.Delay(1000); // Simulate some work
-    }
-    
-    public async Task RunRealHardwareDemoAsync()
-    {
-        Console.ForegroundColor = ConsoleColor.Blue;
-        Console.WriteLine("🏭 Demo Scenario: Real Hardware Detection");
-        Console.WriteLine("=" * 42);
-        Console.ForegroundColor = ConsoleColor.White;
-        
-        Console.WriteLine("🔍 Searching for FT4232H devices...");
-        Console.WriteLine("⚠️ Real hardware demo implementation pending");
-        
-        await Task.Delay(500);
-    }
-    
-    public async Task RunCustomConfigurationDemoAsync()
-    {
-        Console.ForegroundColor = ConsoleColor.Magenta;
-        Console.WriteLine("🔧 Demo Scenario: Custom Configuration");
-        Console.WriteLine("=" * 38);
-        Console.ForegroundColor = ConsoleColor.White;
-        
-        Console.WriteLine("📋 Custom config demo implementation pending");
-        await Task.Delay(500);
-    }
-    
-    public async Task RunPerformanceTestDemoAsync()
-    {
-        Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine("📊 Demo Scenario: Performance Testing");
-        Console.WriteLine("=" * 36);
-        Console.ForegroundColor = ConsoleColor.White;
-        
-        Console.WriteLine("⚡ Performance test demo implementation pending");
-        await Task.Delay(500);
-    }
-    
-    public async Task ShowSystemInformationAsync()
-    {
-        Console.ForegroundColor = ConsoleColor.Cyan;
-        Console.WriteLine("🔍 System Information");
-        Console.WriteLine("=" * 21);
-        Console.ForegroundColor = ConsoleColor.White;
-        
-        Console.WriteLine("📡 Available serial ports:");
-        var ports = SerialPort.GetPortNames();
-        if (ports.Length > 0)
-        {
-            foreach (var port in ports)
-            {
-                Console.WriteLine($"   • {port}");
-            }
-        }
-        else
-        {
-            Console.WriteLine("   ❌ No serial ports detected");
-        }
-        
-        Console.WriteLine();
-        Console.WriteLine("🔧 SerialPortPool services: ✅ Loaded and ready");
-        Console.WriteLine("📋 Demo configurations: ✅ Available");
-        
-        await Task.Delay(100);
-    }
-}
+// Classes are now implemented in separate files:
+// - ConsoleHelper.cs (rich formatting utilities)
+// - DemoOrchestrator.cs (complete workflow engine)
