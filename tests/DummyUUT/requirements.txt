@@ -1,0 +1,18 @@
+# SerialPortPool Dummy UUT Simulator - Python Dependencies
+# Sprint 5 Demo Support
+
+# Core serial communication
+pyserial>=3.5
+
+# Enhanced logging and formatting (optional but recommended)
+colorama>=0.4.4
+
+# Configuration file support (future enhancement)
+pyyaml>=6.0
+
+# Development and testing tools (optional)
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+
+# Performance monitoring (optional)
+psutil>=5.9.0
