@@ -1,9 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Memory;  // ✅ Correct
+using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
 using SerialPortPool.Core.Services;
-using SerialPortPool.Core.Protocols;
-using SerialPortPool.Core.Models.Configuration;
 
 namespace SerialPortPool.Core.Extensions;
 

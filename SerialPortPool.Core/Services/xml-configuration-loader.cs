@@ -1,9 +1,9 @@
+using System;
+using System.IO;
 using System.Xml;
-using System.Xml.Schema;
+using Microsoft.Extensions.Caching.Memory;  // ✅ Correct
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Caching.Memory;
-using SerialPortPool.Core.Interfaces;
-using SerialPortPool.Core.Models.Configuration;
+using SerialPortPool.Core.Models;
 
 namespace SerialPortPool.Core.Services;
 
