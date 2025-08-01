@@ -3,6 +3,9 @@ using Microsoft.Extensions.Caching.Memory;  // ✅ Correct
 using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
 using SerialPortPool.Core.Services;
+using SerialPortPool.Core.Models;
+
+
 
 namespace SerialPortPool.Core.Extensions;
 
@@ -15,37 +18,37 @@ public static class Sprint5ServiceExtensions
     /// <summary>
     /// Add Sprint 5 services to dependency injection container
     /// </summary>
-    public static IServiceCollection AddSprint5Services(this IServiceCollection services, 
+    public static IServiceCollection AddSprint5Services(this IServiceCollection services,
         ConfigurationLoadOptions? configOptions = null)
     {
         // Configuration services
         services.AddSingleton(configOptions ?? new ConfigurationLoadOptions());
         services.AddScoped<IConfigurationValidator, ConfigurationValidator>();
         services.AddScoped<IXmlConfigurationLoader, XmlConfigurationLoader>();
-        
+
         // Protocol services
         services.AddScoped<IProtocolHandlerFactory, ProtocolHandlerFactory>();
         services.AddScoped<RS232ProtocolHandler>();
-        
+
         // Future Sprint 6 protocol handlers (commented for now):
         // services.AddScoped<RS485ProtocolHandler>();
         // services.AddScoped<USBProtocolHandler>();
         // services.AddScoped<CANProtocolHandler>();
         // services.AddScoped<I2CProtocolHandler>();
         // services.AddScoped<SPIProtocolHandler>();
-        
+
         // Workflow orchestration (to be implemented)
         // services.AddScoped<IBibWorkflowOrchestrator, BibWorkflowOrchestrator>();
-        
+
         // Enhanced port reservation (to be implemented)
         // services.AddScoped<IPortReservationService, PortReservationService>();
-        
+
         // Memory cache for configuration caching
         services.AddMemoryCache();
-        
+
         return services;
     }
-    
+
     /// <summary>
     /// Add Sprint 5 services with custom configuration
     /// </summary>
@@ -54,10 +57,10 @@ public static class Sprint5ServiceExtensions
     {
         var options = new ConfigurationLoadOptions();
         configureOptions(options);
-        
+
         return services.AddSprint5Services(options);
     }
-    
+
     /// <summary>
     /// Add Sprint 5 services for demo mode (optimized for demo application)
     /// </summary>
@@ -71,10 +74,10 @@ public static class Sprint5ServiceExtensions
             LoadProtocolSpecificSettings = true,
             CacheExpiration = TimeSpan.FromMinutes(10) // Longer cache for demo
         };
-        
+
         return services.AddSprint5Services(demoOptions);
     }
-    
+
     /// <summary>
     /// Add Sprint 5 services for production mode (full validation)
     /// </summary>
@@ -88,10 +91,10 @@ public static class Sprint5ServiceExtensions
             LoadProtocolSpecificSettings = true,
             CacheExpiration = TimeSpan.FromMinutes(5)
         };
-        
+
         return services.AddSprint5Services(productionOptions);
     }
-    
+
     /// <summary>
     /// Validate Sprint 5 service registration
     /// </summary>
@@ -104,15 +107,15 @@ public static class Sprint5ServiceExtensions
             var validator = serviceProvider.GetRequiredService<IConfigurationValidator>();
             var protocolFactory = serviceProvider.GetRequiredService<IProtocolHandlerFactory>();
             var cache = serviceProvider.GetRequiredService<IMemoryCache>();
-            
+
             // Test protocol handler creation
             var supportedProtocols = protocolFactory.GetSupportedProtocols();
-            
+
             if (!supportedProtocols.Any())
             {
                 throw new InvalidOperationException("No protocol handlers registered");
             }
-            
+
             // Test RS232 handler creation
             if (protocolFactory.IsProtocolSupported("rs232"))
             {
@@ -122,12 +125,12 @@ public static class Sprint5ServiceExtensions
                     throw new InvalidOperationException("RS232 handler configuration error");
                 }
             }
-            
+
             // Log successful validation (if logger available)
             try
             {
                 var logger = serviceProvider.GetService<Microsoft.Extensions.Logging.ILogger<Sprint5ServiceExtensions>>();
-                logger?.LogInformation("✅ Sprint 5 services validated successfully. Protocols: {Protocols}", 
+                logger?.LogInformation("✅ Sprint 5 services validated successfully. Protocols: {Protocols}",
                     string.Join(", ", supportedProtocols));
             }
             catch
@@ -157,10 +160,10 @@ public static class ConfigurationLoadOptionsExtensions
         options.ThrowOnValidationErrors = false;
         options.LoadProtocolSpecificSettings = true;
         options.CacheExpiration = TimeSpan.FromMinutes(1); // Short cache for development
-        
+
         return options;
     }
-    
+
     /// <summary>
     /// Configure for production environment
     /// </summary>
@@ -171,10 +174,10 @@ public static class ConfigurationLoadOptionsExtensions
         options.ThrowOnValidationErrors = true;
         options.LoadProtocolSpecificSettings = true;
         options.CacheExpiration = TimeSpan.FromMinutes(15); // Longer cache for production
-        
+
         return options;
     }
-    
+
     /// <summary>
     /// Configure for demo/presentation mode
     /// </summary>
@@ -185,7 +188,7 @@ public static class ConfigurationLoadOptionsExtensions
         options.ThrowOnValidationErrors = false;
         options.LoadProtocolSpecificSettings = true;
         options.CacheExpiration = TimeSpan.FromHours(1); // Very long cache for demo
-        
+
         return options;
     }
 }

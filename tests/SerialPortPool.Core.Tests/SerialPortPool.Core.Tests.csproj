@@ -22,10 +22,10 @@
     <!-- NEW: Moq for mocking dependencies -->
     <PackageReference Include="Moq" Version="4.20.69" />
     <!-- FIXED: Add main DependencyInjection package for ServiceProvider -->
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
     <!-- FIXED: Add logging packages for AddLogging extension -->
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>

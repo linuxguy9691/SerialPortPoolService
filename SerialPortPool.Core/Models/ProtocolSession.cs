@@ -1,364 +1,277 @@
-// SerialPortPool.Core/Models/ProtocolSession.cs - Sprint 5 Week 1 COMPLETION
-namespace SerialPortPool.Core.Models;
+// ===================================================================
+// PROTOCOL SESSION - VERSION CORRIGÉE
+// Fichier: SerialPortPool.Core/Models/ProtocolSession.cs
+// ===================================================================
 
-/// <summary>
-/// Represents an active protocol communication session
-/// Sprint 5: RS232 support with NativeHandle for SerialPort
-/// Sprint 6: Extended for RS485, USB, CAN, I2C, SPI protocols
-/// </summary>
-public class ProtocolSession : IDisposable
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+
+namespace SerialPortPool.Core.Models
 {
     /// <summary>
-    /// Unique session identifier
+    /// Représente une session de protocole de communication
     /// </summary>
-    public string SessionId { get; set; } = Guid.NewGuid().ToString();
-
-    /// <summary>
-    /// Protocol name (e.g., "RS232", "RS485", "USB", "CAN", "I2C", "SPI")
-    /// </summary>
-    public string ProtocolName { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Physical port name (e.g., "COM11", "COM6")
-    /// </summary>
-    public string PortName { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Protocol-specific native handle
-    /// RS232: System.IO.Ports.SerialPort
-    /// RS485: System.IO.Ports.SerialPort (with RS485 settings)
-    /// USB: USB device handle
-    /// CAN: CAN interface handle
-    /// I2C: I2C device handle
-    /// SPI: SPI device handle
-    /// </summary>
-    public object? NativeHandle { get; set; }
-
-    /// <summary>
-    /// Original configuration used to create this session
-    /// </summary>
-    public ProtocolConfiguration? Configuration { get; set; }
-
-    /// <summary>
-    /// When this session was opened
-    /// </summary>
-    public DateTime OpenedAt { get; set; } = DateTime.Now;
-
-    /// <summary>
-    /// When this session was last used for communication
-    /// </summary>
-    public DateTime LastUsedAt { get; set; } = DateTime.Now;
-
-    /// <summary>
-    /// Whether this session is currently active and available for communication
-    /// </summary>
-    public bool IsActive { get; set; } = true;
-
-    /// <summary>
-    /// Total number of commands executed in this session
-    /// </summary>
-    public int CommandCount { get; set; } = 0;
-
-    /// <summary>
-    /// Number of successful commands in this session
-    /// </summary>
-    public int SuccessfulCommands { get; set; } = 0;
-
-    /// <summary>
-    /// Number of failed commands in this session
-    /// </summary>
-    public int FailedCommands { get; set; } = 0;
-
-    /// <summary>
-    /// Optional client identifier who owns this session
-    /// </summary>
-    public string? ClientId { get; set; }
-
-    /// <summary>
-    /// Session metadata for tracking and debugging
-    /// </summary>
-    public Dictionary<string, object> Metadata { get; set; } = new();
-
-    /// <summary>
-    /// Error message if session is in error state
-    /// </summary>
-    public string? ErrorMessage { get; set; }
-
-    /// <summary>
-    /// Whether this session has been disposed
-    /// </summary>
-    public bool IsDisposed { get; private set; }
-
-    #region Computed Properties
-
-    /// <summary>
-    /// How long this session has been active
-    /// </summary>
-    public TimeSpan SessionDuration => DateTime.Now - OpenedAt;
-
-    /// <summary>
-    /// How long since this session was last used
-    /// </summary>
-    public TimeSpan IdleTime => DateTime.Now - LastUsedAt;
-
-    /// <summary>
-    /// Success rate percentage for commands in this session
-    /// </summary>
-    public double SuccessRate => CommandCount > 0 ? (double)SuccessfulCommands / CommandCount * 100.0 : 0.0;
-
-    /// <summary>
-    /// Whether this session is idle (not used for more than 5 minutes)
-    /// </summary>
-    public bool IsIdle => IdleTime.TotalMinutes > 5;
-
-    /// <summary>
-    /// Whether this session is healthy (active and no errors)
-    /// </summary>
-    public bool IsHealthy => IsActive && string.IsNullOrEmpty(ErrorMessage) && !IsDisposed;
-
-    #endregion
-
-    #region Command Tracking
-
-    /// <summary>
-    /// Record a successful command execution
-    /// </summary>
-    public void RecordSuccessfulCommand()
+    public class ProtocolSession
     {
-        CommandCount++;
-        SuccessfulCommands++;
-        LastUsedAt = DateTime.Now;
-    }
+        /// <summary>
+        /// Identifiant unique de la session
+        /// </summary>
+        [Required]
+        public string SessionId { get; set; } = Guid.NewGuid().ToString();
 
-    /// <summary>
-    /// Record a failed command execution
-    /// </summary>
-    /// <param name="errorMessage">Optional error message</param>
-    public void RecordFailedCommand(string? errorMessage = null)
-    {
-        CommandCount++;
-        FailedCommands++;
-        LastUsedAt = DateTime.Now;
-        
-        if (!string.IsNullOrEmpty(errorMessage))
+        /// <summary>
+        /// Nom du port série utilisé
+        /// </summary>
+        [Required]
+        public string PortName { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Configuration du protocole
+        /// </summary>
+        public ProtocolConfiguration Configuration { get; set; } = new();
+
+        /// <summary>
+        /// Date et heure de création de la session
+        /// </summary>
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        /// <summary>
+        /// Date et heure de la dernière activité
+        /// </summary>
+        public DateTime LastActivityAt { get; set; } = DateTime.UtcNow;
+
+        /// <summary>
+        /// Indique si la session est active
+        /// </summary>
+        public bool IsActive { get; set; }
+
+        /// <summary>
+        /// Statut de la session
+        /// </summary>
+        public SessionStatus Status { get; set; } = SessionStatus.Initialized;
+
+        /// <summary>
+        /// Informations sur l'erreur si la session a échoué
+        /// </summary>
+        public string? ErrorMessage { get; set; }
+
+        /// <summary>
+        /// Métadonnées additionnelles de la session
+        /// </summary>
+        public Dictionary<string, object> Metadata { get; set; } = new();
+
+        /// <summary>
+        /// Statistiques de la session
+        /// </summary>
+        public SessionStatistics Statistics { get; set; } = new();
+
+        /// <summary>
+        /// Contexte personnalisé de la session
+        /// </summary>
+        public object? Context { get; set; }
+
+        /// <summary>
+        /// Durée de la session
+        /// </summary>
+        public TimeSpan Duration => DateTime.UtcNow - CreatedAt;
+
+        /// <summary>
+        /// Temps depuis la dernière activité
+        /// </summary>
+        public TimeSpan TimeSinceLastActivity => DateTime.UtcNow - LastActivityAt;
+
+        /// <summary>
+        /// Met à jour l'heure de la dernière activité
+        /// </summary>
+        public void UpdateLastActivity()
         {
+            LastActivityAt = DateTime.UtcNow;
+        }
+
+        /// <summary>
+        /// Démarre la session
+        /// </summary>
+        public void Start()
+        {
+            IsActive = true;
+            Status = SessionStatus.Active;
+            UpdateLastActivity();
+        }
+
+        /// <summary>
+        /// Termine la session
+        /// </summary>
+        /// <param name="reason">Raison de la fermeture</param>
+        public void Close(string? reason = null)
+        {
+            IsActive = false;
+            Status = SessionStatus.Closed;
+            if (!string.IsNullOrEmpty(reason))
+            {
+                ErrorMessage = reason;
+            }
+            UpdateLastActivity();
+        }
+
+        /// <summary>
+        /// Marque la session comme ayant échoué
+        /// </summary>
+        /// <param name="errorMessage">Message d'erreur</param>
+        public void MarkAsFailed(string errorMessage)
+        {
+            IsActive = false;
+            Status = SessionStatus.Failed;
             ErrorMessage = errorMessage;
+            UpdateLastActivity();
+        }
+
+        /// <summary>
+        /// Obtient une représentation textuelle de la session
+        /// </summary>
+        public override string ToString()
+        {
+            return $"Session {SessionId} - Port: {PortName} - Status: {Status} - Duration: {Duration:hh\\:mm\\:ss}";
         }
     }
 
     /// <summary>
-    /// Mark session as having an error
+    /// Statut d'une session de protocole
     /// </summary>
-    /// <param name="errorMessage">Error description</param>
-    public void SetError(string errorMessage)
+    public enum SessionStatus
     {
-        IsActive = false;
-        ErrorMessage = errorMessage;
-        Metadata["ErrorAt"] = DateTime.Now.ToString("O");
+        /// <summary>Session initialisée mais pas encore démarrée</summary>
+        Initialized = 0,
+
+        /// <summary>Session active et fonctionnelle</summary>
+        Active = 1,
+
+        /// <summary>Session fermée normalement</summary>
+        Closed = 2,
+
+        /// <summary>Session fermée en raison d'une erreur</summary>
+        Failed = 3,
+
+        /// <summary>Session en cours de fermeture</summary>
+        Closing = 4,
+
+        /// <summary>Session suspendue temporairement</summary>
+        Suspended = 5
     }
 
     /// <summary>
-    /// Clear error state and reactivate session
+    /// Statistiques d'une session de protocole
     /// </summary>
-    public void ClearError()
+    public class SessionStatistics
     {
-        IsActive = true;
-        ErrorMessage = null;
-        Metadata.Remove("ErrorAt");
-    }
+        /// <summary>
+        /// Nombre total de commandes envoyées
+        /// </summary>
+        public int TotalCommandsSent { get; set; }
 
-    #endregion
+        /// <summary>
+        /// Nombre de commandes réussies
+        /// </summary>
+        public int SuccessfulCommands { get; set; }
 
-    #region Factory Methods
+        /// <summary>
+        /// Nombre de commandes échouées
+        /// </summary>
+        public int FailedCommands { get; set; }
 
-    /// <summary>
-    /// Create a new protocol session for RS232
-    /// </summary>
-    /// <param name="portName">COM port name</param>
-    /// <param name="serialPort">Opened SerialPort instance</param>
-    /// <param name="config">Protocol configuration</param>
-    /// <param name="clientId">Optional client identifier</param>
-    /// <returns>New RS232 protocol session</returns>
-    public static ProtocolSession CreateRS232Session(
-        string portName, 
-        System.IO.Ports.SerialPort serialPort, 
-        ProtocolConfiguration config,
-        string? clientId = null)
-    {
-        return new ProtocolSession
+        /// <summary>
+        /// Nombre total d'octets envoyés
+        /// </summary>
+        public long BytesSent { get; set; }
+
+        /// <summary>
+        /// Nombre total d'octets reçus
+        /// </summary>
+        public long BytesReceived { get; set; }
+
+        /// <summary>
+        /// Temps total d'exécution des commandes
+        /// </summary>
+        public TimeSpan TotalExecutionTime { get; set; }
+
+        /// <summary>
+        /// Temps moyen d'exécution par commande
+        /// </summary>
+        public TimeSpan AverageExecutionTime => TotalCommandsSent > 0 
+            ? TimeSpan.FromTicks(TotalExecutionTime.Ticks / TotalCommandsSent) 
+            : TimeSpan.Zero;
+
+        /// <summary>
+        /// Taux de réussite des commandes (en pourcentage)
+        /// </summary>
+        public double SuccessRate => TotalCommandsSent > 0 
+            ? (double)SuccessfulCommands / TotalCommandsSent * 100 
+            : 0;
+
+        /// <summary>
+        /// Remet à zéro toutes les statistiques
+        /// </summary>
+        public void Reset()
         {
-            SessionId = Guid.NewGuid().ToString(),
-            ProtocolName = "RS232",
-            PortName = portName,
-            NativeHandle = serialPort,
-            Configuration = config,
-            ClientId = clientId,
-            OpenedAt = DateTime.Now,
-            LastUsedAt = DateTime.Now,
-            IsActive = true
-        };
-    }
-
-    /// <summary>
-    /// Create a protocol session for any protocol type
-    /// </summary>
-    /// <param name="protocolName">Protocol name</param>
-    /// <param name="portName">Port name</param>
-    /// <param name="nativeHandle">Protocol-specific handle</param>
-    /// <param name="config">Protocol configuration</param>
-    /// <param name="clientId">Optional client identifier</param>
-    /// <returns>New protocol session</returns>
-    public static ProtocolSession Create(
-        string protocolName,
-        string portName,
-        object? nativeHandle,
-        ProtocolConfiguration? config = null,
-        string? clientId = null)
-    {
-        return new ProtocolSession
-        {
-            SessionId = Guid.NewGuid().ToString(),
-            ProtocolName = protocolName,
-            PortName = portName,
-            NativeHandle = nativeHandle,
-            Configuration = config,
-            ClientId = clientId,
-            OpenedAt = DateTime.Now,
-            LastUsedAt = DateTime.Now,
-            IsActive = true
-        };
-    }
-
-    #endregion
-
-    #region Display and Debug
-
-    /// <summary>
-    /// Get a summary of this protocol session for logging/display
-    /// </summary>
-    /// <returns>Formatted summary string</returns>
-    public string GetSummary()
-    {
-        var status = IsHealthy ? "✅ HEALTHY" : !IsActive ? "❌ INACTIVE" : "⚠️ ERROR";
-        var commands = CommandCount > 0 ? $"{SuccessfulCommands}/{CommandCount} cmds ({SuccessRate:F1}%)" : "No commands";
-        var duration = SessionDuration.TotalMinutes > 1 ? $"{SessionDuration.TotalMinutes:F1}min" : $"{SessionDuration.TotalSeconds:F0}s";
-        
-        return $"{status}: {ProtocolName} on {PortName} - {commands}, {duration} active";
-    }
-
-    /// <summary>
-    /// Get detailed session information for debugging
-    /// </summary>
-    /// <returns>Detailed session information</returns>
-    public string GetDetailedInfo()
-    {
-        var lines = new List<string>
-        {
-            $"Protocol Session: {SessionId}",
-            $"  Protocol: {ProtocolName}",
-            $"  Port: {PortName}",
-            $"  Status: {(IsHealthy ? "Healthy" : "Unhealthy")}",
-            $"  Active: {IsActive}",
-            $"  Client: {ClientId ?? "None"}",
-            $"  Opened: {OpenedAt:yyyy-MM-dd HH:mm:ss}",
-            $"  Duration: {SessionDuration}",
-            $"  Last Used: {LastUsedAt:yyyy-MM-dd HH:mm:ss} ({IdleTime} ago)",
-            $"  Commands: {CommandCount} total, {SuccessfulCommands} success, {FailedCommands} failed",
-            $"  Success Rate: {SuccessRate:F1}%"
-        };
-
-        if (!string.IsNullOrEmpty(ErrorMessage))
-        {
-            lines.Add($"  Error: {ErrorMessage}");
+            TotalCommandsSent = 0;
+            SuccessfulCommands = 0;
+            FailedCommands = 0;
+            BytesSent = 0;
+            BytesReceived = 0;
+            TotalExecutionTime = TimeSpan.Zero;
         }
 
-        if (Metadata.Any())
+        /// <summary>
+        /// Enregistre l'exécution d'une commande
+        /// </summary>
+        /// <param name="success">Indique si la commande a réussi</param>
+        /// <param name="executionTime">Temps d'exécution de la commande</param>
+        /// <param name="bytesSent">Nombre d'octets envoyés</param>
+        /// <param name="bytesReceived">Nombre d'octets reçus</param>
+        public void RecordCommand(bool success, TimeSpan executionTime, int bytesSent = 0, int bytesReceived = 0)
         {
-            lines.Add($"  Metadata: {string.Join(", ", Metadata.Select(kvp => $"{kvp.Key}={kvp.Value}"))}");
+            TotalCommandsSent++;
+            if (success)
+                SuccessfulCommands++;
+            else
+                FailedCommands++;
+
+            TotalExecutionTime += executionTime;
+            BytesSent += bytesSent;
+            BytesReceived += bytesReceived;
         }
 
-        return string.Join(Environment.NewLine, lines);
-    }
-
-    public override string ToString()
-    {
-        return GetSummary();
-    }
-
-    #endregion
-
-    #region IDisposable Implementation
-
-    /// <summary>
-    /// Dispose the protocol session and clean up native resources
-    /// </summary>
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    /// <summary>
-    /// Protected dispose method
-    /// </summary>
-    /// <param name="disposing">Whether disposing from Dispose() call</param>
-    protected virtual void Dispose(bool disposing)
-    {
-        if (!IsDisposed && disposing)
+        /// <summary>
+        /// Obtient une représentation textuelle des statistiques
+        /// </summary>
+        public override string ToString()
         {
-            try
-            {
-                // Close protocol-specific native handle
-                if (NativeHandle != null)
-                {
-                    switch (NativeHandle)
-                    {
-                        case System.IO.Ports.SerialPort serialPort when serialPort.IsOpen:
-                            serialPort.Close();
-                            serialPort.Dispose();
-                            break;
-                        case IDisposable disposable:
-                            disposable.Dispose();
-                            break;
-                    }
-                }
-
-                IsActive = false;
-                NativeHandle = null;
-                Metadata["DisposedAt"] = DateTime.Now.ToString("O");
-            }
-            catch (Exception)
-            {
-                // Ignore disposal errors - session is being closed anyway
-            }
-            finally
-            {
-                IsDisposed = true;
-            }
+            return $"Commands: {TotalCommandsSent} (Success: {SuccessfulCommands}, Failed: {FailedCommands}) - " +
+                   $"Success Rate: {SuccessRate:F1}% - Avg Time: {AverageExecutionTime.TotalMilliseconds:F0}ms";
         }
     }
 
     /// <summary>
-    /// Finalizer for protocol session
+    /// Session de communication (alias pour compatibilité)
     /// </summary>
-    ~ProtocolSession()
+    public class CommunicationSession : ProtocolSession
     {
-        Dispose(false);
+        /// <summary>
+        /// Statut sous forme de chaîne
+        /// </summary>
+        public string StatusString => Status.ToString();
+
+        /// <summary>
+        /// Indique si la session est connectée
+        /// </summary>
+        public bool IsConnected => IsActive && Status == SessionStatus.Active;
+
+        /// <summary>
+        /// Obtient des informations détaillées sur la session
+        /// </summary>
+        public string GetDetailedInfo()
+        {
+            return $"{ToString()} - Connected: {IsConnected} - Statistics: {Statistics}";
+        }
     }
-
-    #endregion
-
-    #region Equality and Comparison
-
-    public override bool Equals(object? obj)
-    {
-        return obj is ProtocolSession other && SessionId == other.SessionId;
-    }
-
-    public override int GetHashCode()
-    {
-        return SessionId.GetHashCode();
-    }
-
-    #endregion
 }

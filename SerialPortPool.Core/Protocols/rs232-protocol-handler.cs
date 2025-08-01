@@ -1,471 +1,348 @@
-using System.Diagnostics;
+// ===================================================================
+// RS232 PROTOCOL HANDLER - IMPLÉMENTATION COMPLÈTE
+// Fichier: SerialPortPool.Core/Protocols/rs232-protocol-handler.cs
+// REMPLACEZ LE CONTENU EXISTANT PAR CECI
+// ===================================================================
+
+using System;
+using System.Collections.Generic;
 using System.IO.Ports;
+using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
-using SerialPortPool.Core.Models.Configuration;
+using SerialPortPool.Core.Models;
 
-namespace SerialPortPool.Core.Protocols;
-
-/// <summary>
-/// RS232 Protocol Handler - Real serial communication implementation
-/// Supports configurable baud rates, data patterns, timeouts, and retries
-/// </summary>
-public class RS232ProtocolHandler : IProtocolHandler
+namespace SerialPortPool.Core.Protocols
 {
-    private readonly ILogger<RS232ProtocolHandler> _logger;
-    private SerialPort? _serialPort;
-    private CommunicationSession? _currentSession;
-    private bool _disposed = false;
-    
-    public string SupportedProtocol => "rs232";
-    public bool IsSessionActive => _currentSession?.IsActive == true && _serialPort?.IsOpen == true;
-    public CommunicationSession? CurrentSession => _currentSession;
-
-    public RS232ProtocolHandler(ILogger<RS232ProtocolHandler> logger)
-    {
-        _logger = logger;
-    }
-
     /// <summary>
-    /// Open RS232 communication session
+    /// Gestionnaire de protocole RS232 complet
     /// </summary>
-    public async Task<bool> OpenSessionAsync(string portName, PortConfiguration portConfig, CancellationToken cancellationToken = default)
+    public class RS232ProtocolHandler : IProtocolHandler
     {
-        try
+        private readonly ILogger<RS232ProtocolHandler> _logger;
+        private CommunicationSession? _currentSession;
+        private SerialPort? _serialPort;
+        private readonly ProtocolStatistics _statistics;
+        private bool _disposed;
+
+        public RS232ProtocolHandler(ILogger<RS232ProtocolHandler> logger)
         {
-            if (IsSessionActive)
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _statistics = new ProtocolStatistics();
+        }
+
+        #region IProtocolHandler Properties
+
+        public string ProtocolName => "RS232";
+        public string ProtocolVersion => "1.0.0";
+        public string SupportedProtocol => "RS232";
+        public bool IsSessionActive => _currentSession?.IsActive == true;
+        public ProtocolSession? CurrentSession => _currentSession;
+
+        #endregion
+
+        #region IProtocolHandler Methods
+
+        public ProtocolCapabilities GetCapabilities()
+        {
+            return new ProtocolCapabilities
             {
-                await CloseSessionAsync(cancellationToken);
-            }
-
-            _logger.LogInformation("Opening RS232 session on {Port} with config: {Speed} baud, {DataPattern}", 
-                portName, portConfig.Speed, portConfig.DataPattern);
-
-            // Parse data pattern (e.g., "n81" = None parity, 8 data bits, 1 stop bit)
-            var (parity, dataBits, stopBits) = ParseDataPattern(portConfig.DataPattern);
-
-            // Create and configure serial port
-            _serialPort = new SerialPort(portName)
-            {
-                BaudRate = portConfig.Speed,
-                DataBits = dataBits,
-                Parity = parity,
-                StopBits = stopBits,
-                Handshake = Handshake.None,
-                ReadTimeout = 5000,
-                WriteTimeout = 5000,
-                NewLine = "\r\n",
-                Encoding = Encoding.ASCII
+                ProtocolName = ProtocolName,
+                Version = ProtocolVersion,
+                SupportsAsyncOperations = true,
+                SupportsSequenceCommands = true,
+                SupportsBidirectionalCommunication = true,
+                MaxConcurrentSessions = 1,
+                DefaultTimeout = TimeSpan.FromSeconds(5),
+                SupportedCommands = new List<string> { "SEND", "RECEIVE", "QUERY", "RESET" },
+                SupportedBaudRates = new List<int> { 9600, 19200, 38400, 57600, 115200 }
             };
+        }
 
-            // Apply protocol-specific settings
-            ApplyProtocolSettings(portConfig);
+        public async Task<bool> CanHandleProtocolAsync(string protocolName)
+        {
+            await Task.CompletedTask;
+            return string.Equals(protocolName, "RS232", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(protocolName, "Serial", StringComparison.OrdinalIgnoreCase);
+        }
 
-            // Open the port
-            _serialPort.Open();
-
-            // Create session
-            _currentSession = new CommunicationSession
+        public async Task<ProtocolSession> OpenSessionAsync(string portName, PortConfiguration config, CancellationToken cancellationToken)
+        {
+            var protocolConfig = new ProtocolConfiguration
             {
                 PortName = portName,
-                Protocol = SupportedProtocol,
-                Configuration = portConfig,
-                StartTime = DateTime.UtcNow
+                BaudRate = config.BaudRate,
+                DataBits = config.DataBits,
+                Parity = config.Parity,
+                StopBits = config.StopBits,
+                Timeout = config.ReadTimeout
             };
 
-            // Test basic connectivity
-            await Task.Delay(100, cancellationToken); // Let port stabilize
-
-            _logger.LogInformation("RS232 session opened successfully: {SessionId} on {Port}", 
-                _currentSession.SessionId, portName);
-
-            return true;
+            return await OpenSessionAsync(protocolConfig, cancellationToken);
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to open RS232 session on {Port}", portName);
-            
-            // Cleanup on failure
-            _serialPort?.Dispose();
-            _serialPort = null;
-            _currentSession = null;
-            
-            return false;
-        }
-    }
 
-    /// <summary>
-    /// Close RS232 communication session
-    /// </summary>
-    public async Task CloseSessionAsync(CancellationToken cancellationToken = default)
-    {
-        try
+        public async Task<ProtocolSession> OpenSessionAsync(ProtocolConfiguration config, CancellationToken cancellationToken)
         {
-            if (_currentSession != null)
+            if (_currentSession?.IsActive == true)
             {
-                _currentSession.EndTime = DateTime.UtcNow;
-                
-                _logger.LogInformation("Closing RS232 session: {SessionId}, Duration: {Duration:F2}s, Success Rate: {SuccessRate:F1}%",
-                    _currentSession.SessionId,
-                    _currentSession.Duration.TotalSeconds,
-                    _currentSession.SuccessRate);
+                throw new InvalidOperationException("Une session est déjà active");
             }
 
-            if (_serialPort?.IsOpen == true)
-            {
-                _serialPort.Close();
-            }
-
-            _serialPort?.Dispose();
-            _serialPort = null;
-
-            await Task.CompletedTask; // For consistency with async interface
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Error during RS232 session cleanup");
-        }
-    }
-
-    /// <summary>
-    /// Send command and wait for response
-    /// </summary>
-    public async Task<ProtocolResponse> SendCommandAsync(ProtocolRequest request, CancellationToken cancellationToken = default)
-    {
-        if (!IsSessionActive || _serialPort == null || _currentSession == null)
-        {
-            return ProtocolResponse.Failure("No active RS232 session", request.ExpectedResponse, TimeSpan.Zero);
-        }
-
-        var stopwatch = Stopwatch.StartNew();
-        var attemptCount = 0;
-        var maxAttempts = Math.Max(1, request.RetryCount + 1);
-
-        _logger.LogDebug("Sending RS232 command: '{Command}', Expected: '{Expected}', Timeout: {Timeout}ms", 
-            request.Command, request.ExpectedResponse, request.TimeoutMs);
-
-        for (attemptCount = 1; attemptCount <= maxAttempts; attemptCount++)
-        {
             try
             {
-                // Clear any pending data
-                _serialPort.DiscardInBuffer();
-                _serialPort.DiscardOutBuffer();
+                _logger.LogInformation("Ouverture session RS232 sur {PortName}", config.PortName);
 
-                // Send command
-                _serialPort.WriteLine(request.Command);
-                _currentSession.CommandsSent++;
-
-                _logger.LogTrace("RS232 TX (attempt {Attempt}): '{Command}'", attemptCount, request.Command);
-
-                // Wait for response with timeout
-                var response = await ReadResponseAsync(request.TimeoutMs, cancellationToken);
-
-                _logger.LogTrace("RS232 RX (attempt {Attempt}): '{Response}'", attemptCount, response);
-
-                // Validate response
-                if (ValidateResponse(response, request.ExpectedResponse, request.IsRegexPattern))
+                _serialPort = new SerialPort(config.PortName)
                 {
-                    stopwatch.Stop();
-                    _currentSession.CommandsSuccessful++;
-                    
-                    _logger.LogDebug("RS232 command successful: '{Command}' → '{Response}' ({Time}ms)", 
-                        request.Command, response, stopwatch.ElapsedMilliseconds);
+                    BaudRate = config.BaudRate,
+                    DataBits = config.DataBits,
+                    Parity = ParseParity(config.Parity),
+                    StopBits = ParseStopBits(config.StopBits),
+                    ReadTimeout = (int)config.Timeout.TotalMilliseconds,
+                    WriteTimeout = (int)config.Timeout.TotalMilliseconds
+                };
 
-                    return ProtocolResponse.Success(response, request.ExpectedResponse, stopwatch.Elapsed, attemptCount);
-                }
+                await Task.Run(() => _serialPort.Open(), cancellationToken);
 
-                // Response validation failed
-                if (attemptCount < maxAttempts)
+                _currentSession = new CommunicationSession
                 {
-                    _logger.LogWarning("RS232 response mismatch (attempt {Attempt}/{Max}): Expected '{Expected}', Got '{Actual}'", 
-                        attemptCount, maxAttempts, request.ExpectedResponse, response);
-                    
-                    await Task.Delay(100, cancellationToken); // Brief delay before retry
-                }
-                else
-                {
-                    stopwatch.Stop();
-                    var errorMsg = $"Response validation failed after {maxAttempts} attempts. Expected: '{request.ExpectedResponse}', Got: '{response}'";
-                    
-                    _logger.LogError("RS232 command failed: {Error}", errorMsg);
-                    return ProtocolResponse.Failure(errorMsg, request.ExpectedResponse, stopwatch.Elapsed, attemptCount);
-                }
-            }
-            catch (TimeoutException)
-            {
-                if (attemptCount < maxAttempts)
-                {
-                    _logger.LogWarning("RS232 timeout (attempt {Attempt}/{Max}) for command: '{Command}'", 
-                        attemptCount, maxAttempts, request.Command);
-                    
-                    await Task.Delay(200, cancellationToken); // Longer delay after timeout
-                }
-                else
-                {
-                    stopwatch.Stop();
-                    var errorMsg = $"Command timeout after {maxAttempts} attempts";
-                    
-                    _logger.LogError("RS232 command timed out: '{Command}' (timeout: {Timeout}ms)", 
-                        request.Command, request.TimeoutMs);
-                    
-                    return ProtocolResponse.Failure(errorMsg, request.ExpectedResponse, stopwatch.Elapsed, attemptCount);
-                }
+                    SessionId = Guid.NewGuid().ToString(),
+                    PortName = config.PortName,
+                    Configuration = config,
+                    CreatedAt = DateTime.UtcNow,
+                    IsActive = true,
+                    Status = "Connected"
+                };
+
+                return _currentSession;
             }
             catch (Exception ex)
             {
-                stopwatch.Stop();
-                var errorMsg = $"Communication error: {ex.Message}";
-                
-                _logger.LogError(ex, "RS232 communication error for command: '{Command}'", request.Command);
-                return ProtocolResponse.Failure(errorMsg, request.ExpectedResponse, stopwatch.Elapsed, attemptCount);
+                _logger.LogError(ex, "Erreur ouverture session RS232");
+                throw;
             }
         }
 
-        // Should not reach here
-        stopwatch.Stop();
-        return ProtocolResponse.Failure("Unexpected retry loop exit", request.ExpectedResponse, stopwatch.Elapsed, attemptCount);
-    }
-
-    /// <summary>
-    /// Send command sequence
-    /// </summary>
-    public async Task<IEnumerable<ProtocolResponse>> SendCommandSequenceAsync(IEnumerable<ProtocolRequest> requests, CancellationToken cancellationToken = default)
-    {
-        var responses = new List<ProtocolResponse>();
-
-        foreach (var request in requests)
+        public async Task CloseSessionAsync(CancellationToken cancellationToken)
         {
-            var response = await SendCommandAsync(request, cancellationToken);
-            responses.Add(response);
-
-            // Stop on critical command failure if specified
-            if (!response.Success && request.IsCritical)
+            if (_currentSession != null)
             {
-                _logger.LogWarning("Critical command failed, stopping sequence: '{Command}'", request.Command);
-                break;
-            }
-
-            // Brief delay between commands
-            if (responses.Count < requests.Count())
-            {
-                await Task.Delay(50, cancellationToken);
+                await CloseSessionAsync(_currentSession, cancellationToken);
             }
         }
 
-        return responses;
-    }
-
-    /// <summary>
-    /// Test connection health
-    /// </summary>
-    public async Task<bool> TestConnectionAsync(CancellationToken cancellationToken = default)
-    {
-        if (!IsSessionActive || _serialPort == null)
+        public async Task CloseSessionAsync(ProtocolSession session, CancellationToken cancellationToken)
         {
-            return false;
-        }
+            if (session == null || !session.IsActive) return;
 
-        try
-        {
-            // Simple connectivity test - send a basic command or just check port status
-            return _serialPort.IsOpen && _serialPort.BytesToRead >= 0;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "RS232 connection test failed");
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Get RS232 capabilities
-    /// </summary>
-    public ProtocolCapabilities GetCapabilities()
-    {
-        return new ProtocolCapabilities
-        {
-            Protocol = SupportedProtocol,
-            SupportsHalfDuplex = true,
-            SupportsFullDuplex = true,
-            RequiresAddressing = false,
-            SupportsMulticast = false,
-            SupportsBroadcast = false,
-            SupportedSpeeds = new[] { 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200 },
-            SupportedDataPatterns = new[] { "n81", "n82", "e71", "e81", "o71", "o81" },
-            MaxPayloadSize = 8192, // Reasonable limit for RS232
-            MinResponseTime = 10,
-            MaxResponseTime = 30000,
-            SpecificFeatures = new Dictionary<string, object>
-            {
-                ["flow_control"] = new[] { "none", "rts_cts", "xon_xoff" },
-                ["encoding"] = new[] { "ascii", "utf8" },
-                ["line_endings"] = new[] { "\r\n", "\n", "\r" }
-            }
-        };
-    }
-
-    /// <summary>
-    /// Read response from serial port with timeout
-    /// </summary>
-    private async Task<string> ReadResponseAsync(int timeoutMs, CancellationToken cancellationToken)
-    {
-        if (_serialPort == null)
-        {
-            throw new InvalidOperationException("Serial port not initialized");
-        }
-
-        var originalTimeout = _serialPort.ReadTimeout;
-        _serialPort.ReadTimeout = timeoutMs;
-
-        try
-        {
-            // Read until we get a line or timeout
-            var response = await Task.Run(() =>
-            {
-                try
-                {
-                    return _serialPort.ReadLine();
-                }
-                catch (TimeoutException)
-                {
-                    // Try to read any available data
-                    var available = _serialPort.BytesToRead;
-                    if (available > 0)
-                    {
-                        var buffer = new byte[available];
-                        _serialPort.Read(buffer, 0, available);
-                        return Encoding.ASCII.GetString(buffer).Trim();
-                    }
-                    throw;
-                }
-            }, cancellationToken);
-
-            return response.Trim();
-        }
-        finally
-        {
-            _serialPort.ReadTimeout = originalTimeout;
-        }
-    }
-
-    /// <summary>
-    /// Validate response against expected pattern
-    /// </summary>
-    private bool ValidateResponse(string actualResponse, string expectedResponse, bool isRegexPattern)
-    {
-        if (string.IsNullOrEmpty(expectedResponse))
-        {
-            return true; // No validation required
-        }
-
-        if (isRegexPattern)
-        {
             try
             {
-                return Regex.IsMatch(actualResponse, expectedResponse, RegexOptions.IgnoreCase);
+                if (_serialPort?.IsOpen == true)
+                {
+                    await Task.Run(() => _serialPort.Close(), cancellationToken);
+                }
+
+                session.IsActive = false;
+                _logger.LogInformation("Session RS232 fermée");
             }
-            catch (ArgumentException ex)
+            catch (Exception ex)
             {
-                _logger.LogWarning("Invalid regex pattern '{Pattern}': {Error}", expectedResponse, ex.Message);
+                _logger.LogError(ex, "Erreur fermeture session RS232");
+                throw;
+            }
+        }
+
+        public async Task<ProtocolResponse> SendCommandAsync(ProtocolRequest request, CancellationToken cancellationToken)
+        {
+            if (!IsSessionActive || _serialPort?.IsOpen != true)
+            {
+                return ProtocolResponse.FromError("Aucune session active");
+            }
+
+            var startTime = DateTime.UtcNow;
+            _statistics.TotalCommands++;
+
+            try
+            {
+                await Task.Run(() => _serialPort!.Write(request.Data, 0, request.Data.Length), cancellationToken);
+
+                var responseData = Array.Empty<byte>();
+                if (_serialPort.BytesToRead > 0)
+                {
+                    var buffer = new byte[1024];
+                    var bytesRead = await Task.Run(() => _serialPort.Read(buffer, 0, buffer.Length), cancellationToken);
+                    responseData = buffer.Take(bytesRead).ToArray();
+                }
+
+                var executionTime = DateTime.UtcNow - startTime;
+                _statistics.SuccessfulCommands++;
+                _statistics.TotalExecutionTime += executionTime;
+
+                return new ProtocolResponse
+                {
+                    RequestId = request.CommandId,
+                    Success = true,
+                    Data = responseData,
+                    ExecutionTime = executionTime
+                };
+            }
+            catch (Exception ex)
+            {
+                _statistics.FailedCommands++;
+                _logger.LogError(ex, "Erreur commande RS232");
+                return ProtocolResponse.FromError($"Erreur: {ex.Message}");
+            }
+        }
+
+        public async Task<ProtocolResponse> ExecuteCommandAsync(ProtocolSession session, ProtocolCommand command, CancellationToken cancellationToken)
+        {
+            var request = new ProtocolRequest
+            {
+                Command = command.Name,
+                Data = command.Data,
+                Parameters = command.Parameters,
+                Timeout = command.Timeout
+            };
+
+            return await SendCommandAsync(request, cancellationToken);
+        }
+
+        public async Task<IEnumerable<ProtocolResponse>> SendCommandSequenceAsync(IEnumerable<ProtocolRequest> requests, CancellationToken cancellationToken)
+        {
+            var responses = new List<ProtocolResponse>();
+
+            foreach (var request in requests)
+            {
+                if (cancellationToken.IsCancellationRequested) break;
+
+                var response = await SendCommandAsync(request, cancellationToken);
+                responses.Add(response);
+
+                if (!response.Success) break;
+            }
+
+            return responses;
+        }
+
+        public async Task<IEnumerable<ProtocolResponse>> ExecuteCommandSequenceAsync(ProtocolSession session, IEnumerable<ProtocolCommand> commands, CancellationToken cancellationToken)
+        {
+            var requests = commands.Select(cmd => new ProtocolRequest
+            {
+                Command = cmd.Name,
+                Data = cmd.Data,
+                Parameters = cmd.Parameters,
+                Timeout = cmd.Timeout
+            });
+
+            return await SendCommandSequenceAsync(requests, cancellationToken);
+        }
+
+        public async Task<bool> TestConnectionAsync(CancellationToken cancellationToken)
+        {
+            if (!IsSessionActive || _serialPort?.IsOpen != true) return false;
+
+            try
+            {
+                var testRequest = new ProtocolRequest
+                {
+                    Command = "TEST",
+                    Data = Encoding.UTF8.GetBytes("AT\r\n"),
+                    Timeout = TimeSpan.FromSeconds(2)
+                };
+
+                var response = await SendCommandAsync(testRequest, cancellationToken);
+                return response.Success;
+            }
+            catch
+            {
                 return false;
             }
         }
-        else
+
+        public async Task<bool> TestConnectivityAsync(ProtocolConfiguration config, CancellationToken cancellationToken)
         {
-            return actualResponse.Equals(expectedResponse, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    /// <summary>
-    /// Parse data pattern string (e.g., "n81")
-    /// </summary>
-    private (Parity parity, int dataBits, StopBits stopBits) ParseDataPattern(string pattern)
-    {
-        if (string.IsNullOrEmpty(pattern) || pattern.Length != 3)
-        {
-            _logger.LogWarning("Invalid data pattern '{Pattern}', using default n81", pattern);
-            return (Parity.None, 8, StopBits.One);
-        }
-
-        // Parse parity (first character)
-        var parity = pattern[0] switch
-        {
-            'n' or 'N' => Parity.None,
-            'e' or 'E' => Parity.Even,
-            'o' or 'O' => Parity.Odd,
-            'm' or 'M' => Parity.Mark,
-            's' or 'S' => Parity.Space,
-            _ => Parity.None
-        };
-
-        // Parse data bits (second character)
-        var dataBits = pattern[1] switch
-        {
-            '5' => 5,
-            '6' => 6,
-            '7' => 7,
-            '8' => 8,
-            _ => 8
-        };
-
-        // Parse stop bits (third character)
-        var stopBits = pattern[2] switch
-        {
-            '1' => StopBits.One,
-            '2' => StopBits.Two,
-            _ => StopBits.One
-        };
-
-        return (parity, dataBits, stopBits);
-    }
-
-    /// <summary>
-    /// Apply protocol-specific settings to serial port
-    /// </summary>
-    private void ApplyProtocolSettings(PortConfiguration portConfig)
-    {
-        if (_serialPort == null) return;
-
-        // Apply any RS232-specific settings from protocol settings
-        if (portConfig.GetProtocolSetting<string>("flow_control") is string flowControl)
-        {
-            _serialPort.Handshake = flowControl.ToLowerInvariant() switch
+            try
             {
-                "rts_cts" => Handshake.RequestToSend,
-                "xon_xoff" => Handshake.XOnXOff,
-                "none" => Handshake.None,
-                _ => Handshake.None
+                using var testPort = new SerialPort(config.PortName)
+                {
+                    BaudRate = config.BaudRate,
+                    DataBits = config.DataBits,
+                    Parity = ParseParity(config.Parity),
+                    StopBits = ParseStopBits(config.StopBits)
+                };
+
+                await Task.Run(() =>
+                {
+                    testPort.Open();
+                    Thread.Sleep(100);
+                    testPort.Close();
+                }, cancellationToken);
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public ProtocolStatistics GetStatistics()
+        {
+            return _statistics;
+        }
+
+        #endregion
+
+        #region Helper Methods
+
+        private static Parity ParseParity(string parity)
+        {
+            return parity.ToUpperInvariant() switch
+            {
+                "NONE" => Parity.None,
+                "EVEN" => Parity.Even,
+                "ODD" => Parity.Odd,
+                "MARK" => Parity.Mark,
+                "SPACE" => Parity.Space,
+                _ => Parity.None
             };
         }
 
-        if (portConfig.GetProtocolSetting<string>("encoding") is string encoding)
+        private static StopBits ParseStopBits(string stopBits)
         {
-            _serialPort.Encoding = encoding.ToLowerInvariant() switch
+            return stopBits.ToUpperInvariant() switch
             {
-                "utf8" => Encoding.UTF8,
-                "ascii" => Encoding.ASCII,
-                _ => Encoding.ASCII
+                "ONE" => StopBits.One,
+                "TWO" => StopBits.Two,
+                "ONEPOINTFIVE" => StopBits.OnePointFive,
+                _ => StopBits.One
             };
         }
 
-        if (portConfig.GetProtocolSetting<string>("line_ending") is string lineEnding)
-        {
-            _serialPort.NewLine = lineEnding;
-        }
-    }
+        #endregion
 
-    /// <summary>
-    /// Dispose resources
-    /// </summary>
-    public void Dispose()
-    {
-        if (!_disposed)
+        #region IDisposable
+
+        public void Dispose()
         {
-            CloseSessionAsync().GetAwaiter().GetResult();
+            if (_disposed) return;
+
+            try
+            {
+                CloseSessionAsync(CancellationToken.None).Wait(5000);
+                _serialPort?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur disposition RS232ProtocolHandler");
+            }
+
             _disposed = true;
         }
+
+        #endregion
     }
 }
