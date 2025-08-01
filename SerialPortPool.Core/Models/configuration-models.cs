@@ -1,5 +1,5 @@
 // ===================================================================
-// CONFIGURATION MODELS - VERSION PROPRE COMPLÈTE
+// CONFIGURATION MODELS - VERSION NETTOYÉE (SANS DOUBLONS)
 // Fichier: SerialPortPool.Core/Models/configuration-models.cs
 // ===================================================================
 
@@ -9,195 +9,8 @@ using System.ComponentModel.DataAnnotations;
 
 namespace SerialPortPool.Core.Models;
 
-/// <summary>
-/// Configuration pour les tests BIB (Built-In Test)
-/// </summary>
-public class BibConfiguration
-{
-    [Required]
-    public string Name { get; set; } = string.Empty;
-    
-    public string Description { get; set; } = string.Empty;
-    
-    public bool IsEnabled { get; set; } = true;
-    
-    public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(30);
-    
-    public List<UutConfiguration> UutConfigurations { get; set; } = new();
-    
-    public Dictionary<string, object> Parameters { get; set; } = new();
-
-    /// <summary>
-    /// Obtient la configuration UUT par nom
-    /// </summary>
-    public UutConfiguration? GetUut(string name)
-    {
-        return UutConfigurations.FirstOrDefault(u => 
-            string.Equals(u.Name, name, StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>
-    /// Valide la configuration BIB
-    /// </summary>
-    public bool IsValid()
-    {
-        return !string.IsNullOrWhiteSpace(Name) && 
-               UutConfigurations.Any() && 
-               UutConfigurations.All(u => u.IsValid());
-    }
-}
-
-/// <summary>
-/// Configuration pour un Unit Under Test (UUT)
-/// </summary>
-public class UutConfiguration
-{
-    [Required]
-    public string Name { get; set; } = string.Empty;
-    
-    public string Type { get; set; } = string.Empty;
-    
-    public string SerialNumber { get; set; } = string.Empty;
-    
-    public bool IsEnabled { get; set; } = true;
-    
-    public List<PortConfiguration> PortConfigurations { get; set; } = new();
-    
-    public Dictionary<string, object> Properties { get; set; } = new();
-
-    /// <summary>
-    /// Obtient la configuration de port par nom
-    /// </summary>
-    public PortConfiguration? GetPort(string portName)
-    {
-        return PortConfigurations.FirstOrDefault(p => 
-            string.Equals(p.PortName, portName, StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>
-    /// Valide la configuration UUT
-    /// </summary>
-    public bool IsValid()
-    {
-        return !string.IsNullOrWhiteSpace(Name) && 
-               !string.IsNullOrWhiteSpace(Type) &&
-               PortConfigurations.Any() &&
-               PortConfigurations.All(p => p.IsValid());
-    }
-}
-
-/// <summary>
-/// Configuration d'un port série
-/// </summary>
-public class PortConfiguration
-{
-    [Required]
-    public string PortName { get; set; } = string.Empty;
-    
-    public int BaudRate { get; set; } = 9600;
-    
-    public int DataBits { get; set; } = 8;
-    
-    public string Parity { get; set; } = "None";
-    
-    public string StopBits { get; set; } = "One";
-    
-    public TimeSpan ReadTimeout { get; set; } = TimeSpan.FromSeconds(1);
-    
-    public TimeSpan WriteTimeout { get; set; } = TimeSpan.FromSeconds(1);
-    
-    public string Protocol { get; set; } = "RS232";
-    
-    public bool IsEnabled { get; set; } = true;
-    
-    public Dictionary<string, object> AdvancedSettings { get; set; } = new();
-
-    /// <summary>
-    /// Valide la configuration du port
-    /// </summary>
-    public bool IsValid()
-    {
-        return !string.IsNullOrWhiteSpace(PortName) &&
-               BaudRate > 0 &&
-               DataBits >= 5 && DataBits <= 8 &&
-               ReadTimeout > TimeSpan.Zero &&
-               WriteTimeout > TimeSpan.Zero;
-    }
-
-    /// <summary>
-    /// Obtient une description lisible de la configuration
-    /// </summary>
-    public string GetDescription()
-    {
-        return $"{PortName}: {BaudRate},{DataBits},{Parity},{StopBits}";
-    }
-}
-
-/// <summary>
-/// Séquence de commandes pour un test
-/// </summary>
-public class CommandSequence
-{
-    [Required]
-    public string Name { get; set; } = string.Empty;
-    
-    public string Description { get; set; } = string.Empty;
-    
-    public List<CommandStep> Steps { get; set; } = new();
-    
-    public TimeSpan TotalTimeout { get; set; } = TimeSpan.FromMinutes(5);
-    
-    public bool StopOnError { get; set; } = true;
-    
-    public Dictionary<string, object> Variables { get; set; } = new();
-
-    /// <summary>
-    /// Valide la séquence de commandes
-    /// </summary>
-    public bool IsValid()
-    {
-        return !string.IsNullOrWhiteSpace(Name) &&
-               Steps.Any() &&
-               Steps.All(s => s.IsValid());
-    }
-
-    /// <summary>
-    /// Obtient le nombre total d'étapes
-    /// </summary>
-    public int TotalSteps => Steps.Count;
-}
-
-/// <summary>
-/// Étape individuelle dans une séquence de commandes
-/// </summary>
-public class CommandStep
-{
-    [Required]
-    public string Name { get; set; } = string.Empty;
-    
-    public string Command { get; set; } = string.Empty;
-    
-    public string ExpectedResponse { get; set; } = string.Empty;
-    
-    public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(5);
-    
-    public int RetryCount { get; set; } = 0;
-    
-    public bool IsCritical { get; set; } = true;
-    
-    public Dictionary<string, object> Parameters { get; set; } = new();
-
-    /// <summary>
-    /// Valide l'étape de commande
-    /// </summary>
-    public bool IsValid()
-    {
-        return !string.IsNullOrWhiteSpace(Name) &&
-               !string.IsNullOrWhiteSpace(Command) &&
-               Timeout > TimeSpan.Zero &&
-               RetryCount >= 0;
-    }
-}
+// NOTE: BibConfiguration, UutConfiguration, PortConfiguration et CommandSequence 
+// sont maintenant définis dans BibConfiguration.cs pour éviter la duplication
 
 /// <summary>
 /// Configuration système principale
@@ -209,6 +22,8 @@ public class SystemConfiguration
     
     [Required]
     public string Version { get; set; } = "1.0.0";
+    
+    public List<BibConfiguration> Bibs { get; set; } = new();
     
     public LoggingConfiguration Logging { get; set; } = new();
     
@@ -226,7 +41,29 @@ public class SystemConfiguration
     
     public string ConfigurationSource { get; set; } = "XML";
     
+    public string SourcePath { get; set; } = string.Empty;
+    
+    public DateTime LoadedAt { get; set; }
+    
     public Dictionary<string, object> CustomSettings { get; set; } = new();
+
+    /// <summary>
+    /// Get BIB by ID
+    /// </summary>
+    public BibConfiguration? GetBib(string bibId)
+    {
+        return Bibs.FirstOrDefault(b => b.BibId.Equals(bibId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Get all protocols used across all BIBs
+    /// </summary>
+    public IEnumerable<string> GetAllProtocols()
+    {
+        return Bibs.SelectMany(b => b.GetAllPorts())
+                  .Select(p => p.Protocol)
+                  .Distinct(StringComparer.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// Valide la configuration système
@@ -315,15 +152,19 @@ public class PerformanceConfiguration
 /// </summary>
 public class ConfigurationLoadOptions
 {
-    public bool ValidateOnLoad { get; set; } = true;
+    public bool ValidateSchema { get; set; } = true;
+    
+    public bool ValidateBusinessRules { get; set; } = true;
     
     public bool CacheConfiguration { get; set; } = true;
     
-    public TimeSpan CacheTimeout { get; set; } = TimeSpan.FromMinutes(30);
+    public TimeSpan CacheExpiration { get; set; } = TimeSpan.FromMinutes(30);
     
-    public bool ThrowOnValidationError { get; set; } = false;
+    public bool ThrowOnValidationErrors { get; set; } = false;
     
     public bool LoadDefaults { get; set; } = true;
+    
+    public bool LoadProtocolSpecificSettings { get; set; } = true;
     
     public string ConfigurationPath { get; set; } = string.Empty;
     
@@ -342,6 +183,8 @@ public class ConfigurationValidationResult
     public List<string> Errors { get; set; } = new();
     
     public List<string> Warnings { get; set; } = new();
+    
+    public List<string> Info { get; set; } = new();
     
     public DateTime ValidatedAt { get; set; } = DateTime.UtcNow;
     
@@ -387,6 +230,17 @@ public class ConfigurationValidationResult
     }
 
     /// <summary>
+    /// Ajoute une information au résultat
+    /// </summary>
+    public void AddInfo(string info)
+    {
+        if (!string.IsNullOrWhiteSpace(info))
+        {
+            Info.Add(info);
+        }
+    }
+
+    /// <summary>
     /// Obtient un résumé du résultat de validation
     /// </summary>
     public string GetSummary()
@@ -401,11 +255,23 @@ public class ConfigurationValidationResult
 /// </summary>
 public class ConfigurationSearchCriteria
 {
+    public string? BibId { get; set; }
+    
+    public string? UutId { get; set; }
+    
     public string? SystemName { get; set; }
     
     public string? Version { get; set; }
     
-    public string? ProtocolName { get; set; }
+    public string? Protocol { get; set; }
+    
+    public int? PortNumber { get; set; }
+    
+    public int? MinSpeed { get; set; }
+    
+    public int? MaxSpeed { get; set; }
+    
+    public string? DataPattern { get; set; }
     
     public DateTime? CreatedAfter { get; set; }
     
@@ -442,4 +308,24 @@ public class ConfigurationSearchCriteria
         if (Skip < 0) Skip = 0;
         if (string.IsNullOrWhiteSpace(SortBy)) SortBy = "CreatedAt";
     }
+}
+
+/// <summary>
+/// Définition de commande
+/// </summary>
+public class CommandDefinition
+{
+    public string Command { get; set; } = string.Empty;
+    
+    public string ExpectedResponse { get; set; } = string.Empty;
+    
+    public int TimeoutMs { get; set; } = 5000;
+    
+    public int RetryCount { get; set; } = 1;
+    
+    public string Description { get; set; } = string.Empty;
+    
+    public bool IsRegex { get; set; } = false;
+    
+    public bool IsCritical { get; set; } = true;
 }

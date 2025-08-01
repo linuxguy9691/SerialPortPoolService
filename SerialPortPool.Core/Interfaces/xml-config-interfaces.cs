@@ -1,4 +1,4 @@
-using SerialPortPool.Core.Models.Configuration;
+using SerialPortPool.Core.Models;  // ← FIXED: Suppression de .Configuration
 
 namespace SerialPortPool.Core.Interfaces;
 

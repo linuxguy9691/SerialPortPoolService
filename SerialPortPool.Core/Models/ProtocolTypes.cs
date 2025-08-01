@@ -1,5 +1,5 @@
 // ===================================================================
-// PROTOCOL TYPES - SEULEMENT LES TYPES PROTOCOLES MANQUANTS
+// PROTOCOL TYPES - VERSION NETTOYÉE (SANS DUPLICATION)
 // Fichier: SerialPortPool.Core/Models/ProtocolTypes.cs
 // ===================================================================
 
@@ -76,18 +76,7 @@ namespace SerialPortPool.Core.Models
         }
     }
 
-    /// <summary>
-    /// Session de communication (hérite de ProtocolSession existant)
-    /// </summary>
-    public class CommunicationSession : ProtocolSession
-    {
-        public new string Status { get; set; } = "Initialized";
-        public new TimeSpan Duration => DateTime.UtcNow - CreatedAt;
-        public bool IsConnected => IsActive && Status == "Connected";
-
-        public string GetDetailedInfo()
-        {
-            return $"{ToString()} - Connected: {IsConnected}";
-        }
-    }
+    // NOTE: CommunicationSession est maintenant définie uniquement dans ProtocolSession.cs
+    // NOTE: ProtocolCapabilities est définie dans CommandResult.cs
+    // pour éviter la duplication CS0101
 }

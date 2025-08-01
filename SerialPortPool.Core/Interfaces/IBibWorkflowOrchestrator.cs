@@ -1,4 +1,6 @@
-// SerialPortPool.Core/Interfaces/IBibWorkflowOrchestrator.cs - NEW Week 2 INTERFACE
+// SerialPortPool.Core/Services/BibWorkflowOrchestrator.cs - NEW Week 2
+using Microsoft.Extensions.Logging;
+using SerialPortPool.Core.Interfaces;  // ← AJOUTÉ: Pour IBibConfigurationLoader et autres interfaces
 using SerialPortPool.Core.Models;
 
 namespace SerialPortPool.Core.Interfaces;
