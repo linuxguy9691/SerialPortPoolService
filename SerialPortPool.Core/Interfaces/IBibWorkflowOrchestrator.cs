@@ -1,12 +1,10 @@
-// SerialPortPool.Core/Services/BibWorkflowOrchestrator.cs - NEW Week 2
-using Microsoft.Extensions.Logging;
-using SerialPortPool.Core.Interfaces;  // ← AJOUTÉ: Pour IBibConfigurationLoader et autres interfaces
+// SerialPortPool.Core/Interfaces/IBibWorkflowOrchestrator.cs - CORRECTED INTERFACE
 using SerialPortPool.Core.Models;
 
 namespace SerialPortPool.Core.Interfaces;
 
 /// <summary>
-/// Interface for BIB workflow orchestration
+/// Interface for BIB workflow orchestration - CORRECTED VERSION
 /// Week 2: Integration of BIB mapping + XML configuration + RS232 protocol
 /// </summary>
 public interface IBibWorkflowOrchestrator
@@ -42,6 +40,15 @@ public interface IBibWorkflowOrchestrator
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// ✅ ADDED: Validate if workflow can be executed for specified parameters
+    /// </summary>
+    /// <param name="bibId">BIB identifier</param>
+    /// <param name="uutId">UUT identifier</param>
+    /// <param name="portNumber">Port number within UUT</param>
+    /// <returns>True if workflow can be executed</returns>
+    Task<bool> ValidateWorkflowAsync(string bibId, string uutId, int portNumber);
+
+    /// <summary>
     /// Get workflow execution statistics
     /// </summary>
     /// <returns>Workflow statistics</returns>
@@ -49,7 +56,7 @@ public interface IBibWorkflowOrchestrator
 }
 
 /// <summary>
-/// BIB workflow execution result
+/// BIB workflow execution result - CORRECTED VERSION
 /// </summary>
 public class BibWorkflowResult
 {
@@ -116,11 +123,20 @@ public class BibWorkflowResult
 }
 
 /// <summary>
-/// BIB workflow statistics
+/// BIB workflow statistics - CORRECTED VERSION
 /// </summary>
 public class BibWorkflowStatistics
 {
+    /// <summary>
+    /// Total number of workflows executed
+    /// </summary>
     public int TotalWorkflows { get; set; }
+    
+    /// <summary>
+    /// ✅ FIXED: Added alias for compatibility with Program.cs
+    /// </summary>
+    public int TotalWorkflowsExecuted => TotalWorkflows;
+    
     public int SuccessfulWorkflows { get; set; }
     public int FailedWorkflows { get; set; }
     public TimeSpan AverageWorkflowDuration { get; set; }

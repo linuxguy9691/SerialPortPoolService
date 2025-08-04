@@ -1,183 +1,190 @@
-using System;
-using System.IO;
+// SerialPortPool.Core/Services/XmlBibConfigurationLoader.cs - COMPLETE IMPLEMENTATION
 using System.Xml;
-using Microsoft.Extensions.Caching.Memory;  // ✅ Correct
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
-using SerialPortPool.Core.Interfaces;       // ← AJOUTÉ: Pour IXmlConfigurationLoader et IConfigurationValidator
+using SerialPortPool.Core.Interfaces;
 using SerialPortPool.Core.Models;
 
 namespace SerialPortPool.Core.Services;
 
 /// <summary>
-/// XML Configuration Loader - Parses BIB → UUT → PORT → PROTOCOL hierarchy
-/// Supports caching, validation, and protocol-specific settings
+/// XML BIB Configuration Loader - Complete Implementation
+/// Parses BIB → UUT → PORT → PROTOCOL hierarchy from XML files
 /// </summary>
-public class XmlConfigurationLoader : IXmlConfigurationLoader
+public class XmlBibConfigurationLoader : IBibConfigurationLoader
 {
-    private readonly ILogger<XmlConfigurationLoader> _logger;
-    private readonly IConfigurationValidator _validator;
+    private readonly ILogger<XmlBibConfigurationLoader> _logger;
     private readonly IMemoryCache _cache;
-    private readonly ConfigurationLoadOptions _options;
+    private string _defaultXmlPath = string.Empty;
+    private readonly Dictionary<string, BibConfiguration> _loadedConfigurations = new();
 
-    public XmlConfigurationLoader(
-        ILogger<XmlConfigurationLoader> logger,
-        IConfigurationValidator validator,
-        IMemoryCache cache,
-        ConfigurationLoadOptions? options = null)
+    public XmlBibConfigurationLoader(
+        ILogger<XmlBibConfigurationLoader> logger,
+        IMemoryCache cache)
     {
-        _logger = logger;
-        _validator = validator;
-        _cache = cache;
-        _options = options ?? new ConfigurationLoadOptions();
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
     }
 
     /// <summary>
-    /// Load complete system configuration from XML file
+    /// Set default XML configuration path
     /// </summary>
-    public async Task<SystemConfiguration> LoadConfigurationAsync(string xmlPath)
+    public void SetDefaultConfigurationPath(string defaultXmlPath)
     {
-        var cacheKey = $"config_{xmlPath}_{File.GetLastWriteTime(xmlPath).Ticks}";
+        _defaultXmlPath = defaultXmlPath;
+        _logger.LogDebug($"Default XML configuration path set: {defaultXmlPath}");
+    }
+
+    /// <summary>
+    /// Load all BIB configurations from XML file
+    /// </summary>
+    public async Task<Dictionary<string, BibConfiguration>> LoadConfigurationsAsync(string xmlPath)
+    {
+        var cacheKey = $"xml_config_{xmlPath}_{GetFileHash(xmlPath)}";
         
-        if (_cache.TryGetValue(cacheKey, out SystemConfiguration? cachedConfig) && cachedConfig != null)
+        if (_cache.TryGetValue(cacheKey, out Dictionary<string, BibConfiguration>? cached) && cached != null)
         {
-            _logger.LogDebug("Configuration loaded from cache: {XmlPath}", xmlPath);
-            return cachedConfig;
-        }
-
-        _logger.LogInformation("Loading XML configuration from: {XmlPath}", xmlPath);
-
-        if (!File.Exists(xmlPath))
-        {
-            throw new FileNotFoundException($"Configuration file not found: {xmlPath}");
+            _logger.LogDebug($"Loaded BIB configurations from cache: {xmlPath}");
+            return cached;
         }
 
         try
         {
-            // Load and parse XML document
+            _logger.LogInformation($"Loading BIB configurations from XML: {xmlPath}");
+
+            if (!File.Exists(xmlPath))
+            {
+                throw new FileNotFoundException($"XML configuration file not found: {xmlPath}");
+            }
+
+            var configurations = new Dictionary<string, BibConfiguration>();
+            
+            // Load and parse XML
             var xmlDoc = new XmlDocument();
             xmlDoc.Load(xmlPath);
 
-            // Validate schema if requested
-            if (_options.ValidateSchema)
+            var rootNode = xmlDoc.DocumentElement;
+            if (rootNode?.Name != "root")
             {
-                var schemaValidation = await _validator.ValidateSchemaAsync(xmlPath);
-                if (!schemaValidation.IsValid && _options.ThrowOnValidationErrors)
+                throw new InvalidOperationException("XML root element must be 'root'");
+            }
+
+            // Parse each BIB node
+            var bibNodes = rootNode.SelectNodes("bib");
+            if (bibNodes != null)
+            {
+                foreach (XmlNode bibNode in bibNodes)
                 {
-                    throw new InvalidOperationException($"XML schema validation failed: {schemaValidation.GetSummary()}");
+                    var bibConfig = ParseBibConfiguration(bibNode);
+                    configurations[bibConfig.BibId] = bibConfig;
+                    _logger.LogDebug($"Parsed BIB: {bibConfig.BibId} with {bibConfig.Uuts.Count} UUTs");
                 }
             }
 
-            // Parse configuration
-            var configuration = ParseSystemConfiguration(xmlDoc, xmlPath);
-
-            // Validate business rules if requested
-            if (_options.ValidateBusinessRules)
-            {
-                var businessValidation = _validator.ValidateConfiguration(configuration);
-                if (!businessValidation.IsValid && _options.ThrowOnValidationErrors)
-                {
-                    throw new InvalidOperationException($"Configuration validation failed: {businessValidation.GetSummary()}");
-                }
-                
-                LogValidationMessages(businessValidation);
-            }
-
-            // Cache the configuration
+            // Cache the results
             var cacheOptions = new MemoryCacheEntryOptions
             {
-                AbsoluteExpirationRelativeToNow = _options.CacheExpiration,
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30),
                 Priority = CacheItemPriority.High
             };
-            _cache.Set(cacheKey, configuration, cacheOptions);
+            _cache.Set(cacheKey, configurations, cacheOptions);
 
-            _logger.LogInformation("Configuration loaded successfully: {BibCount} BIBs", 
-                configuration.Bibs.Count);
+            // Store in memory for single-parameter methods
+            foreach (var config in configurations)
+            {
+                _loadedConfigurations[config.Key] = config.Value;
+            }
 
-            return configuration;
+            _logger.LogInformation($"Successfully loaded {configurations.Count} BIB configurations from {xmlPath}");
+            return configurations;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to load configuration from: {XmlPath}", xmlPath);
+            _logger.LogError(ex, $"Failed to load BIB configurations from: {xmlPath}");
             throw;
         }
     }
 
     /// <summary>
-    /// Load all BIB configurations as dictionary
+    /// Load single BIB configuration by ID (using default path)
     /// </summary>
-    public async Task<Dictionary<string, BibConfiguration>> LoadAllBibsAsync(string xmlPath)
+    public async Task<BibConfiguration?> LoadBibConfigurationAsync(string bibId)
     {
-        var configuration = await LoadConfigurationAsync(xmlPath);
-        return configuration.Bibs.ToDictionary(b => b.BibId, StringComparer.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Load specific BIB configuration
-    /// </summary>
-    public async Task<BibConfiguration> LoadBibAsync(string xmlPath, string bibId)
-    {
-        var configuration = await LoadConfigurationAsync(xmlPath);
-        var bib = configuration.GetBib(bibId);
-        
-        if (bib == null)
+        // Try from loaded configurations first
+        if (_loadedConfigurations.TryGetValue(bibId, out var cached))
         {
-            throw new ArgumentException($"BIB '{bibId}' not found in configuration: {xmlPath}");
+            _logger.LogDebug($"BIB configuration found in memory: {bibId}");
+            return cached;
         }
 
-        return bib;
-    }
+        // Load from default path if available
+        if (string.IsNullOrEmpty(_defaultXmlPath))
+        {
+            _logger.LogWarning($"No default XML path set and BIB {bibId} not in memory");
+            return null;
+        }
 
-    /// <summary>
-    /// Validate configuration file
-    /// </summary>
-    public async Task<ConfigurationValidationResult> ValidateConfigurationAsync(string xmlPath)
-    {
         try
         {
-            var configuration = await LoadConfigurationAsync(xmlPath);
-            return _validator.ValidateConfiguration(configuration);
+            var allConfigs = await LoadConfigurationsAsync(_defaultXmlPath);
+            return allConfigs.TryGetValue(bibId, out var config) ? config : null;
         }
         catch (Exception ex)
         {
-            var result = new ConfigurationValidationResult();
-            result.AddError($"Failed to load configuration: {ex.Message}");
-            return result;
+            _logger.LogError(ex, $"Failed to load BIB configuration {bibId} from default path");
+            return null;
         }
     }
 
     /// <summary>
-    /// Get all supported protocols from configuration
+    /// Load single BIB configuration by ID from specific XML file
     /// </summary>
-    public async Task<IEnumerable<string>> GetSupportedProtocolsAsync(string xmlPath)
+    public async Task<BibConfiguration?> LoadBibConfigurationAsync(string xmlPath, string bibId)
     {
-        var configuration = await LoadConfigurationAsync(xmlPath);
-        return configuration.GetAllProtocols();
+        var allConfigs = await LoadConfigurationsAsync(xmlPath);
+        return allConfigs.TryGetValue(bibId, out var config) ? config : null;
     }
 
     /// <summary>
-    /// Find port configurations matching criteria
+    /// Get all loaded configurations from memory
     /// </summary>
-    public async Task<IEnumerable<PortConfiguration>> FindPortConfigurationsAsync(string xmlPath, ConfigurationSearchCriteria criteria)
+    public async Task<Dictionary<string, BibConfiguration>> GetLoadedConfigurationsAsync()
     {
-        var configuration = await LoadConfigurationAsync(xmlPath);
-        
-        // Simple filtering - améliorer selon les besoins
-        var allPorts = configuration.Bibs.SelectMany(b => b.GetAllPorts());
-        
-        if (!string.IsNullOrEmpty(criteria.Protocol))
+        await Task.CompletedTask;
+        return new Dictionary<string, BibConfiguration>(_loadedConfigurations);
+    }
+
+    /// <summary>
+    /// Clear all loaded configurations from memory
+    /// </summary>
+    public async Task ClearConfigurationsAsync()
+    {
+        await Task.CompletedTask;
+        _loadedConfigurations.Clear();
+        _logger.LogInformation("Cleared all loaded BIB configurations from memory");
+    }
+
+    /// <summary>
+    /// Validate BIB configuration exists and is accessible
+    /// </summary>
+    public async Task<bool> ValidateBibConfigurationAsync(string bibId)
+    {
+        try
         {
-            allPorts = allPorts.Where(p => p.Protocol.Equals(criteria.Protocol, StringComparison.OrdinalIgnoreCase));
+            var config = await LoadBibConfigurationAsync(bibId);
+            return config != null;
         }
-        
-        return allPorts.ToList();
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, $"BIB configuration validation failed for {bibId}");
+            return false;
+        }
     }
-    
 
-    // SerialPortPool.Core/Services/XmlBibConfigurationLoader.cs - LIGNES À CORRIGER
+    #region Private Parsing Methods
 
     /// <summary>
     /// Parse BIB configuration from XML node
-    /// FIXED: XmlNodeList instantiation issue
     /// </summary>
     private BibConfiguration ParseBibConfiguration(XmlNode bibNode)
     {
@@ -187,13 +194,27 @@ public class XmlConfigurationLoader : IXmlConfigurationLoader
             Description = GetOptionalAttribute(bibNode, "description") ?? ""
         };
 
-        // FIXED: Don't create new XmlNodeList(), use SelectNodes result directly
+        // Parse metadata
+        var metadataNode = bibNode.SelectSingleNode("metadata");
+        if (metadataNode != null)
+        {
+            foreach (XmlNode child in metadataNode.ChildNodes)
+            {
+                if (child.NodeType == XmlNodeType.Element)
+                {
+                    bib.Metadata[child.Name] = child.InnerText;
+                }
+            }
+        }
+
+        // Parse UUTs
         var uutNodes = bibNode.SelectNodes("uut");
         if (uutNodes != null)
         {
             foreach (XmlNode uutNode in uutNodes)
             {
                 var uut = ParseUutConfiguration(uutNode);
+                uut.ParentBibId = bib.BibId;
                 bib.Uuts.Add(uut);
             }
         }
@@ -208,7 +229,6 @@ public class XmlConfigurationLoader : IXmlConfigurationLoader
 
     /// <summary>
     /// Parse UUT configuration from XML node
-    /// FIXED: XmlNodeList instantiation issue
     /// </summary>
     private UutConfiguration ParseUutConfiguration(XmlNode uutNode)
     {
@@ -218,13 +238,27 @@ public class XmlConfigurationLoader : IXmlConfigurationLoader
             Description = GetOptionalAttribute(uutNode, "description") ?? ""
         };
 
-        // FIXED: Don't create new XmlNodeList(), use SelectNodes result directly
+        // Parse metadata
+        var metadataNode = uutNode.SelectSingleNode("metadata");
+        if (metadataNode != null)
+        {
+            foreach (XmlNode child in metadataNode.ChildNodes)
+            {
+                if (child.NodeType == XmlNodeType.Element)
+                {
+                    uut.Metadata[child.Name] = child.InnerText;
+                }
+            }
+        }
+
+        // Parse ports
         var portNodes = uutNode.SelectNodes("port");
         if (portNodes != null)
         {
             foreach (XmlNode portNode in portNodes)
             {
                 var port = ParsePortConfiguration(portNode);
+                port.ParentUutId = uut.UutId;
                 uut.Ports.Add(port);
             }
         }
@@ -235,38 +269,6 @@ public class XmlConfigurationLoader : IXmlConfigurationLoader
         }
 
         return uut;
-    }
-
-    /// <summary>
-    /// Parse system configuration from XML document  
-    /// FIXED: XmlNodeList instantiation issue
-    /// </summary>
-    private SystemConfiguration ParseSystemConfiguration(XmlDocument xmlDoc, string sourcePath)
-    {
-        var configuration = new SystemConfiguration
-        {
-            SourcePath = sourcePath,
-            LoadedAt = DateTime.UtcNow
-        };
-
-        var rootNode = xmlDoc.DocumentElement;
-        if (rootNode?.Name != "root")
-        {
-            throw new InvalidOperationException("XML root element must be 'root'");
-        }
-
-        // FIXED: Don't create new XmlNodeList(), use SelectNodes result directly
-        var bibNodes = rootNode.SelectNodes("bib");
-        if (bibNodes != null)
-        {
-            foreach (XmlNode bibNode in bibNodes)
-            {
-                var bib = ParseBibConfiguration(bibNode);
-                configuration.Bibs.Add(bib);
-            }
-        }
-
-        return configuration;
     }
 
     /// <summary>
@@ -282,7 +284,34 @@ public class XmlConfigurationLoader : IXmlConfigurationLoader
             DataPattern = GetOptionalElement(portNode, "data_pattern") ?? "n81"
         };
 
-        // Parse command sequences (simplified)
+        // Parse protocol-specific settings
+        var settingsToCheck = new[]
+        {
+            ("read_timeout", "3000"),
+            ("write_timeout", "3000"), 
+            ("handshake", "None"),
+            ("rts_enable", "false"),
+            ("dtr_enable", "true")
+        };
+
+        foreach (var (settingName, defaultValue) in settingsToCheck)
+        {
+            var value = GetOptionalElement(portNode, settingName) ?? defaultValue;
+            if (int.TryParse(value, out var intValue))
+            {
+                port.Settings[settingName] = intValue;
+            }
+            else if (bool.TryParse(value, out var boolValue))
+            {
+                port.Settings[settingName] = boolValue;
+            }
+            else
+            {
+                port.Settings[settingName] = value;
+            }
+        }
+
+        // Parse command sequences
         port.StartCommands = ParseCommandSequence(portNode.SelectSingleNode("start"));
         port.TestCommands = ParseCommandSequence(portNode.SelectSingleNode("test"));
         port.StopCommands = ParseCommandSequence(portNode.SelectSingleNode("stop"));
@@ -306,7 +335,8 @@ public class XmlConfigurationLoader : IXmlConfigurationLoader
                 {
                     Command = commandText,
                     ExpectedResponse = GetOptionalElement(sequenceNode, "expected_response"),
-                    TimeoutMs = int.Parse(GetOptionalElement(sequenceNode, "timeout_ms") ?? "2000")
+                    TimeoutMs = int.Parse(GetOptionalElement(sequenceNode, "timeout_ms") ?? "2000"),
+                    RetryCount = int.Parse(GetOptionalElement(sequenceNode, "retry_count") ?? "0")
                 };
                 sequence.Commands.Add(command);
             }
@@ -315,8 +345,9 @@ public class XmlConfigurationLoader : IXmlConfigurationLoader
         return sequence;
     }
 
-    #region Helper Methods
-
+    /// <summary>
+    /// Get required XML attribute
+    /// </summary>
     private string GetRequiredAttribute(XmlNode node, string attributeName)
     {
         var value = node.Attributes?[attributeName]?.Value;
@@ -327,11 +358,17 @@ public class XmlConfigurationLoader : IXmlConfigurationLoader
         return value;
     }
 
+    /// <summary>
+    /// Get optional XML attribute
+    /// </summary>
     private string? GetOptionalAttribute(XmlNode node, string attributeName)
     {
         return node.Attributes?[attributeName]?.Value;
     }
 
+    /// <summary>
+    /// Get required XML element
+    /// </summary>
     private string GetRequiredElement(XmlNode node, string elementName)
     {
         var element = node.SelectSingleNode(elementName);
@@ -342,24 +379,33 @@ public class XmlConfigurationLoader : IXmlConfigurationLoader
         return element.InnerText;
     }
 
+    /// <summary>
+    /// Get optional XML element
+    /// </summary>
     private string? GetOptionalElement(XmlNode node, string elementName)
     {
         return node.SelectSingleNode(elementName)?.InnerText;
     }
 
-    private void LogValidationMessages(ConfigurationValidationResult validation)
+    /// <summary>
+    /// Get file hash for caching
+    /// </summary>
+    private string GetFileHash(string filePath)
     {
-        foreach (var error in validation.Errors)
+        try
         {
-            _logger.LogError("Configuration error: {Error}", error);
+            if (File.Exists(filePath))
+            {
+                var lastWrite = File.GetLastWriteTime(filePath);
+                return lastWrite.Ticks.ToString();
+            }
         }
-
-        foreach (var warning in validation.Warnings)
+        catch
         {
-            _logger.LogWarning("Configuration warning: {Warning}", warning);
+            // Ignore errors, return default
         }
+        return DateTime.Now.Ticks.ToString();
     }
 
     #endregion
-    
 }

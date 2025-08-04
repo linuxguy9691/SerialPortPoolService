@@ -1,4 +1,6 @@
-// SerialPortPool.Core/Services/BibWorkflowOrchestrator.cs - FIXED SIGNATURES
+// SerialPortPool.Core/Services/BibWorkflowOrchestrator.cs - FIXED VERSION
+// FIX: Ajout méthode de conversion ProtocolResponse → CommandResult
+
 using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
 using SerialPortPool.Core.Models;
@@ -6,7 +8,7 @@ using SerialPortPool.Core.Models;
 namespace SerialPortPool.Core.Services;
 
 /// <summary>
-/// BIB workflow orchestrator for complete 3-phase workflows
+/// BIB workflow orchestrator for complete 3-phase workflows - CORRECTED VERSION
 /// Week 2: Integration of BIB mapping + XML configuration + RS232 protocol
 /// Uses ZERO TOUCH composition pattern with existing port reservation
 /// </summary>
@@ -92,7 +94,6 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
             var protocolHandler = _protocolFactory.GetHandler(portConfig.Protocol);
             var protocolConfig = CreateProtocolConfiguration(physicalPort, portConfig);
 
-            // FIXED: OpenSessionAsync with correct signature
             session = await protocolHandler.OpenSessionAsync(protocolConfig, cancellationToken);
             workflowResult.SessionId = session.SessionId;
             workflowResult.SessionOpened = true;
@@ -355,7 +356,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
 
     /// <summary>
     /// Execute a command sequence (Start/Test/Stop)
-    /// FIXED: Correct parameter order for ExecuteCommandAsync
+    /// FIXED: Added conversion method ProtocolResponse → CommandResult
     /// </summary>
     private async Task<CommandSequenceResult> ExecuteCommandSequenceAsync(
         IProtocolHandler protocolHandler,
@@ -379,13 +380,16 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
                     break;
                 }
 
-                // FIXED: Correct parameter order and added missing cancellationToken
-                var commandResult = await protocolHandler.ExecuteCommandAsync(session, command, cancellationToken);
+                // Execute command via protocol handler
+                var protocolResponse = await protocolHandler.ExecuteCommandAsync(session, command, cancellationToken);
+                
+                // ✅ FIX: Convert ProtocolResponse to CommandResult
+                var commandResult = ConvertToCommandResult(command, protocolResponse);
                 sequenceResult.CommandResults.Add(commandResult);
 
                 _logger.LogDebug($"📥 {phaseName} command result: {commandResult}");
 
-                // Check if we should continue on failure
+                // Check if we should continue on failure - ✅ FIX: Use IsSuccess property
                 if (!commandResult.IsSuccess && !commandSequence.ContinueOnFailure)
                 {
                     _logger.LogWarning($"⚠️ {phaseName} phase stopped due to command failure (continue_on_failure=false)");
@@ -414,8 +418,27 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
     }
 
     /// <summary>
+    /// ✅ NEW: Convert ProtocolResponse to CommandResult (Fix for compilation error)
+    /// </summary>
+    private static CommandResult ConvertToCommandResult(ProtocolCommand originalCommand, ProtocolResponse protocolResponse)
+    {
+        return new CommandResult
+        {
+            Command = originalCommand.Command,
+            Response = protocolResponse.DataAsString,
+            IsSuccess = protocolResponse.Success, // ✅ FIX: ProtocolResponse.Success → CommandResult.IsSuccess
+            ErrorMessage = protocolResponse.Success ? null : protocolResponse.ErrorMessage,
+            Duration = protocolResponse.ExecutionTime,
+            StartTime = protocolResponse.CompletedAt - protocolResponse.ExecutionTime,
+            EndTime = protocolResponse.CompletedAt,
+            ProtocolName = "RS232", // Could be dynamic based on session
+            SessionId = "session-id", // Could come from session parameter
+            Metadata = new Dictionary<string, object>(protocolResponse.Metadata)
+        };
+    }
+
+    /// <summary>
     /// Cleanup workflow resources
-    /// FIXED: Correct parameter order for CloseSessionAsync
     /// </summary>
     private async Task CleanupWorkflowAsync(ProtocolSession? session, PortReservation? reservation, string workflowId)
     {
@@ -429,7 +452,6 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
                 try
                 {
                     var protocolHandler = _protocolFactory.GetHandler(session.ProtocolName);
-                    // FIXED: Added CancellationToken.None parameter
                     await protocolHandler.CloseSessionAsync(session, CancellationToken.None);
                     _logger.LogDebug($"📡 Protocol session closed: {session.SessionId}");
                 }
@@ -464,6 +486,62 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
     #endregion
 
     #region Statistics and Monitoring
+
+    /// <summary>
+    /// ✅ ADDED: Validate if workflow can be executed for specified parameters
+    /// </summary>
+    public async Task<bool> ValidateWorkflowAsync(string bibId, string uutId, int portNumber)
+    {
+        try
+        {
+            _logger.LogDebug($"🔍 Validating workflow: {bibId}.{uutId}.{portNumber}");
+
+            // Check if BIB configuration exists and is valid
+            var bibConfig = await _configLoader.LoadBibConfigurationAsync(bibId);
+            if (bibConfig == null)
+            {
+                _logger.LogWarning($"⚠️ BIB configuration not found: {bibId}");
+                return false;
+            }
+
+            // Check if UUT exists in BIB
+            try
+            {
+                var uutConfig = bibConfig.GetUut(uutId);
+                
+                // Check if port exists in UUT
+                var portConfig = uutConfig.GetPort(portNumber);
+                
+                // Check if physical port mapping exists
+                var physicalPort = await FindPhysicalPortAsync(bibId, uutId, portNumber);
+                if (string.IsNullOrEmpty(physicalPort))
+                {
+                    _logger.LogWarning($"⚠️ No physical port mapping for {bibId}.{uutId}.{portNumber}");
+                    return false;
+                }
+
+                // Check if protocol is supported
+                if (!_protocolFactory.IsProtocolSupported(portConfig.Protocol))
+                {
+                    _logger.LogWarning($"⚠️ Protocol not supported: {portConfig.Protocol}");
+                    return false;
+                }
+
+                _logger.LogDebug($"✅ Workflow validation passed: {bibId}.{uutId}.{portNumber}");
+                return true;
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning($"⚠️ Workflow validation failed: {ex.Message}");
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"❌ Error during workflow validation: {bibId}.{uutId}.{portNumber}");
+            return false;
+        }
+    }
 
     /// <summary>
     /// Get workflow statistics

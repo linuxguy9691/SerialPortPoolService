@@ -447,15 +447,15 @@ class Program
                 {
                     Console.WriteLine($"   📦 {bibConfig.BibId}: {bibConfig.Uuts.Count} UUT(s), {bibConfig.TotalPortCount} port(s)");
                     
-                    foreach (var uut in bibConfig.Uuts.Values.Take(1))
-                    {
-                        Console.WriteLine($"      🔧 UUT {uut.UutId}: {uut.Ports.Count} port(s)");
-                        
-                        foreach (var port in uut.Ports.Values.Take(1))
-                        {
-                            Console.WriteLine($"         📍 Port {port.PortNumber}: {port.Protocol.ToUpper()} @ {port.Speed} ({port.DataPattern})");
-                        }
-                    }
+                    foreach (var uut in bibConfig.Uuts.Take(1))  // Suppression de .Values car Uuts est une List<>, pas un Dictionary<>
+{
+    Console.WriteLine($"      🔧 UUT {uut.UutId}: {uut.Ports.Count} port(s)");
+    
+    foreach (var port in uut.Ports.Take(1))  // Même correction si nécessaire pour les ports
+    {
+        Console.WriteLine($"         📍 Port {port.PortNumber}: {port.Protocol.ToUpper()} @ {port.Speed} ({port.DataPattern})");
+    }
+}
                 }
             }
             
