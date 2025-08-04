@@ -5,10 +5,13 @@
 
 using System.Collections.Generic;
 
+// SerialPortPool.Core/Interfaces/IProtocolHandlerFactory.cs - SECTION À AJOUTER
+
 namespace SerialPortPool.Core.Interfaces
 {
     /// <summary>
     /// Factory pour créer des gestionnaires de protocole
+    /// FIXED: Added GetHandler method for compatibility
     /// </summary>
     public interface IProtocolHandlerFactory
     {
@@ -32,5 +35,38 @@ namespace SerialPortPool.Core.Interfaces
         /// <returns>Instance du gestionnaire de protocole</returns>
         /// <exception cref="NotSupportedException">Si le protocole n'est pas supporté</exception>
         IProtocolHandler CreateHandler(string protocolName);
+
+        /// <summary>
+        /// AJOUTÉ: Obtient un gestionnaire pour le protocole spécifié (alias pour CreateHandler)
+        /// </summary>
+        /// <param name="protocolName">Nom du protocole</param>
+        /// <returns>Instance du gestionnaire de protocole</returns>
+        /// <exception cref="NotSupportedException">Si le protocole n'est pas supporté</exception>
+        IProtocolHandler GetHandler(string protocolName);
+    }
+}
+
+// ===================================================================
+// IMPLEMENTATION DANS ProtocolHandlerFactory.cs - MÉTHODE À AJOUTER
+// ===================================================================
+
+namespace SerialPortPool.Core.Services
+{
+    public class ProtocolHandlerFactory : IProtocolHandlerFactory
+    {
+        // ... existing methods ...
+
+        /// <summary>
+        /// AJOUTÉ: Obtient un gestionnaire pour le protocole spécifié (alias pour CreateHandler)
+        /// </summary>
+        /// <param name="protocolName">Nom du protocole</param>
+        /// <returns>Instance du gestionnaire de protocole</returns>
+        public IProtocolHandler GetHandler(string protocolName)
+        {
+            // Delegate to CreateHandler - same functionality
+            return CreateHandler(protocolName);
+        }
+
+        // ... rest of existing methods ...
     }
 }

@@ -12,6 +12,12 @@ namespace SerialPortPool.Core.Models
     /// <summary>
     /// Représente une session de protocole de communication
     /// </summary>
+    // SerialPortPool.Core/Models/ProtocolSession.cs - SECTION À AJOUTER
+
+    /// <summary>
+    /// Représente une session de protocole de communication
+    /// FIXED: Added ProtocolName property
+    /// </summary>
     public class ProtocolSession
     {
         /// <summary>
@@ -27,9 +33,16 @@ namespace SerialPortPool.Core.Models
         public string PortName { get; set; } = string.Empty;
 
         /// <summary>
+        /// AJOUTÉ: Nom du protocole utilisé
+        /// </summary>
+        public string ProtocolName { get; set; } = string.Empty;
+
+        /// <summary>
         /// Configuration du protocole
         /// </summary>
         public ProtocolConfiguration Configuration { get; set; } = new();
+
+        // ... rest of existing properties remain the same ...
 
         /// <summary>
         /// Date et heure de création de la session

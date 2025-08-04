@@ -201,43 +201,84 @@ public class ProtocolTestResult
     }
 }
 
+// SerialPortPool.Core/Models/CommandResult.cs - SECTION À CORRIGER
 /// <summary>
-/// Protocol handler capabilities
+/// Protocol handler capabilities - FIXED VERSION
 /// </summary>
 public class ProtocolCapabilities
 {
     /// <summary>
-    /// Supported speed/baud rates
+    /// Protocol name (AJOUTÉ)
+    /// </summary>
+    public string ProtocolName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Protocol version (AJOUTÉ)
+    /// </summary>
+    public string Version { get; set; } = "1.0.0";
+
+    /// <summary>
+    /// Supports async operations (AJOUTÉ)
+    /// </summary>
+    public bool SupportsAsyncOperations { get; set; } = true;
+
+    /// <summary>
+    /// Supports sequence commands (AJOUTÉ)
+    /// </summary>
+    public bool SupportsSequenceCommands { get; set; } = true;
+
+    /// <summary>
+    /// Supports bidirectional communication (AJOUTÉ)
+    /// </summary>
+    public bool SupportsBidirectionalCommunication { get; set; } = true;
+
+    /// <summary>
+    /// Default timeout (AJOUTÉ)
+    /// </summary>
+    public TimeSpan DefaultTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Supported commands (AJOUTÉ)
+    /// </summary>
+    public List<string> SupportedCommands { get; set; } = new();
+
+    /// <summary>
+    /// Supported baud rates (AJOUTÉ)
+    /// </summary>
+    public List<int> SupportedBaudRates { get; set; } = new();
+
+    /// <summary>
+    /// Supported speed/baud rates (EXISTING)
     /// </summary>
     public List<int> SupportedSpeeds { get; set; } = new();
 
     /// <summary>
-    /// Supported data patterns
+    /// Supported data patterns (EXISTING)
     /// </summary>
     public List<string> SupportedDataPatterns { get; set; } = new();
 
     /// <summary>
-    /// Maximum command length
+    /// Maximum command length (EXISTING)
     /// </summary>
     public int MaxCommandLength { get; set; } = 1024;
 
     /// <summary>
-    /// Maximum response length
+    /// Maximum response length (EXISTING)
     /// </summary>
     public int MaxResponseLength { get; set; } = 4096;
 
     /// <summary>
-    /// Supports concurrent sessions
+    /// Supports concurrent sessions (EXISTING)
     /// </summary>
     public bool SupportsConcurrentSessions { get; set; } = false;
 
     /// <summary>
-    /// Maximum concurrent sessions
+    /// Maximum concurrent sessions (EXISTING)
     /// </summary>
     public int MaxConcurrentSessions { get; set; } = 1;
 
     /// <summary>
-    /// Protocol-specific features
+    /// Protocol-specific features (EXISTING)
     /// </summary>
     public Dictionary<string, object> Features { get; set; } = new();
 }

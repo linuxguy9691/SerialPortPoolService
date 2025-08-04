@@ -171,9 +171,75 @@ public class XmlConfigurationLoader : IXmlConfigurationLoader
         
         return allPorts.ToList();
     }
+    
+
+    // SerialPortPool.Core/Services/XmlBibConfigurationLoader.cs - LIGNES À CORRIGER
 
     /// <summary>
-    /// Parse XML document into system configuration
+    /// Parse BIB configuration from XML node
+    /// FIXED: XmlNodeList instantiation issue
+    /// </summary>
+    private BibConfiguration ParseBibConfiguration(XmlNode bibNode)
+    {
+        var bib = new BibConfiguration
+        {
+            BibId = GetRequiredAttribute(bibNode, "id"),
+            Description = GetOptionalAttribute(bibNode, "description") ?? ""
+        };
+
+        // FIXED: Don't create new XmlNodeList(), use SelectNodes result directly
+        var uutNodes = bibNode.SelectNodes("uut");
+        if (uutNodes != null)
+        {
+            foreach (XmlNode uutNode in uutNodes)
+            {
+                var uut = ParseUutConfiguration(uutNode);
+                bib.Uuts.Add(uut);
+            }
+        }
+
+        if (!bib.Uuts.Any())
+        {
+            throw new InvalidOperationException($"BIB '{bib.BibId}' must contain at least one UUT");
+        }
+
+        return bib;
+    }
+
+    /// <summary>
+    /// Parse UUT configuration from XML node
+    /// FIXED: XmlNodeList instantiation issue
+    /// </summary>
+    private UutConfiguration ParseUutConfiguration(XmlNode uutNode)
+    {
+        var uut = new UutConfiguration
+        {
+            UutId = GetRequiredAttribute(uutNode, "id"),
+            Description = GetOptionalAttribute(uutNode, "description") ?? ""
+        };
+
+        // FIXED: Don't create new XmlNodeList(), use SelectNodes result directly
+        var portNodes = uutNode.SelectNodes("port");
+        if (portNodes != null)
+        {
+            foreach (XmlNode portNode in portNodes)
+            {
+                var port = ParsePortConfiguration(portNode);
+                uut.Ports.Add(port);
+            }
+        }
+
+        if (!uut.Ports.Any())
+        {
+            throw new InvalidOperationException($"UUT '{uut.UutId}' must contain at least one port");
+        }
+
+        return uut;
+    }
+
+    /// <summary>
+    /// Parse system configuration from XML document  
+    /// FIXED: XmlNodeList instantiation issue
     /// </summary>
     private SystemConfiguration ParseSystemConfiguration(XmlDocument xmlDoc, string sourcePath)
     {
@@ -189,66 +255,18 @@ public class XmlConfigurationLoader : IXmlConfigurationLoader
             throw new InvalidOperationException("XML root element must be 'root'");
         }
 
-        // Parse each BIB
-        foreach (XmlNode bibNode in rootNode.SelectNodes("bib") ?? new XmlNodeList())
+        // FIXED: Don't create new XmlNodeList(), use SelectNodes result directly
+        var bibNodes = rootNode.SelectNodes("bib");
+        if (bibNodes != null)
         {
-            var bib = ParseBibConfiguration(bibNode);
-            configuration.Bibs.Add(bib);
+            foreach (XmlNode bibNode in bibNodes)
+            {
+                var bib = ParseBibConfiguration(bibNode);
+                configuration.Bibs.Add(bib);
+            }
         }
 
         return configuration;
-    }
-
-    /// <summary>
-    /// Parse BIB configuration from XML node
-    /// </summary>
-    private BibConfiguration ParseBibConfiguration(XmlNode bibNode)
-    {
-        var bib = new BibConfiguration
-        {
-            BibId = GetRequiredAttribute(bibNode, "id"),
-            Description = GetOptionalAttribute(bibNode, "description") ?? ""
-        };
-
-        // Parse each UUT
-        foreach (XmlNode uutNode in bibNode.SelectNodes("uut") ?? new XmlNodeList())
-        {
-            var uut = ParseUutConfiguration(uutNode);
-            bib.Uuts.Add(uut);
-        }
-
-        if (!bib.Uuts.Any())
-        {
-            throw new InvalidOperationException($"BIB '{bib.BibId}' must contain at least one UUT");
-        }
-
-        return bib;
-    }
-
-    /// <summary>
-    /// Parse UUT configuration from XML node
-    /// </summary>
-    private UutConfiguration ParseUutConfiguration(XmlNode uutNode)
-    {
-        var uut = new UutConfiguration
-        {
-            UutId = GetRequiredAttribute(uutNode, "id"),
-            Description = GetOptionalAttribute(uutNode, "description") ?? ""
-        };
-
-        // Parse each port
-        foreach (XmlNode portNode in uutNode.SelectNodes("port") ?? new XmlNodeList())
-        {
-            var port = ParsePortConfiguration(portNode);
-            uut.Ports.Add(port);
-        }
-
-        if (!uut.Ports.Any())
-        {
-            throw new InvalidOperationException($"UUT '{uut.UutId}' must contain at least one port");
-        }
-
-        return uut;
     }
 
     /// <summary>

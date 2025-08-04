@@ -95,8 +95,11 @@ public static class Sprint5ServiceExtensions
         return services.AddSprint5Services(productionOptions);
     }
 
+   // SerialPortPool.Core/Extensions/sprint5-services-registration.cs - LIGNE À CORRIGER
+
     /// <summary>
     /// Validate Sprint 5 service registration
+    /// FIXED: Remove static type usage in generic method
     /// </summary>
     public static void ValidateSprint5Services(this IServiceProvider serviceProvider)
     {
@@ -129,7 +132,9 @@ public static class Sprint5ServiceExtensions
             // Log successful validation (if logger available)
             try
             {
-                var logger = serviceProvider.GetService<Microsoft.Extensions.Logging.ILogger<Sprint5ServiceExtensions>>();
+                // FIXED: Don't use Sprint5ServiceExtensions as generic type argument
+                var loggerFactory = serviceProvider.GetService<ILoggerFactory>();
+                var logger = loggerFactory?.CreateLogger("Sprint5ServiceExtensions");
                 logger?.LogInformation("✅ Sprint 5 services validated successfully. Protocols: {Protocols}",
                     string.Join(", ", supportedProtocols));
             }

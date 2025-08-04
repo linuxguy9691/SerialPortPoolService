@@ -1,9 +1,10 @@
-// SerialPortPool.Core/Models/ProtocolCommand.cs - NEW (Missing model)
+// SerialPortPool.Core/Models/ProtocolCommand.cs - VERSION CORRIGÉE COMPLÈTE
 namespace SerialPortPool.Core.Models;
 
 /// <summary>
 /// Protocol command for execution in communication workflows
 /// Week 2: Core model for 3-phase workflows (Start/Test/Stop)
+/// FIXED: Added missing properties for RS232ProtocolHandler
 /// </summary>
 public class ProtocolCommand
 {
@@ -13,9 +14,24 @@ public class ProtocolCommand
     public string CommandId { get; set; } = Guid.NewGuid().ToString();
 
     /// <summary>
-    /// Raw command string to send
+    /// Raw command string to send (FIXED: Added Name property alias)
     /// </summary>
     public string Command { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Command name alias for compatibility (AJOUTÉ)
+    /// </summary>
+    public string Name { get => Command; set => Command = value; }
+
+    /// <summary>
+    /// Command data as byte array (AJOUTÉ)
+    /// </summary>
+    public byte[] Data { get; set; } = Array.Empty<byte>();
+
+    /// <summary>
+    /// Command parameters dictionary (AJOUTÉ)
+    /// </summary>
+    public Dictionary<string, object> Parameters { get; set; } = new();
 
     /// <summary>
     /// Expected response pattern (regex supported)
@@ -26,6 +42,15 @@ public class ProtocolCommand
     /// Command timeout in milliseconds
     /// </summary>
     public int TimeoutMs { get; set; } = 2000;
+
+    /// <summary>
+    /// Command timeout as TimeSpan (AJOUTÉ pour compatibility)
+    /// </summary>
+    public TimeSpan Timeout 
+    { 
+        get => TimeSpan.FromMilliseconds(TimeoutMs); 
+        set => TimeoutMs = (int)value.TotalMilliseconds; 
+    }
 
     /// <summary>
     /// Number of retry attempts on failure
@@ -56,7 +81,8 @@ public class ProtocolCommand
         {
             Command = command,
             ExpectedResponse = expectedResponse,
-            TimeoutMs = timeoutMs
+            TimeoutMs = timeoutMs,
+            Data = System.Text.Encoding.UTF8.GetBytes(command) // AJOUTÉ: Auto-convert to bytes
         };
     }
 
@@ -76,7 +102,8 @@ public class ProtocolCommand
             ExpectedResponse = expectedResponse,
             TimeoutMs = timeoutMs,
             RetryCount = retryCount,
-            RetryDelayMs = retryDelayMs
+            RetryDelayMs = retryDelayMs,
+            Data = System.Text.Encoding.UTF8.GetBytes(command) // AJOUTÉ
         };
     }
 

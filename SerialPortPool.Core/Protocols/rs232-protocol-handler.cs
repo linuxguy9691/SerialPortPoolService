@@ -62,26 +62,49 @@ namespace SerialPortPool.Core.Protocols
             };
         }
 
-        public async Task<bool> CanHandleProtocolAsync(string protocolName)
-        {
-            await Task.CompletedTask;
-            return string.Equals(protocolName, "RS232", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(protocolName, "Serial", StringComparison.OrdinalIgnoreCase);
-        }
+     // SerialPortPool.Core/Protocols/rs232-protocol-handler.cs - SECTION À CORRIGER
 
-        public async Task<ProtocolSession> OpenSessionAsync(string portName, PortConfiguration config, CancellationToken cancellationToken)
+        public async Task&lt;ProtocolSession&gt; OpenSessionAsync(ProtocolConfiguration config, CancellationToken cancellationToken)
         {
-            var protocolConfig = new ProtocolConfiguration
+            if (_currentSession?.IsActive == true)
             {
-                PortName = portName,
-                BaudRate = config.BaudRate,
-                DataBits = config.DataBits,
-                Parity = config.Parity,
-                StopBits = config.StopBits,
-                Timeout = config.ReadTimeout
-            };
+                throw new InvalidOperationException("Une session est déjà active");
+            }
 
-            return await OpenSessionAsync(protocolConfig, cancellationToken);
+            try
+            {
+                _logger.LogInformation("Ouverture session RS232 sur {PortName}", config.PortName);
+
+                _serialPort = new SerialPort(config.PortName)
+                {
+                    BaudRate = config.BaudRate,
+                    DataBits = config.DataBits,
+                    Parity = ParseParity(config.Parity),
+                    StopBits = ParseStopBits(config.StopBits),
+                    ReadTimeout = (int)config.Timeout.TotalMilliseconds,
+                    WriteTimeout = (int)config.Timeout.TotalMilliseconds
+                };
+
+                await Task.Run(() => _serialPort.Open(), cancellationToken);
+
+                _currentSession = new CommunicationSession
+                {
+                    SessionId = Guid.NewGuid().ToString(),
+                    PortName = config.PortName,
+                    ProtocolName = "RS232", // AJOUTÉ: Set protocol name
+                    Configuration = config,
+                    CreatedAt = DateTime.UtcNow,
+                    IsActive = true,
+                    Status = SessionStatus.Active // FIXED: Use enum instead of string
+                };
+
+                return _currentSession;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur ouverture session RS232");
+                throw;
+            }
         }
 
         public async Task<ProtocolSession> OpenSessionAsync(ProtocolConfiguration config, CancellationToken cancellationToken)
