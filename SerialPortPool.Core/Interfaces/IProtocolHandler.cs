@@ -1,5 +1,5 @@
 // ===================================================================
-// INTERFACE IPROTOCOL HANDLER - VERSION CLEAN
+// INTERFACE IPROTOCOL HANDLER - VERSION COMPLÈTE CORRIGÉE
 // Fichier: SerialPortPool.Core/Interfaces/IProtocolHandler.cs
 // ===================================================================
 

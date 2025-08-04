@@ -1,7 +1,6 @@
 // ===================================================================
-// RS232 PROTOCOL HANDLER - IMPLÉMENTATION COMPLÈTE
+// RS232 PROTOCOL HANDLER - VERSION COMPLÈTE CORRIGÉE
 // Fichier: SerialPortPool.Core/Protocols/rs232-protocol-handler.cs
-// REMPLACEZ LE CONTENU EXISTANT PAR CECI
 // ===================================================================
 
 using System;
@@ -62,9 +61,14 @@ namespace SerialPortPool.Core.Protocols
             };
         }
 
-     // SerialPortPool.Core/Protocols/rs232-protocol-handler.cs - SECTION À CORRIGER
+        public async Task<bool> CanHandleProtocolAsync(string protocolName)
+        {
+            await Task.CompletedTask;
+            return protocolName.Equals("RS232", StringComparison.OrdinalIgnoreCase) ||
+                   protocolName.Equals("SERIAL", StringComparison.OrdinalIgnoreCase);
+        }
 
-        public async Task&lt;ProtocolSession&gt; OpenSessionAsync(ProtocolConfiguration config, CancellationToken cancellationToken)
+        public async Task<ProtocolSession> OpenSessionAsync(string portName, PortConfiguration config, CancellationToken cancellationToken)
         {
             if (_currentSession?.IsActive == true)
             {
@@ -73,16 +77,16 @@ namespace SerialPortPool.Core.Protocols
 
             try
             {
-                _logger.LogInformation("Ouverture session RS232 sur {PortName}", config.PortName);
+                _logger.LogInformation("Ouverture session RS232 sur {PortName}", portName);
 
-                _serialPort = new SerialPort(config.PortName)
+                _serialPort = new SerialPort(portName)
                 {
-                    BaudRate = config.BaudRate,
-                    DataBits = config.DataBits,
-                    Parity = ParseParity(config.Parity),
-                    StopBits = ParseStopBits(config.StopBits),
-                    ReadTimeout = (int)config.Timeout.TotalMilliseconds,
-                    WriteTimeout = (int)config.Timeout.TotalMilliseconds
+                    BaudRate = config.GetBaudRate(),
+                    DataBits = config.GetDataBits(),
+                    Parity = config.GetParity(),
+                    StopBits = config.GetStopBits(),
+                    ReadTimeout = config.GetReadTimeout(),
+                    WriteTimeout = config.GetWriteTimeout()
                 };
 
                 await Task.Run(() => _serialPort.Open(), cancellationToken);
@@ -90,19 +94,19 @@ namespace SerialPortPool.Core.Protocols
                 _currentSession = new CommunicationSession
                 {
                     SessionId = Guid.NewGuid().ToString(),
-                    PortName = config.PortName,
-                    ProtocolName = "RS232", // AJOUTÉ: Set protocol name
-                    Configuration = config,
+                    PortName = portName,
+                    ProtocolName = ProtocolName,
+                    Configuration = ProtocolConfiguration.CreateDefault(portName),
                     CreatedAt = DateTime.UtcNow,
                     IsActive = true,
-                    Status = SessionStatus.Active // FIXED: Use enum instead of string
+                    Status = SessionStatus.Active
                 };
 
                 return _currentSession;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erreur ouverture session RS232");
+                _logger.LogError(ex, "Erreur ouverture session RS232 sur {PortName}", portName);
                 throw;
             }
         }
@@ -134,10 +138,11 @@ namespace SerialPortPool.Core.Protocols
                 {
                     SessionId = Guid.NewGuid().ToString(),
                     PortName = config.PortName,
+                    ProtocolName = ProtocolName,
                     Configuration = config,
                     CreatedAt = DateTime.UtcNow,
                     IsActive = true,
-                    Status = "Connected"
+                    Status = SessionStatus.Active
                 };
 
                 return _currentSession;

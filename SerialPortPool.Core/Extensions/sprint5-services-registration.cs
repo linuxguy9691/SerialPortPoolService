@@ -4,8 +4,7 @@ using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
 using SerialPortPool.Core.Services;
 using SerialPortPool.Core.Models;
-
-
+using SerialPortPool.Core.Protocols;  // ← AJOUTÉ: Pour RS232ProtocolHandler
 
 namespace SerialPortPool.Core.Extensions;
 
@@ -28,7 +27,7 @@ public static class Sprint5ServiceExtensions
 
         // Protocol services
         services.AddScoped<IProtocolHandlerFactory, ProtocolHandlerFactory>();
-        services.AddScoped<RS232ProtocolHandler>();
+        services.AddScoped<RS232ProtocolHandler>();  // ← FIXED: Now found with proper using
 
         // Future Sprint 6 protocol handlers (commented for now):
         // services.AddScoped<RS485ProtocolHandler>();
@@ -94,8 +93,6 @@ public static class Sprint5ServiceExtensions
 
         return services.AddSprint5Services(productionOptions);
     }
-
-   // SerialPortPool.Core/Extensions/sprint5-services-registration.cs - LIGNE À CORRIGER
 
     /// <summary>
     /// Validate Sprint 5 service registration

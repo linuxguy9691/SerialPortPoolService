@@ -1,5 +1,5 @@
 // ===================================================================
-// PROTOCOL HANDLER FACTORY - VERSION COMPLÈTE
+// PROTOCOL HANDLER FACTORY - IMPLÉMENTATION COMPLÈTE CORRIGÉE
 // Fichier: SerialPortPool.Core/Services/ProtocolHandlerFactory.cs
 // ===================================================================
 
@@ -132,6 +132,17 @@ namespace SerialPortPool.Core.Services
                 _logger.LogError(ex, error);
                 throw new InvalidOperationException(error, ex);
             }
+        }
+
+        /// <summary>
+        /// AJOUTÉ: Obtient un gestionnaire pour le protocole spécifié (alias pour CreateHandler)
+        /// </summary>
+        /// <param name="protocolName">Nom du protocole</param>
+        /// <returns>Instance du gestionnaire de protocole</returns>
+        public IProtocolHandler GetHandler(string protocolName)
+        {
+            // Delegate to CreateHandler - same functionality
+            return CreateHandler(protocolName);
         }
 
         #endregion

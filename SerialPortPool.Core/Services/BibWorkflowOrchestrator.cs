@@ -1,4 +1,4 @@
-// SerialPortPool.Core/Services/BibWorkflowOrchestrator.cs - NEW Week 2
+// SerialPortPool.Core/Services/BibWorkflowOrchestrator.cs - FIXED SIGNATURES
 using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
 using SerialPortPool.Core.Models;
@@ -12,7 +12,7 @@ namespace SerialPortPool.Core.Services;
 /// </summary>
 public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
 {
-    private readonly IPortReservationService _reservationService;  // ← ZERO TOUCH: Uses existing wrapper
+    private readonly IPortReservationService _reservationService;
     private readonly IBibConfigurationLoader _configLoader;
     private readonly IBibMappingService _bibMapping;
     private readonly IProtocolHandlerFactory _protocolFactory;
@@ -92,7 +92,8 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
             var protocolHandler = _protocolFactory.GetHandler(portConfig.Protocol);
             var protocolConfig = CreateProtocolConfiguration(physicalPort, portConfig);
 
-            session = await protocolHandler.OpenSessionAsync(protocolConfig);
+            // FIXED: OpenSessionAsync with correct signature
+            session = await protocolHandler.OpenSessionAsync(protocolConfig, cancellationToken);
             workflowResult.SessionId = session.SessionId;
             workflowResult.SessionOpened = true;
 
@@ -354,6 +355,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
 
     /// <summary>
     /// Execute a command sequence (Start/Test/Stop)
+    /// FIXED: Correct parameter order for ExecuteCommandAsync
     /// </summary>
     private async Task<CommandSequenceResult> ExecuteCommandSequenceAsync(
         IProtocolHandler protocolHandler,
@@ -377,7 +379,8 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
                     break;
                 }
 
-                var commandResult = await protocolHandler.ExecuteCommandAsync(session, command);
+                // FIXED: Correct parameter order and added missing cancellationToken
+                var commandResult = await protocolHandler.ExecuteCommandAsync(session, command, cancellationToken);
                 sequenceResult.CommandResults.Add(commandResult);
 
                 _logger.LogDebug($"📥 {phaseName} command result: {commandResult}");
@@ -412,6 +415,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
 
     /// <summary>
     /// Cleanup workflow resources
+    /// FIXED: Correct parameter order for CloseSessionAsync
     /// </summary>
     private async Task CleanupWorkflowAsync(ProtocolSession? session, PortReservation? reservation, string workflowId)
     {
@@ -425,7 +429,8 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
                 try
                 {
                     var protocolHandler = _protocolFactory.GetHandler(session.ProtocolName);
-                    await protocolHandler.CloseSessionAsync(session);
+                    // FIXED: Added CancellationToken.None parameter
+                    await protocolHandler.CloseSessionAsync(session, CancellationToken.None);
                     _logger.LogDebug($"📡 Protocol session closed: {session.SessionId}");
                 }
                 catch (Exception ex)
@@ -479,111 +484,4 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
     }
 
     #endregion
-}
-
-/// <summary>
-/// Interface for BIB workflow orchestration
-/// </summary>
-public interface IBibWorkflowOrchestrator
-{
-    Task<BibWorkflowResult> ExecuteBibWorkflowAsync(
-        string bibId,
-        string uutId,
-        int portNumber,
-        string clientId = "BibWorkflow",
-        CancellationToken cancellationToken = default);
-        
-    Task<BibWorkflowResult> ExecuteBibWorkflowAutoPortAsync(
-        string bibId,
-        string uutId,
-        string clientId = "BibWorkflowAuto",
-        CancellationToken cancellationToken = default);
-        
-    Task<BibWorkflowStatistics> GetWorkflowStatisticsAsync();
-}
-
-/// <summary>
-/// Complete BIB workflow execution result
-/// </summary>
-public class BibWorkflowResult
-{
-    public string WorkflowId { get; set; } = string.Empty;
-    public string BibId { get; set; } = string.Empty;
-    public string UutId { get; set; } = string.Empty;
-    public int PortNumber { get; set; }
-    public string ClientId { get; set; } = string.Empty;
-    public string ProtocolName { get; set; } = string.Empty;
-    public string PhysicalPort { get; set; } = string.Empty;
-    public string ReservationId { get; set; } = string.Empty;
-    public string SessionId { get; set; } = string.Empty;
-    
-    public DateTime StartTime { get; set; }
-    public DateTime EndTime { get; set; }
-    public TimeSpan Duration => EndTime - StartTime;
-    
-    public bool Success { get; set; }
-    public string? ErrorMessage { get; set; }
-    
-    // Workflow phases
-    public bool ConfigurationLoaded { get; set; }
-    public bool PortReserved { get; set; }
-    public bool SessionOpened { get; set; }
-    
-    // 3-phase results
-    public CommandSequenceResult? StartResult { get; set; }
-    public CommandSequenceResult? TestResult { get; set; }
-    public CommandSequenceResult? StopResult { get; set; }
-    
-    /// <summary>
-    /// Check if all 3 phases completed successfully
-    /// </summary>
-    public bool AllPhasesSuccessful()
-    {
-        return StartResult?.IsSuccess == true &&
-               TestResult?.IsSuccess == true &&
-               StopResult?.IsSuccess == true;
-    }
-    
-    /// <summary>
-    /// Set error state
-    /// </summary>
-    public BibWorkflowResult WithError(string errorMessage)
-    {
-        Success = false;
-        ErrorMessage = errorMessage;
-        if (EndTime == default)
-            EndTime = DateTime.Now;
-        return this;
-    }
-    
-    /// <summary>
-    /// Get workflow summary
-    /// </summary>
-    public string GetSummary()
-    {
-        var status = Success ? "✅ SUCCESS" : "❌ FAILED";
-        var phases = $"Start: {StartResult?.IsSuccess ?? false}, Test: {TestResult?.IsSuccess ?? false}, Stop: {StopResult?.IsSuccess ?? false}";
-        return $"{status}: {BibId}.{UutId}.{PortNumber} ({ProtocolName}) - {phases} [{Duration.TotalSeconds:F1}s]";
-    }
-    
-    public override string ToString() => GetSummary();
-}
-
-/// <summary>
-/// BIB workflow statistics
-/// </summary>
-public class BibWorkflowStatistics
-{
-    public int TotalWorkflows { get; set; }
-    public int SuccessfulWorkflows { get; set; }
-    public int FailedWorkflows { get; set; }
-    public TimeSpan AverageWorkflowDuration { get; set; }
-    public DateTime GeneratedAt { get; set; }
-    
-    public double SuccessRate => TotalWorkflows > 0 ? (double)SuccessfulWorkflows / TotalWorkflows * 100.0 : 0.0;
-    
-    public override string ToString()
-    {
-        return $"Workflows: {SuccessfulWorkflows}/{TotalWorkflows} successful ({SuccessRate:F1}%), avg duration: {AverageWorkflowDuration.TotalSeconds:F1}s";
-    }
 }
