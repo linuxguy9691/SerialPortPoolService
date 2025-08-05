@@ -498,7 +498,7 @@ SerialPortPool.Core/
 - **Foundation Ready** - Sprint 7 can add multi-protocol support
 
 ### **Expected Result:**
-```csharp
+```csharp   
 // These 4 lines will work in production after Sprint 6
 var bibConfig = await configLoader.LoadBibAsync(xmlPath, bibId);        // ✅ WORKS
 var protocolHandler = factory.CreateHandler("rs232");                   // ✅ WORKS
