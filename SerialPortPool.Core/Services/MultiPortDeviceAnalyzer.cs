@@ -1,4 +1,4 @@
-// SerialPortPool.Core/Services/MultiPortDeviceAnalyzer.cs - FIXED for FT4232HL
+// SerialPortPool.Core/Services/MultiPortDeviceAnalyzer.cs - FIXED for FT4232HL Variants
 using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
 using SerialPortPool.Core.Models;
@@ -8,6 +8,7 @@ namespace SerialPortPool.Core.Services;
 /// <summary>
 /// Service for analyzing and grouping multi-port FTDI devices (FIXED for FT4232HL)
 /// Detects when multiple serial ports belong to the same physical device (e.g., FT4232HL = 4 ports)
+/// CORRECTED: Properly handles FT9A9OFOA/B/C/D variants as same device
 /// </summary>
 public class MultiPortDeviceAnalyzer : IMultiPortDeviceAnalyzer
 {
@@ -90,7 +91,7 @@ public class MultiPortDeviceAnalyzer : IMultiPortDeviceAnalyzer
 
     /// <summary>
     /// Group ports by physical device using serial numbers and device IDs
-    /// ENHANCED: Improved algorithm with better logging and FT4232HL support
+    /// CORRECTED: Now properly groups FT4232H variants (A/B/C/D) together
     /// </summary>
     public Dictionary<string, List<SerialPortInfo>> GroupPortsByDevice(IEnumerable<SerialPortInfo> ports)
     {
@@ -110,7 +111,7 @@ public class MultiPortDeviceAnalyzer : IMultiPortDeviceAnalyzer
             }
             
             groups[deviceKey].Add(port);
-            _logger.LogDebug($"   ➕ Added {port.PortName} to group {deviceKey}");
+            _logger.LogDebug($"   ➕ Added {port.PortName} to group {deviceKey} (original serial: {port.FtdiInfo?.SerialNumber})");
         }
 
         // Log grouping results
@@ -118,7 +119,8 @@ public class MultiPortDeviceAnalyzer : IMultiPortDeviceAnalyzer
         foreach (var group in groups)
         {
             var ports_str = string.Join(", ", group.Value.Select(p => p.PortName));
-            _logger.LogDebug($"   📦 {group.Key}: {group.Value.Count} ports ({ports_str})");
+            var serials_str = string.Join(", ", group.Value.Where(p => p.FtdiInfo != null).Select(p => p.FtdiInfo!.SerialNumber));
+            _logger.LogDebug($"   📦 {group.Key}: {group.Value.Count} ports ({ports_str}) - serials: [{serials_str}]");
             
             // Check for potential FT4232HL
             var ftdiPorts = group.Value.Where(p => p.IsFtdiDevice).ToList();
@@ -138,14 +140,14 @@ public class MultiPortDeviceAnalyzer : IMultiPortDeviceAnalyzer
 
     /// <summary>
     /// Get device grouping key for identifying ports that belong to the same physical device
-    /// ENHANCED: Better algorithm for FT4232HL and improved fallback logic
+    /// CORRECTED: Now properly handles FT4232H variants (A/B/C/D suffix removal)
     /// </summary>
     private string GetDeviceGroupingKey(SerialPortInfo port)
     {
         // Priority 1: FTDI devices with serial number (most reliable)
         if (port.IsFtdiDevice && port.FtdiInfo != null && !string.IsNullOrEmpty(port.FtdiInfo.SerialNumber))
         {
-            // FIXED: Special handling for FT4232HL multi-port devices
+            // FIXED: Use base serial number that removes A/B/C/D variants
             var baseSerial = ExtractBaseSerialNumber(port.FtdiInfo.SerialNumber, port.FtdiInfo.ChipType);
             var key = $"FTDI_{baseSerial}";
             _logger.LogDebug($"🔑 FTDI grouping key for {port.PortName}: {key} (original: {port.FtdiInfo.SerialNumber})");
@@ -168,34 +170,48 @@ public class MultiPortDeviceAnalyzer : IMultiPortDeviceAnalyzer
     }
 
     /// <summary>
-    /// Extract base serial number for device grouping (NEW: FT4232HL support)
+    /// Extract base serial number for device grouping - CORRECTED for FT4232H variants
+    /// FT9A9OFOA/B/C/D → FT9A9OFO (remove A/B/C/D suffix)
     /// </summary>
     private string ExtractBaseSerialNumber(string serialNumber, string chipType)
     {
         if (string.IsNullOrEmpty(serialNumber))
             return "UNKNOWN";
 
-        // For FT4232HL: Remove the last character which indicates the port (A, B, C, D)
-        // Example: FT9A9OFOA -> FT9A9OFO (remove A)
-        //          FT9A9OFOB -> FT9A9OFO (remove B)
-        //          FT9A9OFOC -> FT9A9OFO (remove C)
-        //          FT9A9OFOD -> FT9A9OFO (remove D)
+        // CORRECTED: For FT4232HL/FT4232H devices, remove A/B/C/D suffix 
+        // This ensures FT9A9OFOA, FT9A9OFOB, FT9A9OFOC, FT9A9OFOD all become FT9A9OFO
         if (chipType == "FT4232HL" || chipType == "FT4232H")
         {
             if (serialNumber.Length > 1)
             {
                 var lastChar = serialNumber[serialNumber.Length - 1];
-                // Check if last character is A, B, C, or D (typical for FT4232HL)
+                // Check if last character is A, B, C, or D (typical for FT4232H variants)
                 if (lastChar >= 'A' && lastChar <= 'D')
                 {
                     var baseSerial = serialNumber.Substring(0, serialNumber.Length - 1);
-                    _logger.LogDebug($"🔍 FT4232HL base serial: {serialNumber} -> {baseSerial}");
+                    _logger.LogDebug($"🔍 FT4232H base serial: {serialNumber} -> {baseSerial}");
                     return baseSerial;
                 }
             }
         }
 
-        // For other chips, use the full serial number
+        // ENHANCEMENT: Also handle other known multi-port chips with variants
+        if (chipType == "FT2232H" || chipType == "FT2232HL")
+        {
+            if (serialNumber.Length > 1)
+            {
+                var lastChar = serialNumber[serialNumber.Length - 1];
+                // FT2232H typically uses A/B suffix
+                if (lastChar == 'A' || lastChar == 'B')
+                {
+                    var baseSerial = serialNumber.Substring(0, serialNumber.Length - 1);
+                    _logger.LogDebug($"🔍 FT2232H base serial: {serialNumber} -> {baseSerial}");
+                    return baseSerial;
+                }
+            }
+        }
+
+        // For single-port chips or unknown patterns, use the full serial number
         return serialNumber;
     }
 
@@ -261,15 +277,16 @@ public class MultiPortDeviceAnalyzer : IMultiPortDeviceAnalyzer
             // Set device-level information
             if (ftdiInfo != null)
             {
-                deviceGroup.SerialNumber = ftdiInfo.SerialNumber;
+                // CORRECTED: Use the base serial number for the device group
+                deviceGroup.SerialNumber = ExtractBaseSerialNumber(ftdiInfo.SerialNumber, ftdiInfo.ChipType);
                 deviceGroup.DeviceInfo = ftdiInfo;
                 
-                _logger.LogDebug($"📱 FTDI device group: {ftdiInfo.ChipType}, Serial: {ftdiInfo.SerialNumber}");
+                _logger.LogDebug($"📱 FTDI device group: {ftdiInfo.ChipType}, Base Serial: {deviceGroup.SerialNumber} (from {ftdiInfo.SerialNumber})");
                 
                 // Special handling for FT4232HL
                 if (ftdiInfo.ChipType == "FT4232HL")
                 {
-                    _logger.LogInformation($"🎯 FT4232HL device group created: {ports.Count} ports");
+                    _logger.LogInformation($"🎯 FT4232HL device group created: {ports.Count} ports with base serial {deviceGroup.SerialNumber}");
                     
                     // Validate expected port count
                     if (ports.Count != 4)
@@ -287,7 +304,7 @@ public class MultiPortDeviceAnalyzer : IMultiPortDeviceAnalyzer
                         // Create SystemInfo from EEPROM data
                         var systemInfo = new SystemInfo
                         {
-                            SerialNumber = ftdiInfo.SerialNumber,
+                            SerialNumber = deviceGroup.SerialNumber, // Use base serial, not variant
                             Manufacturer = ftdiInfo.Manufacturer,
                             ProductDescription = ftdiInfo.ProductDescription,
                             EepromData = eepromData,
