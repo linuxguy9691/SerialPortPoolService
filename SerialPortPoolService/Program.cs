@@ -7,6 +7,7 @@ using SerialPortPool.Core.Interfaces;
 using SerialPortPool.Core.Models;
 using SerialPortPool.Core.Services;
 using SerialPortPoolService.Services;
+using SerialPortPool.Core.Protocols; 
 
 namespace SerialPortPoolService;
 

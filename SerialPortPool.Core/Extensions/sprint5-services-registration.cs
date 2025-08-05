@@ -23,7 +23,7 @@ public static class Sprint5ServiceExtensions
         // Configuration services
         services.AddSingleton(configOptions ?? new ConfigurationLoadOptions());
         services.AddScoped<IConfigurationValidator, ConfigurationValidator>();
-        services.AddScoped<IXmlConfigurationLoader, XmlConfigurationLoader>();
+        services.AddScoped<IBibConfigurationLoader, XmlBibConfigurationLoader>();
 
         // Protocol services
         services.AddScoped<IProtocolHandlerFactory, ProtocolHandlerFactory>();

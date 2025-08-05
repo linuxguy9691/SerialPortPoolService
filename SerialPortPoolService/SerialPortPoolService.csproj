@@ -11,7 +11,6 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
     <UseWPF>false</UseWPF>
     <StartupObject>SerialPortPoolService.Program</StartupObject>
   </PropertyGroup>
