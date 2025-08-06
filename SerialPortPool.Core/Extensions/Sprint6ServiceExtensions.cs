@@ -1,5 +1,5 @@
 // ===================================================================
-// SIMPLIFIED: Sprint6ServiceExtensions.cs - Core services only
+// FIXED: Sprint6ServiceExtensions.cs - Core services only
 // File: SerialPortPool.Core/Extensions/Sprint6ServiceExtensions.cs
 // ===================================================================
 
@@ -14,34 +14,35 @@ using SerialPortPool.Core.Models;
 namespace SerialPortPool.Core.Extensions;
 
 /// <summary>
-/// Sprint 6 - Core Services Registration (Simplified)
+/// Sprint 6 - Core Services Registration (FIXED)
 /// Registers ONLY the essential services needed for the 4 critical lines
 /// </summary>
 public static class Sprint6ServiceExtensions
 {
     /// <summary>
-    /// Add Sprint 6 Core Services - PRODUCTION READY
+    /// Add Sprint 6 Core Services - PRODUCTION READY (FIXED)
     /// </summary>
     public static IServiceCollection AddSprint6CoreServices(this IServiceCollection services)
     {
         // 1️⃣ Memory Cache (required by XML services)
         services.AddMemoryCache();
 
-        // 2️⃣ XML Configuration Services
+        // 2️⃣ XML Configuration Services - FIXED
         services.AddScoped<IBibConfigurationLoader, XmlBibConfigurationLoader>();
-        services.AddScoped<IXmlConfigurationLoader, XmlConfigurationLoader>();
+        services.AddScoped<IXmlConfigurationLoader, XmlConfigurationLoader>();  // ← NOW IMPLEMENTED
         services.AddScoped<IConfigurationValidator, ConfigurationValidator>();
 
         // 3️⃣ Protocol Handler Services  
         services.AddScoped<IProtocolHandlerFactory, ProtocolHandlerFactory>();
         services.AddScoped<RS232ProtocolHandler>();
 
-        // 4️⃣ Essential Supporting Services
+        // 4️⃣ Essential Supporting Services - FIXED namespace conflict
         services.AddScoped<ISerialPortDiscovery, EnhancedSerialPortDiscoveryService>();
         services.AddScoped<IFtdiDeviceReader, FtdiDeviceReader>();
         services.AddScoped<ISerialPortValidator, SerialPortValidator>();
         services.AddScoped<ISystemInfoCache, SystemInfoCache>();
-        services.AddScoped<ISerialPortPool, SerialPortPool>();
+        // FIXED: Use full namespace to avoid conflict
+        services.AddScoped<ISerialPortPool, SerialPortPool.Core.Services.SerialPortPool>();
 
         return services;
     }
@@ -67,7 +68,7 @@ public static class Sprint6ServiceExtensions
     }
 
     /// <summary>
-    /// Validate Sprint 6 service registration
+    /// Validate Sprint 6 service registration - FIXED
     /// </summary>
     public static void ValidateSprint6Services(this IServiceProvider serviceProvider)
     {
@@ -78,6 +79,9 @@ public static class Sprint6ServiceExtensions
             // Test critical services
             var configLoader = serviceProvider.GetRequiredService<IBibConfigurationLoader>();
             Console.WriteLine("✅ IBibConfigurationLoader registered");
+
+            var xmlConfigLoader = serviceProvider.GetRequiredService<IXmlConfigurationLoader>();
+            Console.WriteLine("✅ IXmlConfigurationLoader registered");
 
             var protocolFactory = serviceProvider.GetRequiredService<IProtocolHandlerFactory>();
             var protocols = protocolFactory.GetSupportedProtocols();
@@ -94,6 +98,10 @@ public static class Sprint6ServiceExtensions
             // Test cache
             var cache = serviceProvider.GetRequiredService<IMemoryCache>();
             Console.WriteLine("✅ IMemoryCache registered");
+
+            // Test pool service (FIXED namespace)
+            var pool = serviceProvider.GetRequiredService<ISerialPortPool>();
+            Console.WriteLine("✅ ISerialPortPool registered");
 
             Console.WriteLine("🎉 Sprint 6 validation PASSED - All systems ready!");
         }
