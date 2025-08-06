@@ -1,8 +1,3 @@
-// ===================================================================
-// SPRINT 6 - PROJECT FILE FOR QUICK TEST
-// File: tests/Sprint6QuickTest/Sprint6QuickTest.csproj
-// ===================================================================
-
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
