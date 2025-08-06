@@ -190,6 +190,8 @@ class Program
         
         try
         {
+            // ✅ AJOUT MANQUANT: IMemoryCache pour XmlBibConfigurationLoader
+            services.AddMemoryCache();
             // Sprint 5: XML Configuration System - PRODUCTION READY
             services.AddScoped<IBibConfigurationLoader, XmlBibConfigurationLoader>();
             
