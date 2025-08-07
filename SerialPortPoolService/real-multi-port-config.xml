@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+    <bibs>
+        <!-- Configuration réelle basée sur votre hardware FTDI détecté -->
+        <bib id="bib_real_test" name="Real Multi-Port BIB Test Configuration">
+            <description>Test réel avec FT232R + FT4232HL multi-port</description>
+            <uuts>
+                <!-- UUT Principal sur FT232R (COM6) -->
+                <uut id="uut_main_ft232r" name="Main UUT on FT232R">
+                    <description>UUT principal sur COM6 (FT232R)</description>
+                    <ports>
+                        <port number="0" protocol="rs232" type="primary">
+                            <connection>
+                                <portName>COM6</portName>
+                                <baudRate>9600</baudRate>
+                                <dataBits>8</dataBits>
+                                <parity>None</parity>
+                                <stopBits>One</stopBits>
+                                <readTimeout>3000</readTimeout>
+                                <writeTimeout>3000</writeTimeout>
+                            </connection>
+                            <commands>
+                                <startCommands>
+                                    <command>
+                                        <text>MAIN_POWER_ON\r\n</text>
+                                        <expectedResponse>^MAIN_POWER:ON$</expectedResponse>
+                                        <timeout>2000</timeout>
+                                        <description>Power on main UUT</description>
+                                    </command>
+                                    <command>
+                                        <text>MAIN_INIT\r\n</text>
+                                        <expectedResponse>^MAIN_INIT:OK$</expectedResponse>
+                                        <timeout>2000</timeout>
+                                        <description>Initialize main UUT</description>
+                                    </command>
+                                </startCommands>
+                                <testCommands>
+                                    <command>
+                                        <text>MAIN_TEST_STATUS\r\n</text>
+                                        <expectedResponse>^MAIN_STATUS:READY$</expectedResponse>
+                                        <timeout>3000</timeout>
+                                        <description>Test main UUT status</description>
+                                    </command>
+                                    <command>
+                                        <text>MAIN_SELF_TEST\r\n</text>
+                                        <expectedResponse>^MAIN_SELF_TEST:PASS$</expectedResponse>
+                                        <timeout>5000</timeout>
+                                        <description>Main UUT self test</description>
+                                    </command>
+                                </testCommands>
+                                <stopCommands>
+                                    <command>
+                                        <text>MAIN_SHUTDOWN\r\n</text>
+                                        <expectedResponse>^MAIN_SHUTDOWN:OK$</expectedResponse>
+                                        <timeout>2000</timeout>
+                                        <description>Shutdown main UUT</description>
+                                    </command>
+                                </stopCommands>
+                            </commands>
+                        </port>
+                    </ports>
+                </uut>
+
+                <!-- UUT Multi-Port sur FT4232HL (COM11, COM12, COM13) -->
+                <uut id="uut_multiport_ft4232" name="Multi-Port UUT on FT4232HL">
+                    <description>UUT multi-port sur COM11,12,13 (FT4232HL)</description>
+                    <ports>
+                        <!-- Port 1 sur COM11 -->
+                        <port number="1" protocol="rs232" type="secondary">
+                            <connection>
+                                <portName>COM11</portName>
+                                <baudRate>9600</baudRate>
+                                <dataBits>8</dataBits>
+                                <parity>None</parity>
+                                <stopBits>One</stopBits>
+                                <readTimeout>3000</readTimeout>
+                                <writeTimeout>3000</writeTimeout>
+                            </connection>
+                            <commands>
+                                <startCommands>
+                                    <command>
+                                        <text>PORT1_ENABLE\r\n</text>
+                                        <expectedResponse>^PORT1:ENABLED$</expectedResponse>
+                                        <timeout>2000</timeout>
+                                        <description>Enable port 1</description>
+                                    </command>
+                                </startCommands>
+                                <testCommands>
+                                    <command>
+                                        <text>PORT1_TEST\r\n</text>
+                                        <expectedResponse>^PORT1:TEST_OK$</expectedResponse>
+                                        <timeout>3000</timeout>
+                                        <description>Test port 1 functionality</description>
+                                    </command>
+                                    <command>
+                                        <text>PORT1_DATA_CHECK\r\n</text>
+                                        <expectedResponse>^PORT1:DATA_VALID$</expectedResponse>
+                                        <timeout>2000</timeout>
+                                        <description>Check port 1 data integrity</description>
+                                    </command>
+                                </testCommands>
+                                <stopCommands>
+                                    <command>
+                                        <text>PORT1_DISABLE\r\n</text>
+                                        <expectedResponse>^PORT1:DISABLED$</expectedResponse>
+                                        <timeout>2000</timeout>
+                                        <description>Disable port 1</description>
+                                    </command>
+                                </stopCommands>
+                            </commands>
+                        </port>
+
+                        <!-- Port 2 sur COM12 -->
+                        <port number="2" protocol="rs232" type="secondary">
+                            <connection>
+                                <portName>COM12</portName>
+                                <baudRate>9600</baudRate>
+                                <dataBits>8</dataBits>
+                                <parity>None</parity>
+                                <stopBits>One</stopBits>
+                                <readTimeout>3000</readTimeout>
+                                <writeTimeout>3000</writeTimeout>
+                            </connection>
+                            <commands>
+                                <startCommands>
+                                    <command>
+                                        <text>PORT2_ENABLE\r\n</text>
+                                        <expectedResponse>^PORT2:ENABLED$</expectedResponse>
+                                        <timeout>2000</timeout>
+                                        <description>Enable port 2</description>
+                                    </command>
+                                </startCommands>
+                                <testCommands>
+                                    <command>
+                                        <text>PORT2_TEST\r\n</text>
+                                        <expectedResponse>^PORT2:TEST_OK$</expectedResponse>
+                                        <timeout>3000</timeout>
+                                        <description>Test port 2 functionality</description>
+                                    </command>
+                                    <command>
+                                        <text>PORT2_DATA_CHECK\r\n</text>
+                                        <expectedResponse>^PORT2:DATA_VALID$</expectedResponse>
+                                        <timeout>2000</timeout>
+                                        <description>Check port 2 data integrity</description>
+                                    </command>
+                                </testCommands>
+                                <stopCommands>
+                                    <command>
+                                        <text>PORT2_DISABLE\r\n</text>
+                                        <expectedResponse>^PORT2:DISABLED$</expectedResponse>
+                                        <timeout>2000</timeout>
+                                        <description>Disable port 2</description>
+                                    </command>
+                                </stopCommands>
+                            </commands>
+                        </port>
+
+                        <!-- Port 3 sur COM13 -->
+                        <port number="3" protocol="rs232" type="secondary">
+                            <connection>
+                                <portName>COM13</portName>
+                                <baudRate>9600</baudRate>
+                                <dataBits>8</dataBits>
+                                <parity>None</parity>
+                                <stopBits>One</stopBits>
+                                <readTimeout>3000</readTimeout>
+                                <writeTimeout>3000</writeTimeout>
+                            </connection>
+                            <commands>
+                                <startCommands>
+                                    <command>
+                                        <text>PORT3_ENABLE\r\n</text>
+                                        <expectedResponse>^PORT3:ENABLED$</expectedResponse>
+                                        <timeout>2000</timeout>
+                                        <description>Enable port 3</description>
+                                    </command>
+                                </startCommands>
+                                <testCommands>
+                                    <command>
+                                        <text>PORT3_TEST\r\n</text>
+                                        <expectedResponse>^PORT3:TEST_OK$</expectedResponse>
+                                        <timeout>3000</timeout>
+                                        <description>Test port 3 functionality</description>
+                                    </command>
+                                    <command>
+                                        <text>PORT3_DATA_CHECK\r\n</text>
+                                        <expectedResponse>^PORT3:DATA_VALID$</expectedResponse>
+                                        <timeout>2000</timeout>
+                                        <description>Check port 3 data integrity</description>
+                                    </command>
+                                </testCommands>
+                                <stopCommands>
+                                    <command>
+                                        <text>PORT3_DISABLE\r\n</text>
+                                        <expectedResponse>^PORT3:DISABLED$</expectedResponse>
+                                        <timeout>2000</timeout>
+                                        <description>Disable port 3</description>
+                                    </command>
+                                </stopCommands>
+                            </commands>
+                        </port>
+                    </ports>
+                </uut>
+            </uuts>
+        </bib>
+    </bibs>
+</configuration>
