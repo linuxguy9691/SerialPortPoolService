@@ -1,15 +1,12 @@
-<!-- ===================================================================
-     SERIALPORTPOOLSERVICE.CSPROJ - VERSIONS MISES À JOUR
-     Fichier: SerialPortPoolService/SerialPortPoolService.csproj
-     ================================================================== -->
-
+<!-- FIXED: SerialPortPoolService.csproj -->
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
+    <!-- FIXED: Exe au lieu de WinExe pour avoir une console -->
+    <OutputType>Exe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
-    <UseWindowsForms>true</UseWindowsForms>
+    <!-- REMOVED: UseWindowsForms car pas nécessaire pour un service console -->
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>false</UseWPF>
     <StartupObject>SerialPortPoolService.Program</StartupObject>
