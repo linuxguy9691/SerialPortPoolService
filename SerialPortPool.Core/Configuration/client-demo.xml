@@ -1,4 +1,3 @@
-<!-- SerialPortPool.Core/Configuration/client-demo.xml -->
 <?xml version="1.0" encoding="UTF-8"?>
 <root>
   <bib id="client_demo" description="Production Client Demo BIB">
