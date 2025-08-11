@@ -17,19 +17,19 @@
         
         <!-- Simple TEST command as requested -->
         <start>
-          <command>AT+INIT\r\n</command>
+          <command>INIT_RS232</command>
           <expected_response>READY</expected_response>
           <timeout_ms>3000</timeout_ms>
         </start>
         
         <test>
-          <command>TEST\r\n</command>
+          <command>TEST</command>
           <expected_response>PASS</expected_response>
           <timeout_ms>5000</timeout_ms>
         </test>
         
         <stop>
-          <command>AT+QUIT\r\n</command>
+          <command>AT+QUIT</command>
           <expected_response>BYE</expected_response>
           <timeout_ms>2000</timeout_ms>
         </stop>

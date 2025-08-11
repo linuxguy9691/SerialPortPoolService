@@ -42,8 +42,8 @@ public class TemporaryBibMappingService : IBibMappingService
             new BibPortMapping
             {
                 PhysicalPort = "COM11",
-                BibId = "bib_001",
-                UutId = "uut_001", 
+                BibId = "client_demo",
+                UutId = "production_uut", 
                 PortNumber = 1,
                 DeviceType = "FT4232HL",
                 SerialNumber = "FT9A9OFO", // Base serial from your hardware
