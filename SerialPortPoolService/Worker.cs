@@ -200,14 +200,14 @@ public class EnhancedWorker : BackgroundService
     {
         try
         {
-            _logger.LogInformation("🔍 BIB: enhanced_client_demo");
+            _logger.LogInformation("🔍 BIB: client_demo");
             _logger.LogInformation("🔧 UUT: production_uut");
             _logger.LogInformation("📍 Port: 1 (auto-discover)");
             _logger.LogInformation("🏭 Client: ENHANCED_PRODUCTION_CLIENT");
             
             // ✅ Exécution du workflow enhanced
             var result = await _orchestrator.ExecuteBibWorkflowAsync(
-                bibId: "enhanced_client_demo",
+                bibId: "client_demo",
                 uutId: "production_uut", 
                 portNumber: 1,
                 clientId: $"ENHANCED_CLIENT_CYCLE_{cycleNumber}",

@@ -396,7 +396,7 @@ class Program
         
         var enhancedDemoXml = $@"<?xml version=""1.0"" encoding=""UTF-8""?>
 <root>
-  <bib id=""enhanced_client_demo"" description=""Enhanced Production Client Demo with Loop Support"">
+  <bib id=""client_demo"" description=""Enhanced Production Client Demo with Loop Support"">
     <metadata>
       <board_type>production</board_type>
       <revision>v2.0</revision>
