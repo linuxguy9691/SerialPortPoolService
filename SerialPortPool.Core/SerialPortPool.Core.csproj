@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <!-- Extensions Microsoft pour Caching et DI (Versions sécurisées) -->
+    <PackageReference Include="FTD2XX.Net" Version="1.2.1" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
