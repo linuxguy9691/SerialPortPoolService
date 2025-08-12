@@ -1,30 +1,47 @@
-// SerialPortPoolService/Worker.cs - FIXED pour Sprint 7 Client Demo
+// SerialPortPoolService/EnhancedWorker.cs - ENHANCED CLIENT DEMO avec mode boucle
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
+using SerialPortPool.Core.Models;
 
 namespace SerialPortPoolService;
 
-public class Worker : BackgroundService
+public class EnhancedWorker : BackgroundService
 {
     private readonly IBibWorkflowOrchestrator _orchestrator;
     private readonly IBibConfigurationLoader _configLoader;
-    private readonly ILogger<Worker> _logger;
+    private readonly ILogger<EnhancedWorker> _logger;
+    private readonly ClientDemoConfiguration _config;
+    private readonly Dictionary<string, object> _runtimeConfig;
 
-    public Worker(
+    // ✅ NOUVEAU: Statistiques de performance en mode boucle
+    private int _totalCycles = 0;
+    private int _successfulCycles = 0;
+    private int _failedCycles = 0;
+    private TimeSpan _totalExecutionTime = TimeSpan.Zero;
+    private DateTime _startTime;
+
+    public EnhancedWorker(
         IBibWorkflowOrchestrator orchestrator, 
         IBibConfigurationLoader configLoader,
-        ILogger<Worker> logger)
+        ILogger<EnhancedWorker> logger,
+        ClientDemoConfiguration config,
+        Dictionary<string, object> runtimeConfig)
     {
         _orchestrator = orchestrator;
         _configLoader = configLoader;
         _logger = logger;
+        _config = config;
+        _runtimeConfig = runtimeConfig;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("🚀 SerialPortPool Service - Sprint 7 Client Demo Mode");
-        _logger.LogInformation("📋 Auto-Execution: BIB Workflow + FT4232 Detection + RS232 TEST");
+        _startTime = DateTime.Now;
+        
+        _logger.LogInformation("🚀 SerialPortPool Service - Enhanced Client Demo");
+        _logger.LogInformation("📋 Configuration: {XmlFile} | Loop: {LoopMode} | Interval: {Interval}s", 
+            _config.XmlConfigFile, _config.LoopMode, _config.LoopIntervalSeconds);
         _logger.LogInformation("=".PadRight(80, '='));
         
         // Délai de démarrage pour laisser les services s'initialiser
@@ -32,8 +49,8 @@ public class Worker : BackgroundService
         
         try
         {
-            // ✅ ÉTAPE 1: Configuration du loader avec le bon chemin
-            var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Configuration", "client-demo.xml");
+            // ✅ ÉTAPE 1: Configuration du loader avec le chemin configuré
+            var configPath = _runtimeConfig["config_path"] as string ?? throw new InvalidOperationException("Config path not set");
             _configLoader.SetDefaultConfigurationPath(configPath);
             
             _logger.LogInformation("📄 Configuration path set: {ConfigPath}", configPath);
@@ -41,63 +58,177 @@ public class Worker : BackgroundService
             // ✅ ÉTAPE 2: Vérification de la configuration
             if (!File.Exists(configPath))
             {
-                _logger.LogError("❌ Client demo configuration not found: {ConfigPath}", configPath);
-                _logger.LogError("💡 Please ensure client-demo.xml exists in Configuration folder");
+                _logger.LogError("❌ Configuration file not found: {ConfigPath}", configPath);
+                _logger.LogError("💡 Please ensure the XML configuration file exists");
                 return;
             }
             
-            _logger.LogInformation("📋 Executing Client Production Workflow...");
-            _logger.LogInformation("🔍 BIB: client_demo");
-            _logger.LogInformation("🔧 UUT: production_uut");
-            _logger.LogInformation("📍 Port: 1 (auto-discover)");
-            _logger.LogInformation("🏭 Client: PRODUCTION_CLIENT");
-            
-            // ✅ ÉTAPE 3: Exécution du workflow client
-            var result = await _orchestrator.ExecuteBibWorkflowAsync(
-                bibId: "client_demo",
-                uutId: "production_uut", 
-                portNumber: 1,
-                clientId: "PRODUCTION_CLIENT",
-                cancellationToken: stoppingToken
-            );
-            
-            // ✅ ÉTAPE 4: Affichage des résultats client-ready
-            LogClientDemoResults(result);
-            
-            if (result.Success)
+            // ✅ ÉTAPE 3: Mode d'exécution
+            if (_config.LoopMode)
             {
-                _logger.LogInformation("🎉 CLIENT DEMO COMPLETED SUCCESSFULLY!");
-                _logger.LogInformation("✅ Service ready for production deployment");
+                await ExecuteLoopMode(stoppingToken);
             }
             else
             {
-                _logger.LogError("❌ CLIENT DEMO FAILED - See details above");
-                _logger.LogError("🔧 Check hardware connections and configuration");
+                await ExecuteSingleRun(stoppingToken);
             }
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("🛑 Enhanced Client Demo stopped by user request");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "💥 Client Demo Exception");
-            _logger.LogError("🔧 Troubleshooting checklist:");
-            _logger.LogError("   • Verify FT4232 device is connected");
-            _logger.LogError("   • Check dummy UUT is running on correct port");
-            _logger.LogError("   • Ensure client-demo.xml configuration exists");
-            _logger.LogError("   • Verify no other software is using the serial port");
+            _logger.LogError(ex, "💥 Enhanced Client Demo Exception");
+            LogTroubleshootingInformation();
         }
-        
-        // Garder le service en marche pour monitoring
-        _logger.LogInformation("⏳ Service continuing to run for monitoring...");
+        finally
+        {
+            LogFinalStatistics();
+        }
+    }
+
+    // ✅ NOUVEAU: Mode boucle continue
+    private async Task ExecuteLoopMode(CancellationToken stoppingToken)
+    {
+        _logger.LogInformation("🔄 LOOP MODE ACTIVATED");
+        _logger.LogInformation("⏱️ Interval: {Interval} seconds between cycles", _config.LoopIntervalSeconds);
+        _logger.LogInformation("🛑 Press Ctrl+C to stop gracefully");
+        _logger.LogInformation("");
+
+        var cycleNumber = 0;
+        var maxCycles = _config.MaxCycles;
+
         while (!stoppingToken.IsCancellationRequested)
         {
-            await Task.Delay(60000, stoppingToken); // Check every minute
+            cycleNumber++;
+            
+            // Check if we should stop (for limited demo)
+            if (maxCycles.HasValue && cycleNumber > maxCycles.Value)
+            {
+                _logger.LogInformation("🎯 Reached maximum cycles ({MaxCycles}), stopping...", maxCycles.Value);
+                break;
+            }
+
+            _logger.LogInformation("🔄 =".PadRight(50, '='));
+            _logger.LogInformation("🔄 CYCLE #{CycleNumber} - {Time:HH:mm:ss}", cycleNumber, DateTime.Now);
+            _logger.LogInformation("🔄 =".PadRight(50, '='));
+
+            var cycleStartTime = DateTime.Now;
+            
+            try
+            {
+                // Exécuter le workflow
+                var success = await ExecuteWorkflowCycle(cycleNumber, stoppingToken);
+                
+                var cycleDuration = DateTime.Now - cycleStartTime;
+                _totalExecutionTime += cycleDuration;
+                _totalCycles++;
+                
+                if (success)
+                {
+                    _successfulCycles++;
+                    _logger.LogInformation("✅ CYCLE #{CycleNumber} COMPLETED - Duration: {Duration:F1}s", 
+                        cycleNumber, cycleDuration.TotalSeconds);
+                }
+                else
+                {
+                    _failedCycles++;
+                    _logger.LogError("❌ CYCLE #{CycleNumber} FAILED - Duration: {Duration:F1}s", 
+                        cycleNumber, cycleDuration.TotalSeconds);
+                }
+
+                // ✅ NOUVEAU: Statistiques intermédiaires toutes les 5 cycles
+                if (cycleNumber % 5 == 0)
+                {
+                    LogIntermediateStatistics(cycleNumber);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("🛑 Loop interrupted during cycle #{CycleNumber}", cycleNumber);
+                break;
+            }
+            catch (Exception ex)
+            {
+                _failedCycles++;
+                _totalCycles++;
+                _logger.LogError(ex, "💥 Exception during cycle #{CycleNumber}", cycleNumber);
+            }
+
+            // ✅ NOUVEAU: Attente intelligente avec cancellation
+            if (!stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogInformation("⏳ Waiting {Interval}s until next cycle...", _config.LoopIntervalSeconds);
+                _logger.LogInformation("");
+                
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(_config.LoopIntervalSeconds), stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.LogInformation("🛑 Loop cancelled during wait period");
+                    break;
+                }
+            }
         }
-        
-        _logger.LogInformation("🛑 Client Demo Service shutting down");
+
+        _logger.LogInformation("🔄 Loop mode completed after {Cycles} cycles", cycleNumber);
     }
-    
-    private void LogClientDemoResults(object result)
+
+    // ✅ NOUVEAU: Exécution simple (mode original)
+    private async Task ExecuteSingleRun(CancellationToken stoppingToken)
     {
-        // Utilisation de réflexion pour accéder aux propriétés
+        _logger.LogInformation("🎯 SINGLE RUN MODE");
+        _logger.LogInformation("📋 Executing Enhanced Client Production Workflow...");
+        
+        var success = await ExecuteWorkflowCycle(1, stoppingToken);
+        
+        if (success)
+        {
+            _logger.LogInformation("🎉 SINGLE RUN COMPLETED SUCCESSFULLY!");
+        }
+        else
+        {
+            _logger.LogError("❌ SINGLE RUN FAILED - See details above");
+        }
+    }
+
+    // ✅ NOUVEAU: Exécution d'un cycle de workflow
+    private async Task<bool> ExecuteWorkflowCycle(int cycleNumber, CancellationToken stoppingToken)
+    {
+        try
+        {
+            _logger.LogInformation("🔍 BIB: enhanced_client_demo");
+            _logger.LogInformation("🔧 UUT: production_uut");
+            _logger.LogInformation("📍 Port: 1 (auto-discover)");
+            _logger.LogInformation("🏭 Client: ENHANCED_PRODUCTION_CLIENT");
+            
+            // ✅ Exécution du workflow enhanced
+            var result = await _orchestrator.ExecuteBibWorkflowAsync(
+                bibId: "enhanced_client_demo",
+                uutId: "production_uut", 
+                portNumber: 1,
+                clientId: $"ENHANCED_CLIENT_CYCLE_{cycleNumber}",
+                cancellationToken: stoppingToken
+            );
+            
+            // ✅ Affichage des résultats enhanced
+            LogEnhancedWorkflowResults(result, cycleNumber);
+            
+            return GetWorkflowSuccess(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "💥 Workflow cycle #{CycleNumber} exception", cycleNumber);
+            return false;
+        }
+    }
+
+    // ✅ NOUVEAU: Logging amélioré des résultats
+    private void LogEnhancedWorkflowResults(object result, int cycleNumber)
+    {
         var resultType = result.GetType();
         
         try
@@ -106,12 +237,12 @@ public class Worker : BackgroundService
             var isSuccess = successProperty?.GetValue(result) as bool? ?? false;
             
             _logger.LogInformation("📊 =".PadRight(50, '='));
-            _logger.LogInformation("📊 CLIENT DEMO RESULTS");
+            _logger.LogInformation("📊 CYCLE #{CycleNumber} RESULTS", cycleNumber);
             _logger.LogInformation("📊 =".PadRight(50, '='));
             
             if (isSuccess)
             {
-                _logger.LogInformation("🎉 OVERALL STATUS: ✅ SUCCESS");
+                _logger.LogInformation("🎉 CYCLE STATUS: ✅ SUCCESS");
                 
                 // Phase results
                 var startResult = resultType.GetProperty("StartResult")?.GetValue(result);
@@ -123,35 +254,20 @@ public class Worker : BackgroundService
                 _logger.LogInformation("   🧪 Test Phase: {Result}", GetPhaseResult(testResult));  
                 _logger.LogInformation("   🔌 Stop Phase: {Result}", GetPhaseResult(stopResult));
                 
-                // Timing info
-                var durationProperty = resultType.GetProperty("Duration");
-                if (durationProperty?.GetValue(result) is TimeSpan duration)
-                {
-                    _logger.LogInformation("⏱️ Total Duration: {Duration:F1} seconds", duration.TotalSeconds);
-                }
+                // Timing et port info
+                LogTimingAndPortInfo(result);
                 
-                // Port info
-                var physicalPortProperty = resultType.GetProperty("PhysicalPort");
-                var physicalPort = physicalPortProperty?.GetValue(result) as string;
-                if (!string.IsNullOrEmpty(physicalPort))
+                // ✅ NOUVEAU: Informations enhanced pour mode boucle
+                if (_config.LoopMode)
                 {
-                    _logger.LogInformation("🔌 Port Used: {Port}", physicalPort);
+                    var successRate = _totalCycles > 0 ? (_successfulCycles * 100.0 / _totalCycles) : 0;
+                    _logger.LogInformation("📈 Success Rate: {SuccessRate:F1}% ({Success}/{Total})", 
+                        successRate, _successfulCycles, _totalCycles);
                 }
-                
-                // Protocol info
-                var protocolProperty = resultType.GetProperty("ProtocolName");
-                var protocol = protocolProperty?.GetValue(result) as string;
-                if (!string.IsNullOrEmpty(protocol))
-                {
-                    _logger.LogInformation("📡 Protocol: {Protocol}", protocol.ToUpper());
-                }
-                
-                _logger.LogInformation("🏭 Device Detection: AUTO (FT4232 Discovery)");
-                _logger.LogInformation("🎯 CLIENT REQUIREMENTS: FULLY SATISFIED");
             }
             else
             {
-                _logger.LogError("❌ OVERALL STATUS: FAILED");
+                _logger.LogError("❌ CYCLE STATUS: FAILED");
                 
                 var errorProperty = resultType.GetProperty("ErrorMessage");
                 var errorMessage = errorProperty?.GetValue(result) as string;
@@ -161,21 +277,126 @@ public class Worker : BackgroundService
                     _logger.LogError("💬 Error Details: {Error}", errorMessage);
                 }
                 
-                _logger.LogError("🔧 TROUBLESHOOTING STEPS:");
-                _logger.LogError("   • Check if FT4232 device is properly connected");
-                _logger.LogError("   • Verify dummy UUT is running: python dummy_uut.py --port COM8");
-                _logger.LogError("   • Ensure no other software is using the serial ports");
-                _logger.LogError("   • Check client-demo.xml configuration file");
-                _logger.LogError("   • Verify port mapping in BIB configuration");
+                // ✅ NOUVEAU: Troubleshooting contextuel pour mode boucle
+                if (_config.LoopMode)
+                {
+                    _logger.LogWarning("🔄 Continuing loop - next attempt in {Interval}s", _config.LoopIntervalSeconds);
+                }
+                else
+                {
+                    LogTroubleshootingInformation();
+                }
             }
             
             _logger.LogInformation("📊 =".PadRight(50, '='));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error displaying results");
+            _logger.LogError(ex, "Error displaying cycle #{CycleNumber} results", cycleNumber);
             _logger.LogInformation("Raw result: {Result}", result.ToString());
         }
+    }
+
+    // ✅ NOUVEAU: Statistiques intermédiaires
+    private void LogIntermediateStatistics(int currentCycle)
+    {
+        var uptime = DateTime.Now - _startTime;
+        var avgCycleDuration = _totalCycles > 0 ? _totalExecutionTime.TotalSeconds / _totalCycles : 0;
+        var successRate = _totalCycles > 0 ? (_successfulCycles * 100.0 / _totalCycles) : 0;
+        
+        _logger.LogInformation("📊 INTERMEDIATE STATISTICS (Cycle #{CurrentCycle})", currentCycle);
+        _logger.LogInformation("   ⏱️ Uptime: {Uptime:hh\\:mm\\:ss}", uptime);
+        _logger.LogInformation("   🔄 Total Cycles: {Total}", _totalCycles);
+        _logger.LogInformation("   ✅ Successful: {Successful} ({SuccessRate:F1}%)", _successfulCycles, successRate);
+        _logger.LogInformation("   ❌ Failed: {Failed}", _failedCycles);
+        _logger.LogInformation("   ⚡ Avg Cycle Duration: {AvgDuration:F1}s", avgCycleDuration);
+        _logger.LogInformation("");
+    }
+
+    // ✅ NOUVEAU: Statistiques finales
+    private void LogFinalStatistics()
+    {
+        var totalUptime = DateTime.Now - _startTime;
+        var avgCycleDuration = _totalCycles > 0 ? _totalExecutionTime.TotalSeconds / _totalCycles : 0;
+        var successRate = _totalCycles > 0 ? (_successfulCycles * 100.0 / _totalCycles) : 0;
+        
+        _logger.LogInformation("📊 =".PadRight(60, '='));
+        _logger.LogInformation("📊 FINAL ENHANCED DEMO STATISTICS");
+        _logger.LogInformation("📊 =".PadRight(60, '='));
+        _logger.LogInformation("🕐 Total Runtime: {Runtime:hh\\:mm\\:ss}", totalUptime);
+        _logger.LogInformation("🔄 Total Cycles Executed: {Total}", _totalCycles);
+        _logger.LogInformation("✅ Successful Cycles: {Successful}", _successfulCycles);
+        _logger.LogInformation("❌ Failed Cycles: {Failed}", _failedCycles);
+        _logger.LogInformation("📈 Overall Success Rate: {SuccessRate:F1}%", successRate);
+        _logger.LogInformation("⚡ Average Cycle Duration: {AvgDuration:F1} seconds", avgCycleDuration);
+        _logger.LogInformation("📄 Configuration Used: {ConfigFile}", _config.XmlConfigFile);
+        
+        if (_config.LoopMode)
+        {
+            _logger.LogInformation("🔄 Loop Interval: {Interval} seconds", _config.LoopIntervalSeconds);
+            var cyclesPerHour = 3600.0 / _config.LoopIntervalSeconds;
+            _logger.LogInformation("📊 Potential Cycles/Hour: {CyclesPerHour:F0}", cyclesPerHour);
+        }
+        
+        _logger.LogInformation("📊 =".PadRight(60, '='));
+        
+        // ✅ Recommandations basées sur les performances
+        if (_totalCycles > 0)
+        {
+            if (successRate >= 95)
+            {
+                _logger.LogInformation("🏆 EXCELLENT: System is performing optimally!");
+            }
+            else if (successRate >= 80)
+            {
+                _logger.LogWarning("⚠️ GOOD: System is stable but some improvement possible");
+            }
+            else
+            {
+                _logger.LogError("🔧 NEEDS ATTENTION: Success rate below 80% - check configuration and hardware");
+            }
+        }
+    }
+
+    // Helper methods
+    private void LogTimingAndPortInfo(object result)
+    {
+        var resultType = result.GetType();
+        
+        // Timing info
+        var durationProperty = resultType.GetProperty("Duration");
+        if (durationProperty?.GetValue(result) is TimeSpan duration)
+        {
+            _logger.LogInformation("⏱️ Cycle Duration: {Duration:F1} seconds", duration.TotalSeconds);
+        }
+        
+        // Port info
+        var physicalPortProperty = resultType.GetProperty("PhysicalPort");
+        var physicalPort = physicalPortProperty?.GetValue(result) as string;
+        if (!string.IsNullOrEmpty(physicalPort))
+        {
+            _logger.LogInformation("🔌 Port Used: {Port}", physicalPort);
+        }
+        
+        // Protocol info
+        var protocolProperty = resultType.GetProperty("ProtocolName");
+        var protocol = protocolProperty?.GetValue(result) as string;
+        if (!string.IsNullOrEmpty(protocol))
+        {
+            _logger.LogInformation("📡 Protocol: {Protocol}", protocol.ToUpper());
+        }
+    }
+
+    private void LogTroubleshootingInformation()
+    {
+        _logger.LogError("🔧 TROUBLESHOOTING CHECKLIST:");
+        _logger.LogError("   • Verify FT4232 device is connected and drivers installed");
+        _logger.LogError("   • Check if dummy UUT is running: python dummy_uut.py --port COM8");
+        _logger.LogError("   • Ensure no other software is using the serial ports");
+        _logger.LogError("   • Verify XML configuration file exists and is valid");
+        _logger.LogError("   • Check port mapping in BIB configuration");
+        _logger.LogError("   • Try running with different --xml-config file");
+        _logger.LogError("   • Verify COM port assignments in Device Manager");
     }
     
     private string GetPhaseResult(object? phaseResult)
@@ -191,6 +412,19 @@ public class Worker : BackgroundService
         catch
         {
             return "❓ UNKNOWN";
+        }
+    }
+
+    private bool GetWorkflowSuccess(object result)
+    {
+        try
+        {
+            var successProperty = result.GetType().GetProperty("Success");
+            return successProperty?.GetValue(result) as bool? ?? false;
+        }
+        catch
+        {
+            return false;
         }
     }
 }

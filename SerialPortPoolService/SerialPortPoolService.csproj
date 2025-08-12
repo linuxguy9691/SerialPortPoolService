@@ -1,4 +1,4 @@
-<!-- FIXED: SerialPortPoolService.csproj -->
+<!-- SerialPortPoolService.csproj - ENHANCED avec System.CommandLine -->
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
@@ -8,10 +8,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>false</UseWPF>
     <StartupObject>SerialPortPoolService.Program</StartupObject>
+    
+    <!-- ✅ NEW: Enhanced demo properties -->
+    <AssemblyTitle>SerialPortPool Enhanced Client Demo Service</AssemblyTitle>
+    <AssemblyDescription>Enhanced Client Demo with XML Configuration, Loop Mode, and Service Management</AssemblyDescription>
+    <AssemblyVersion>2.0.0.0</AssemblyVersion>
+    <FileVersion>2.0.0.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- ✅ FIXED: Updated NLog versions for .NET 9 compatibility -->
+    <!-- ✅ EXISTING: Core dependencies (updated for .NET 9) -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
@@ -19,12 +25,15 @@
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.0" />
     
-    <!-- ✅ FIXED: Updated NLog versions for .NET 9 -->
+    <!-- ✅ EXISTING: NLog for .NET 9 -->
     <PackageReference Include="NLog" Version="6.0.3" />
     <PackageReference Include="NLog.Extensions.Logging" Version="6.0.1" />
     
-    <!-- Windows Services -->
+    <!-- ✅ EXISTING: Windows Services -->
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="9.0.0" />
+    
+    <!-- ✅ NEW: Command Line Interface -->
+    <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -32,12 +41,33 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- ✅ EXISTING: Configuration files -->
     <None Update="NLog.config">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="default-settings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    
+    <!-- ✅ NEW: Enhanced demo configurations -->
+    <None Update="Configuration\**\*.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    
+    <!-- ✅ NEW: Service demo scripts -->
+    <None Update="Scripts\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
+
+  <!-- ✅ NEW: Post-build actions for enhanced demo -->
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="echo Enhanced Client Demo Build Completed" />
+    <Exec Command="echo Version: $(AssemblyVersion)" />
+    <Exec Command="echo Available modes: --help for usage information" />
+  </Target>
 
 </Project>

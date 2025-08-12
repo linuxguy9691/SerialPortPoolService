@@ -1,4 +1,4 @@
-// SerialPortPoolService/Program.cs - FIXED pour Sprint 7 Client Demo
+// SerialPortPoolService/Program.cs - ENHANCED CLIENT DEMO avec paramètres
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -7,82 +7,264 @@ using SerialPortPool.Core.Interfaces;
 using SerialPortPool.Core.Models;
 using SerialPortPool.Core.Services;
 using SerialPortPoolService.Services;
-using SerialPortPool.Core.Protocols; 
+using SerialPortPool.Core.Protocols;
+using System.CommandLine;
 
 namespace SerialPortPoolService;
 
 class Program
 {
-    static async Task Main(string[] args)
+    static async Task<int> Main(string[] args)
     {
-        Console.WriteLine("🚀 SerialPortPoolService - Sprint 7 Client Demo");
-        Console.WriteLine("Auto-Execution BIB Workflow + FT4232 Detection + RS232 TEST");
+        Console.WriteLine("🚀 SerialPortPoolService - Enhanced Client Demo");
+        Console.WriteLine("🎛️ XML Configuration + Loop Mode + Service Demo");
         Console.WriteLine("=".PadRight(80, '='));
+        Console.WriteLine();
+
+        // ✅ NOUVEAU: Command Line Interface avec System.CommandLine
+        var xmlConfigOption = new Option<string>(
+            "--xml-config", 
+            getDefaultValue: () => "client-demo.xml",
+            description: "Path to XML configuration file (relative to Configuration folder)");
+
+        var loopOption = new Option<bool>(
+            "--loop", 
+            getDefaultValue: () => false,
+            description: "Run workflow in continuous loop mode");
+
+        var intervalOption = new Option<int>(
+            "--interval", 
+            getDefaultValue: () => 30,
+            description: "Interval between loops in seconds (default: 30)");
+
+        var serviceDemoOption = new Option<bool>(
+            "--service-demo", 
+            getDefaultValue: () => false,
+            description: "Demonstrate Windows Service capabilities");
+
+        var consoleOption = new Option<bool>(
+            "--console", 
+            getDefaultValue: () => false,
+            description: "Run in interactive console mode");
+
+        var rootCommand = new RootCommand("SerialPortPool Service - Enhanced Client Demo")
+        {
+            xmlConfigOption,
+            loopOption,
+            intervalOption,
+            serviceDemoOption,
+            consoleOption
+        };
+
+        rootCommand.SetHandler(async (xmlConfig, loop, interval, serviceDemo, console) =>
+        {
+            try
+            {
+                var demoConfig = new ClientDemoConfiguration
+                {
+                    XmlConfigFile = xmlConfig,
+                    LoopMode = loop,
+                    LoopIntervalSeconds = interval,
+                    ServiceDemo = serviceDemo,
+                    ConsoleMode = console
+                };
+
+                Console.WriteLine($"📋 Configuration:");
+                Console.WriteLine($"   📄 XML Config: {demoConfig.XmlConfigFile}");
+                Console.WriteLine($"   🔄 Loop Mode: {(demoConfig.LoopMode ? "ENABLED" : "DISABLED")}");
+                if (demoConfig.LoopMode)
+                {
+                    Console.WriteLine($"   ⏱️ Loop Interval: {demoConfig.LoopIntervalSeconds} seconds");
+                }
+                Console.WriteLine($"   🔧 Service Demo: {(demoConfig.ServiceDemo ? "ENABLED" : "DISABLED")}");
+                Console.WriteLine();
+
+                if (demoConfig.ServiceDemo)
+                {
+                    await RunServiceDemo();
+                }
+                else if (demoConfig.ConsoleMode)
+                {
+                    await RunInteractiveMode();
+                }
+                else
+                {
+                    await RunEnhancedClientDemo(demoConfig);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Fatal error: {ex.Message}");
+                Console.WriteLine($"📋 Details: {ex.StackTrace}");
+                Environment.Exit(1);
+            }
+        }, xmlConfigOption, loopOption, intervalOption, serviceDemoOption, consoleOption);
+
+        return await rootCommand.InvokeAsync(args);
+    }
+
+    // ✅ NOUVEAU: Enhanced Client Demo avec configuration
+    static async Task RunEnhancedClientDemo(ClientDemoConfiguration config)
+    {
+        Console.WriteLine("🎬 Starting Enhanced Client Demo Service...");
+        
+        var builder = Host.CreateApplicationBuilder();
+        
+        // Configure services avec configuration custom
+        ConfigureServicesForEnhancedDemo(builder.Services, config);
+        
+        // Register enhanced worker
+        builder.Services.AddSingleton(config);
+        builder.Services.AddHostedService<EnhancedWorker>();
+        
+        var host = builder.Build();
+        
+        Console.WriteLine("✅ Enhanced Client Demo Service configured and starting...");
+        
+        // ✅ NOUVEAU: Gestion gracieuse d'arrêt en mode loop
+        Console.CancelKeyPress += (sender, e) =>
+        {
+            e.Cancel = true;
+            Console.WriteLine("\n🛑 Graceful shutdown requested...");
+            host.StopAsync().Wait(TimeSpan.FromSeconds(10));
+        };
+        
+        await host.RunAsync();
+    }
+
+    // ✅ NOUVEAU: Service Windows Demo
+    static async Task RunServiceDemo()
+    {
+        Console.WriteLine("🔧 Windows Service Demonstration Mode");
+        Console.WriteLine("🎯 Showing service installation, status, and management...");
         Console.WriteLine();
 
         try
         {
-            if (args.Length > 0 && args[0] == "--console")
+            // Check if running as Administrator
+            bool isAdmin = IsRunningAsAdministrator();
+            Console.WriteLine($"👤 Administrator Rights: {(isAdmin ? "✅ YES" : "❌ NO")}");
+            
+            if (!isAdmin)
             {
-                await RunInteractiveMode();
+                Console.WriteLine("⚠️ Administrator rights required for service operations");
+                Console.WriteLine("💡 Run as Administrator for full service demo");
+                Console.WriteLine();
             }
-            else
+
+            // Demonstrate service commands
+            await DemonstrateServiceCommands(isAdmin);
+            
+            // Show how service would run
+            Console.WriteLine("🎬 Simulating service execution...");
+            var config = new ClientDemoConfiguration
             {
-                await RunClientDemoService(); // ✅ NOUVEAU: Mode client demo au lieu de service Windows
-            }
+                XmlConfigFile = "client-demo.xml",
+                LoopMode = true,
+                LoopIntervalSeconds = 10,
+                ServiceDemo = false,
+                ConsoleMode = false
+            };
+            
+            Console.WriteLine("⏱️ Running 3 demo cycles...");
+            await RunLimitedDemo(config, 3);
+            
+            Console.WriteLine("✅ Service demo completed!");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Fatal error: {ex.Message}");
-            Console.WriteLine($"📋 Details: {ex.StackTrace}");
-            Environment.Exit(1);
+            Console.WriteLine($"❌ Service demo error: {ex.Message}");
         }
     }
 
-    // ✅ NOUVEAU: Mode spécifique pour le client demo
-    static async Task RunClientDemoService()
+    // ✅ NOUVEAU: Démonstration des commandes service Windows
+    static async Task DemonstrateServiceCommands(bool isAdmin)
     {
-        Console.WriteLine("🎬 Starting Client Demo Service mode...");
-        
+        Console.WriteLine("📋 Windows Service Commands Demonstration:");
+        Console.WriteLine();
+
+        var serviceName = "SerialPortPoolService";
+        var commands = new[]
+        {
+            ($"sc create {serviceName}", "Install service"),
+            ($"sc start {serviceName}", "Start service"),
+            ($"sc query {serviceName}", "Check service status"),
+            ($"sc stop {serviceName}", "Stop service"),
+            ($"sc delete {serviceName}", "Uninstall service")
+        };
+
+        foreach (var (command, description) in commands)
+        {
+            Console.WriteLine($"🔧 {description}:");
+            Console.WriteLine($"   💻 Command: {command}");
+            
+            if (isAdmin && command.Contains("query"))
+            {
+                // Actually try to query the service
+                try
+                {
+                    var result = await RunCommand("sc", $"query {serviceName}");
+                    Console.WriteLine($"   📊 Result: {result}");
+                }
+                catch
+                {
+                    Console.WriteLine($"   📊 Result: Service not currently installed");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"   📊 Result: {(isAdmin ? "Would execute if service were installed" : "Requires Administrator")}");
+            }
+            Console.WriteLine();
+        }
+
+        // Show service installation example
+        Console.WriteLine("💡 Service Installation Example:");
+        Console.WriteLine($"   sc create {serviceName} binPath= \"C:\\Path\\To\\SerialPortPoolService.exe\"");
+        Console.WriteLine($"   sc description {serviceName} \"Serial Port Pool Management Service\"");
+        Console.WriteLine($"   sc config {serviceName} start= auto");
+        Console.WriteLine();
+    }
+
+    // ✅ NOUVEAU: Demo limité pour simulation service
+    static async Task RunLimitedDemo(ClientDemoConfiguration config, int maxCycles)
+    {
         var builder = Host.CreateApplicationBuilder();
+        ConfigureServicesForEnhancedDemo(builder.Services, config);
         
-        // Configure services
-        ConfigureServicesForClientDemo(builder.Services);
-        
-        // ✅ CRUCIAL: Register Worker au lieu de PortDiscoveryBackgroundService
-        builder.Services.AddHostedService<Worker>();
+        // Override configuration for limited demo
+        var limitedConfig = config with { MaxCycles = maxCycles };
+        builder.Services.AddSingleton(limitedConfig);
+        builder.Services.AddHostedService<EnhancedWorker>();
         
         var host = builder.Build();
         
-        Console.WriteLine("✅ Client Demo Service configured and starting...");
-        await host.RunAsync();
+        using var cts = new CancellationTokenSource();
+        var runTask = host.RunAsync(cts.Token);
+        
+        // Wait for demo completion or timeout
+        var completed = await Task.WhenAny(runTask, Task.Delay(TimeSpan.FromMinutes(2)));
+        
+        if (completed != runTask)
+        {
+            Console.WriteLine("⏰ Demo timeout - stopping...");
+        }
+        
+        cts.Cancel();
+        try
+        {
+            await runTask;
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected
+        }
     }
 
-    static async Task RunAsWindowsService()
+    // ✅ NOUVEAU: Configuration services pour demo enhanced
+    static void ConfigureServicesForEnhancedDemo(IServiceCollection services, ClientDemoConfiguration config)
     {
-        Console.WriteLine("🔧 Starting Windows Service mode...");
-        
-        var builder = Host.CreateApplicationBuilder();
-        
-        // Configure services
-        ConfigureServices(builder.Services);
-        
-        // Add Windows Service support
-        builder.Services.AddWindowsService();
-        
-        // Add background service
-        builder.Services.AddHostedService<PortDiscoveryBackgroundService>();
-        
-        var host = builder.Build();
-        
-        Console.WriteLine("✅ Windows Service configured and starting...");
-        await host.RunAsync();
-    }
-
-    // ✅ NOUVEAU: Configuration spécifique pour le client demo
-    static void ConfigureServicesForClientDemo(IServiceCollection services)
-    {
-        Console.WriteLine("⚙️ Configuring Client Demo services...");
+        Console.WriteLine("⚙️ Configuring Enhanced Demo services...");
         
         try
         {
@@ -95,10 +277,9 @@ class Program
                        .SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Information);
             });
 
-            // ✅ CRUCIAL: Configuration permissive pour le demo
-            var demoConfig = PortValidationConfiguration.CreateDevelopmentDefault();
-            services.AddSingleton(demoConfig);
-            Console.WriteLine($"📋 Demo validation config: RequireFtdi={demoConfig.RequireFtdiDevice}, Require4232H={demoConfig.Require4232HChip}");
+            // Configuration permissive pour le demo
+            var demoValidationConfig = PortValidationConfiguration.CreateDevelopmentDefault();
+            services.AddSingleton(demoValidationConfig);
 
             // Core services
             services.AddScoped<IFtdiDeviceReader, FtdiDeviceReader>();
@@ -115,350 +296,144 @@ class Program
             // POC Extension Layer Services
             services.AddScoped<IPortReservationService, PortReservationService>();
 
-            // ✅ CRUCIAL: Sprint 5 services pour le workflow
+            // Sprint 5/6 services pour le workflow
             services.AddMemoryCache();
             services.AddScoped<IBibConfigurationLoader, XmlBibConfigurationLoader>();
             services.AddScoped<IBibMappingService, TemporaryBibMappingService>();
             services.AddScoped<IProtocolHandlerFactory, ProtocolHandlerFactory>();
             services.AddScoped<RS232ProtocolHandler>();
             
-            // ✅ CRUCIAL: BibWorkflowOrchestrator pour le client demo
+            // BibWorkflowOrchestrator pour le client demo
             services.AddScoped<IBibWorkflowOrchestrator, BibWorkflowOrchestrator>();
 
-            LoadClientDemoConfiguration(services);
+            LoadEnhancedDemoConfiguration(services, config);
 
-            Console.WriteLine("✅ Client Demo services configured successfully");
+            Console.WriteLine("✅ Enhanced Demo services configured successfully");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ ERROR configuring client demo services: {ex.Message}");
+            Console.WriteLine($"❌ ERROR configuring enhanced demo services: {ex.Message}");
             throw;
         }
     }
 
-    // ✅ NOUVEAU: Configuration spécifique client demo
-    static void LoadClientDemoConfiguration(IServiceCollection services)
+    // ✅ NOUVEAU: Configuration enhanced avec paramètres XML
+    static void LoadEnhancedDemoConfiguration(IServiceCollection services, ClientDemoConfiguration config)
     {
-        Console.WriteLine("📄 Loading Client Demo BIB configuration...");
+        Console.WriteLine($"📄 Loading Enhanced Demo configuration: {config.XmlConfigFile}...");
         
         try
         {
-            // Configuration client demo
-            var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Configuration", "client-demo.xml");
+            // Résoudre le chemin du fichier XML
+            var configPath = ResolveConfigPath(config.XmlConfigFile);
             
             if (!File.Exists(configPath))
             {
-                Console.WriteLine($"⚠️ Client demo config not found: {configPath}");
-                Console.WriteLine("📄 Creating client demo configuration...");
-                
-                var configDir = Path.GetDirectoryName(configPath);
-                if (!Directory.Exists(configDir))
-                {
-                    Directory.CreateDirectory(configDir!);
-                }
-                
-                CreateClientDemoConfiguration(configPath);
-            }
-            
-            // Pre-configure pour client demo
-            services.AddSingleton<Dictionary<string, object>>(provider =>
-            {
-                var dict = new Dictionary<string, object>
-                {
-                    ["client_demo_path"] = configPath,
-                    ["demo_mode"] = true,
-                    ["_metadata"] = new { LoadedAt = DateTime.Now, Mode = "CLIENT_DEMO" }
-                };
-                
-                Console.WriteLine($"✅ Client demo configuration ready: {configPath}");
-                return dict;
-            });
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ ERROR loading client demo config: {ex.Message}");
-        }
-    }
-
-    // ✅ NOUVEAU: Création de la config client demo
-    static void CreateClientDemoConfiguration(string configPath)
-    {
-        Console.WriteLine("📄 Creating client demo configuration...");
-        
-        var clientDemoXml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
-<root>
-  <bib id=""client_demo"" description=""Production Client Demo BIB"">
-    <metadata>
-      <board_type>production</board_type>
-      <revision>v1.0</revision>
-      <client>CLIENT_DEMO</client>
-    </metadata>
-    
-    <uut id=""production_uut"" description=""Client Production UUT"">
-      <port number=""1"">
-        <protocol>rs232</protocol>
-        <speed>115200</speed>
-        <data_pattern>n81</data_pattern>
-        <auto_discover>true</auto_discover>
-        
-        <!-- Simple TEST command as requested -->
-        <start>
-          <command>INIT_RS232</command>
-          <expected_response>READY</expected_response>
-          <timeout_ms>3000</timeout_ms>
-        </start>
-        
-        <test>
-          <command>TEST</command>
-          <expected_response>PASS</expected_response>
-          <timeout_ms>5000</timeout_ms>
-        </test>
-        
-        <stop>
-          <command>AT+QUIT</command>
-          <expected_response>BYE</expected_response>
-          <timeout_ms>2000</timeout_ms>
-        </stop>
-      </port>
-    </uut>
-  </bib>
-</root>";
-
-        try
-        {
-            File.WriteAllText(configPath, clientDemoXml);
-            Console.WriteLine($"✅ Client demo configuration created: {configPath}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"⚠️ Could not create client demo config: {ex.Message}");
-        }
-    }
-
-    static void ConfigureServices(IServiceCollection services)
-    {
-        // ... existing ConfigureServices code (unchanged)
-        Console.WriteLine("⚙️ Configuring dependency injection services (COMPLETE Sprint 5)...");
-        
-        try
-        {
-            // Logging configuration - PRESERVED
-            services.AddLogging(builder =>
-            {
-                builder.ClearProviders()
-                       .AddNLog()
-                       .AddConsole()
-                       .SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Information);
-            });
-
-            // Validation configuration - PRESERVED
-            var devConfig = PortValidationConfiguration.CreateDevelopmentDefault();
-            services.AddSingleton(devConfig);
-            Console.WriteLine($"📋 Using validation config: RequireFtdi={devConfig.RequireFtdiDevice}, Require4232H={devConfig.Require4232HChip}");
-
-            // Core services - PRESERVED
-            services.AddScoped<IFtdiDeviceReader, FtdiDeviceReader>();
-            services.AddScoped<ISerialPortValidator, SerialPortValidator>();
-            services.AddScoped<ISerialPortDiscovery, EnhancedSerialPortDiscoveryService>();
-            
-            // Device grouping service - PRESERVED
-            services.AddScoped<IMultiPortDeviceAnalyzer, MultiPortDeviceAnalyzer>();
-            
-            // SystemInfo caching - PRESERVED
-            services.AddScoped<SystemInfoCache>();
-            services.AddScoped<ISystemInfoCache>(provider => provider.GetRequiredService<SystemInfoCache>());
-            
-            // Thread-safe pool management - PRESERVED
-            services.AddScoped<ISerialPortPool, SerialPortPool.Core.Services.SerialPortPool>();
-
-            Console.WriteLine("✅ Foundation services (Sprint 1-4) configured - ZERO TOUCH");
-
-            // POC Extension Layer Services - ENHANCED
-            services.AddScoped<IPortReservationService, PortReservationService>();
-
-            Console.WriteLine("✅ Enhanced POC Sprint 5 extension layer services configured");
-
-            ConfigureCompleteSprint5Services(services);
-            LoadBibConfigurations(services);
-
-            Console.WriteLine("✅ All dependency injection services configured successfully");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ ERROR configuring services: {ex.Message}");
-            throw;
-        }
-    }
-
-    static void ConfigureCompleteSprint5Services(IServiceCollection services)
-    {
-        Console.WriteLine("⚙️ Configuring COMPLETE Sprint 5 services: XML + BIB + RS232 + Reservation...");
-        
-        try
-        {
-            services.AddMemoryCache();
-            services.AddScoped<IBibConfigurationLoader, XmlBibConfigurationLoader>();
-            services.AddScoped<IBibMappingService, TemporaryBibMappingService>();
-            services.AddScoped<IProtocolHandlerFactory, ProtocolHandlerFactory>();
-            services.AddScoped<RS232ProtocolHandler>();
-            services.AddScoped<IBibWorkflowOrchestrator, BibWorkflowOrchestrator>();
-            
-            Console.WriteLine("✅ COMPLETE Sprint 5 services configured successfully");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ ERROR configuring Sprint 5 services: {ex.Message}");
-            throw;
-        }
-    }
-
-    static void LoadBibConfigurations(IServiceCollection services)
-    {
-        // ... existing LoadBibConfigurations code (unchanged)
-        Console.WriteLine("📄 Loading BIB configurations from XML...");
-        
-        try
-        {
-            var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Configuration", "bib-configurations.xml");
-            
-            if (!File.Exists(configPath))
-            {
-                Console.WriteLine($"⚠️ BIB configuration file not found: {configPath}");
+                Console.WriteLine($"⚠️ Config file not found: {configPath}");
                 Console.WriteLine("📄 Creating default configuration...");
                 
                 var configDir = Path.GetDirectoryName(configPath);
                 if (!Directory.Exists(configDir))
                 {
                     Directory.CreateDirectory(configDir!);
-                    Console.WriteLine($"📁 Created directory: {configDir}");
                 }
                 
-                CreateDefaultBibConfiguration(configPath);
+                CreateEnhancedDemoConfiguration(configPath, config);
             }
             
             services.AddSingleton<Dictionary<string, object>>(provider =>
             {
-                try
+                var dict = new Dictionary<string, object>
                 {
-                    var loader = provider.GetRequiredService<IBibConfigurationLoader>();
-                    var configurations = loader.LoadConfigurationsAsync(configPath).GetAwaiter().GetResult();
-                    
-                    Console.WriteLine($"✅ Loaded {configurations.Count} BIB configuration(s) from XML");
-                    foreach (var config in configurations.Values)
-                    {
-                        Console.WriteLine($"   📦 {config.BibId}: {config.Uuts.Count} UUT(s), {config.TotalPortCount} port(s)");
+                    ["config_path"] = configPath,
+                    ["xml_file"] = config.XmlConfigFile,
+                    ["loop_mode"] = config.LoopMode,
+                    ["loop_interval"] = config.LoopIntervalSeconds,
+                    ["service_demo"] = config.ServiceDemo,
+                    ["_metadata"] = new { 
+                        LoadedAt = DateTime.Now, 
+                        Mode = "ENHANCED_CLIENT_DEMO",
+                        ConfigFile = config.XmlConfigFile
                     }
-                    
-                    var objectDict = new Dictionary<string, object>();
-                    foreach (var kvp in configurations)
-                    {
-                        objectDict[kvp.Key] = kvp.Value;
-                    }
-                    objectDict["_metadata"] = new { LoadedAt = DateTime.Now, Source = configPath };
-                    
-                    return objectDict;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"❌ Error loading BIB configurations: {ex.Message}");
-                    Console.WriteLine("📄 Using empty configuration dictionary");
-                    return new Dictionary<string, object>
-                    {
-                        ["_error"] = ex.Message,
-                        ["_metadata"] = new { LoadedAt = DateTime.Now, Source = "error_fallback" }
-                    };
-                }
+                };
+                
+                Console.WriteLine($"✅ Enhanced demo configuration ready: {configPath}");
+                return dict;
             });
-            
-            Console.WriteLine("✅ BIB configurations loaded successfully");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ ERROR loading BIB configurations: {ex.Message}");
+            Console.WriteLine($"❌ ERROR loading enhanced demo config: {ex.Message}");
         }
     }
 
-    static void CreateDefaultBibConfiguration(string configPath)
+    // ✅ NOUVEAU: Résolution du chemin de configuration
+    static string ResolveConfigPath(string xmlFileName)
     {
-        // ... existing CreateDefaultBibConfiguration code (unchanged)
-        Console.WriteLine("📄 Creating default BIB configuration for COMPLETE Sprint 5...");
+        // Si chemin absolu, utiliser tel quel
+        if (Path.IsPathRooted(xmlFileName))
+        {
+            return xmlFileName;
+        }
         
-        var defaultXml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+        // Sinon, chercher dans Configuration folder
+        var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        var configDir = Path.Combine(baseDir, "Configuration");
+        
+        // Ajouter .xml si pas d'extension
+        if (!Path.HasExtension(xmlFileName))
+        {
+            xmlFileName += ".xml";
+        }
+        
+        return Path.Combine(configDir, xmlFileName);
+    }
+
+    // ✅ NOUVEAU: Création configuration enhanced
+    static void CreateEnhancedDemoConfiguration(string configPath, ClientDemoConfiguration config)
+    {
+        Console.WriteLine($"📄 Creating enhanced demo configuration: {Path.GetFileName(configPath)}...");
+        
+        var enhancedDemoXml = $@"<?xml version=""1.0"" encoding=""UTF-8""?>
 <root>
-  <!-- COMPLETE Sprint 5 Configuration -->
-  <bib id=""bib_sprint5_complete"" description=""Complete Sprint 5 Production Configuration"">
+  <bib id=""enhanced_client_demo"" description=""Enhanced Production Client Demo with Loop Support"">
     <metadata>
       <board_type>production</board_type>
-      <revision>v5.0</revision>
-      <purpose>Complete Sprint 5 XML Configuration + BIB Workflow + RS232 Protocol</purpose>
-      <created_date>2025-07-31</created_date>
+      <revision>v2.0</revision>
+      <client>ENHANCED_CLIENT_DEMO</client>
+      <loop_support>true</loop_support>
+      <created_date>{DateTime.Now:yyyy-MM-dd}</created_date>
     </metadata>
     
-    <uut id=""uut_rs232_production"" description=""Production RS232 UUT"">
+    <uut id=""production_uut"" description=""Enhanced Client Production UUT"">
       <metadata>
-        <uut_type>rs232_production</uut_type>
-        <test_mode>sprint5_complete</test_mode>
+        <uut_type>enhanced_production</uut_type>
+        <loop_interval>{config.LoopIntervalSeconds}</loop_interval>
       </metadata>
       
       <port number=""1"">
         <protocol>rs232</protocol>
         <speed>115200</speed>
         <data_pattern>n81</data_pattern>
-        <read_timeout>3000</read_timeout>
-        <write_timeout>3000</write_timeout>
-        <handshake>None</handshake>
+        <auto_discover>true</auto_discover>
         
+        <!-- Enhanced TEST commands sequence -->
         <start>
-          <command>INIT_SPRINT5\r\n</command>
-          <expected_response>READY_COMPLETE</expected_response>
+          <command>ENHANCED_INIT</command>
+          <expected_response>ENHANCED_READY</expected_response>
           <timeout_ms>3000</timeout_ms>
-          <retry_count>2</retry_count>
         </start>
         
         <test>
-          <command>TEST_COMPLETE\r\n</command>
-          <expected_response>PASS_SPRINT5</expected_response>
+          <command>ENHANCED_TEST</command>
+          <expected_response>ENHANCED_PASS</expected_response>
           <timeout_ms>5000</timeout_ms>
-          <retry_count>2</retry_count>
         </test>
         
         <stop>
-          <command>STOP_SPRINT5\r\n</command>
-          <expected_response>BYE_COMPLETE</expected_response>
+          <command>ENHANCED_QUIT</command>
+          <expected_response>ENHANCED_BYE</expected_response>
           <timeout_ms>2000</timeout_ms>
-          <retry_count>1</retry_count>
-        </stop>
-      </port>
-    </uut>
-  </bib>
-  
-  <!-- Python Demo Configuration (backward compatibility) -->
-  <bib id=""bib_demo"" description=""Python Dummy UUT Demo"">
-    <uut id=""uut_python_simulator"">
-      <port number=""1"">
-        <protocol>rs232</protocol>
-        <speed>115200</speed>
-        <data_pattern>n81</data_pattern>
-        
-        <start>
-          <command>INIT_RS232\r\n</command>
-          <expected_response>READY</expected_response>
-          <timeout_ms>3000</timeout_ms>
-          <retry_count>2</retry_count>
-        </start>
-        
-        <test>
-          <command>RUN_TEST_1\r\n</command>
-          <expected_response>PASS</expected_response>
-          <timeout_ms>5000</timeout_ms>
-          <retry_count>1</retry_count>
-        </test>
-        
-        <stop>
-          <command>STOP_RS232\r\n</command>
-          <expected_response>BYE</expected_response>
-          <timeout_ms>2000</timeout_ms>
-          <retry_count>1</retry_count>
         </stop>
       </port>
     </uut>
@@ -467,28 +442,78 @@ class Program
 
         try
         {
-            File.WriteAllText(configPath, defaultXml);
-            Console.WriteLine($"✅ Default COMPLETE Sprint 5 configuration created: {configPath}");
+            File.WriteAllText(configPath, enhancedDemoXml);
+            Console.WriteLine($"✅ Enhanced demo configuration created: {configPath}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"⚠️ Could not create default configuration: {ex.Message}");
+            Console.WriteLine($"⚠️ Could not create enhanced demo config: {ex.Message}");
         }
     }
 
-    // ... rest of existing test methods (unchanged)
+    // Existing methods (unchanged)
     static async Task RunInteractiveMode()
     {
-        // ... existing code (unchanged)
+        Console.WriteLine("🔧 Interactive Mode - Not implemented in this demo");
+        Console.WriteLine("💡 Use enhanced demo modes instead:");
+        Console.WriteLine("   --xml-config myconfig.xml --loop --interval 30");
+        await Task.Delay(1000);
     }
 
-    static async Task TestFoundationPreservation(IServiceProvider serviceProvider)
+    // ✅ HELPER: Check Administrator rights
+    static bool IsRunningAsAdministrator()
     {
-        // ... existing code (unchanged)
+        try
+        {
+            var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+            var principal = new System.Security.Principal.WindowsPrincipal(identity);
+            return principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
-    static async Task TestCompleteSprint5Integration(IServiceProvider serviceProvider)
+    // ✅ HELPER: Run command
+    static async Task<string> RunCommand(string command, string arguments)
     {
-        // ... existing code (unchanged)
+        try
+        {
+            var processInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = command,
+                Arguments = arguments,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(processInfo);
+            if (process == null) return "Failed to start process";
+
+            var output = await process.StandardOutput.ReadToEndAsync();
+            var error = await process.StandardError.ReadToEndAsync();
+            
+            await process.WaitForExitAsync();
+            
+            return string.IsNullOrEmpty(error) ? output : $"Error: {error}";
+        }
+        catch (Exception ex)
+        {
+            return $"Exception: {ex.Message}";
+        }
     }
+}
+
+// ✅ NOUVEAU: Configuration pour enhanced demo
+public record ClientDemoConfiguration
+{
+    public string XmlConfigFile { get; init; } = "client-demo.xml";
+    public bool LoopMode { get; init; } = false;
+    public int LoopIntervalSeconds { get; init; } = 30;
+    public bool ServiceDemo { get; init; } = false;
+    public bool ConsoleMode { get; init; } = false;
+    public int? MaxCycles { get; init; } = null; // Pour demo limité
 }
