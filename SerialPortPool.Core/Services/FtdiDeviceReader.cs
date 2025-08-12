@@ -2,6 +2,7 @@ using System.Management;
 using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
 using SerialPortPool.Core.Models;
+using FTD2XX_NET; // Namespace du package
 
 namespace SerialPortPool.Core.Services;
 

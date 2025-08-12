@@ -158,7 +158,7 @@ public class FtdiDeviceInfo
     /// <summary>
     /// Get detailed device description for logging/display
     /// </summary>
-    public string GetDetailedDescription()
+    public virtual string GetDetailedDescription()
     {
         var speed = IsHighSpeedCapable ? "High-Speed" : "Full-Speed";
         var ports = ExpectedPortCount > 1 ? $"{ExpectedPortCount}-Port" : "Single-Port";

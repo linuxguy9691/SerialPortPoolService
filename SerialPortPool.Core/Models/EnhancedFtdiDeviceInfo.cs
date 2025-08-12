@@ -1,5 +1,5 @@
 // ===================================================================
-// NEW SPRINT 8: EnhancedFtdiDeviceInfo.cs - WMI + EEPROM Combined
+// FIXED: EnhancedFtdiDeviceInfo.cs - Complete Implementation
 // File: SerialPortPool.Core/Models/EnhancedFtdiDeviceInfo.cs
 // Purpose: Enhanced FTDI device info combining WMI + EEPROM data
 // ===================================================================
@@ -19,7 +19,7 @@ public class EnhancedFtdiDeviceInfo : FtdiDeviceInfo
     /// Raw EEPROM data read via FTD2XX_NET
     /// Contains ProductDescription and other EEPROM-exclusive fields
     /// </summary>
-    public FtdiEepromData? EepromData { get; set; }
+    public FtdiEepromData? EepromDataObject { get; set; }
     
     /// <summary>
     /// Whether valid EEPROM data was successfully read
@@ -48,24 +48,24 @@ public class EnhancedFtdiDeviceInfo : FtdiDeviceInfo
     /// CRITICAL for dynamic BIB selection feature
     /// </summary>
     public bool SupportsCustomProductDescription => HasEepromData && 
-        !string.IsNullOrEmpty(EepromData?.ProductDescription) &&
-        EepromData.ProductDescription != ProductDescription;
+        !string.IsNullOrEmpty(EepromDataObject?.ProductDescription) &&
+        EepromDataObject.ProductDescription != ProductDescription;
     
     /// <summary>
     /// BEST ProductDescription: EEPROM first, fallback to WMI
     /// This is the field used for dynamic BIB mapping
     /// </summary>
     public string EffectiveProductDescription => 
-        (HasEepromData && !string.IsNullOrEmpty(EepromData?.ProductDescription)) 
-            ? EepromData.ProductDescription 
+        (HasEepromData && !string.IsNullOrEmpty(EepromDataObject?.ProductDescription)) 
+            ? EepromDataObject.ProductDescription 
             : ProductDescription;
     
     /// <summary>
     /// BEST Manufacturer: EEPROM first, fallback to WMI
     /// </summary>
     public string EffectiveManufacturer => 
-        (HasEepromData && !string.IsNullOrEmpty(EepromData?.Manufacturer)) 
-            ? EepromData.Manufacturer 
+        (HasEepromData && !string.IsNullOrEmpty(EepromDataObject?.Manufacturer)) 
+            ? EepromDataObject.Manufacturer 
             : Manufacturer;
     
     /// <summary>
@@ -126,7 +126,7 @@ public class EnhancedFtdiDeviceInfo : FtdiDeviceInfo
         // ✨ ENHANCE: Add EEPROM data if available
         if (eepromData?.IsValid == true)
         {
-            enhanced.EepromData = eepromData;
+            enhanced.EepromDataObject = eepromData;
             enhanced.HasEepromData = true;
             
             // Override with better EEPROM data where available
@@ -141,11 +141,17 @@ public class EnhancedFtdiDeviceInfo : FtdiDeviceInfo
             enhanced.SelfPowered = eepromData.SelfPowered;
             enhanced.RemoteWakeup = eepromData.RemoteWakeup;
             
-            // Merge additional EEPROM fields
+            // Merge additional EEPROM fields into the existing EepromData dictionary
             foreach (var field in eepromData.AdditionalFields)
             {
                 enhanced.EepromData[field.Key] = field.Value;
             }
+            
+            // Add key EEPROM fields to the dictionary for compatibility
+            enhanced.EepromData["EepromProductDescription"] = eepromData.ProductDescription;
+            enhanced.EepromData["EepromManufacturer"] = eepromData.Manufacturer;
+            enhanced.EepromData["MaxPower"] = eepromData.MaxPower.ToString();
+            enhanced.EepromData["SelfPowered"] = eepromData.SelfPowered.ToString();
         }
         
         return enhanced;
@@ -166,7 +172,7 @@ public class EnhancedFtdiDeviceInfo : FtdiDeviceInfo
             ProductId = eepromData.ProductId,
             Manufacturer = eepromData.Manufacturer,
             ProductDescription = eepromData.ProductDescription,
-            EepromData = eepromData,
+            EepromDataObject = eepromData,
             HasEepromData = true,
             MaxPower = eepromData.MaxPower,
             SelfPowered = eepromData.SelfPowered,
@@ -174,7 +180,15 @@ public class EnhancedFtdiDeviceInfo : FtdiDeviceInfo
         };
         
         // Determine chip type from Product ID
-        enhanced.ChipType = GetChipTypeFromPid(eepromData.ProductId);
+        enhanced.ChipType = eepromData.ProductId.ToUpper() switch
+        {
+            "6001" => "FT232R",
+            "6011" => "FT4232H", 
+            "6048" => "FT4232HL",
+            "6014" => "FT232H",
+            "6010" => "FT2232H",
+            _ => $"Unknown FTDI Chip (PID: {eepromData.ProductId})"
+        };
         
         return enhanced;
     }

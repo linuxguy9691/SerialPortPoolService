@@ -10,13 +10,13 @@ class Program
 {
     static async Task Main(string[] args)
     {
-        Console.WriteLine("🔍 Enhanced Serial Port Discovery Demo - ÉTAPE 5 Phase 2");
-        Console.WriteLine("===========================================================");
-        Console.WriteLine("🎯 Features: FTDI Analysis + Validation + Device Grouping + Multi-Port Awareness");
+        Console.WriteLine("🔍 Enhanced Serial Port Discovery Demo - SPRINT 8 INTEGRATION");
+        Console.WriteLine("===============================================================");
+        Console.WriteLine("🎯 Features: FTDI Analysis + Validation + Device Grouping + SPRINT 8 EEPROM Enhancement");
         Console.WriteLine();
         
-        // Setup dependency injection
-        var serviceProvider = SetupServices();
+        // Setup dependency injection with SPRINT 8 integration
+        var serviceProvider = SetupServicesWithSprint8();
         
         try
         {
@@ -24,6 +24,7 @@ class Program
             var discovery = serviceProvider.GetRequiredService<ISerialPortDiscovery>() as EnhancedSerialPortDiscoveryService;
             var ftdiReader = serviceProvider.GetRequiredService<IFtdiDeviceReader>();
             var validator = serviceProvider.GetRequiredService<ISerialPortValidator>();
+            var eepromReader = serviceProvider.GetRequiredService<IFtdiEepromReader>(); // ← SPRINT 8
             
             if (discovery == null)
             {
@@ -41,26 +42,26 @@ class Program
             Console.WriteLine();
             
             // === PHASE 2: NEW - Device Grouping Discovery ===
-            Console.WriteLine("=== PHASE 2: DEVICE GROUPING DISCOVERY (NEW) ===");
+            Console.WriteLine("=== PHASE 2: DEVICE GROUPING DISCOVERY ===");
             await TestDeviceGroupingDiscovery(discovery);
             
             Console.WriteLine();
             
-            // === PHASE 3: Multi-Port Device Focus ===  
-            Console.WriteLine("=== PHASE 3: MULTI-PORT DEVICE ANALYSIS ===");
-            await TestMultiPortDeviceDiscovery(discovery);
+            // === PHASE 3: SPRINT 8 - EEPROM Enhancement Demo ===  
+            Console.WriteLine("=== PHASE 3: SPRINT 8 - EEPROM ENHANCEMENT DEMO ===");
+            await TestSprint8EepromEnhancement(eepromReader);
             
             Console.WriteLine();
             
-            // === PHASE 4: Device Grouping Statistics ===
-            Console.WriteLine("=== PHASE 4: DEVICE GROUPING STATISTICS ===");
+            // === PHASE 4: Enhanced SystemInfo with EEPROM ===
+            Console.WriteLine("=== PHASE 4: ENHANCED SYSTEMINFO WITH EEPROM ===");
+            await TestEnhancedSystemInfo(serviceProvider);
+            
+            Console.WriteLine();
+            
+            // === PHASE 5: Device Grouping Statistics ===
+            Console.WriteLine("=== PHASE 5: DEVICE GROUPING STATISTICS ===");
             await TestDeviceGroupingStatistics(discovery);
-            
-            Console.WriteLine();
-            
-            // === PHASE 5: Port-to-Device Lookup ===
-            Console.WriteLine("=== PHASE 5: PORT-TO-DEVICE LOOKUP ===");
-            await TestPortToDeviceLookup(discovery);
             
         }
         catch (Exception ex)
@@ -70,12 +71,12 @@ class Program
         }
         
         Console.WriteLine();
-        Console.WriteLine("🎯 Enhanced discovery demo with device grouping completed!");
+        Console.WriteLine("🎯 Enhanced discovery demo with SPRINT 8 EEPROM integration completed!");
         Console.WriteLine("Press any key to exit...");
         Console.ReadKey();
     }
     
-    static ServiceProvider SetupServices()
+    static ServiceProvider SetupServicesWithSprint8()
     {
         var services = new ServiceCollection();
         
@@ -86,10 +87,17 @@ class Program
         // Configuration - Use development config to see all devices
         services.AddSingleton(PortValidationConfiguration.CreateDevelopmentDefault());
         
-        // Services
+        // ✅ SPRINT 8: Add new EEPROM reader service
+        services.AddScoped<IFtdiEepromReader, FtdiEepromReader>();
+        
+        // Original services
         services.AddScoped<IFtdiDeviceReader, FtdiDeviceReader>();
         services.AddScoped<ISerialPortValidator, SerialPortValidator>();
         services.AddScoped<ISerialPortDiscovery, EnhancedSerialPortDiscoveryService>();
+        
+        // ✅ SPRINT 8: Enhanced SystemInfo with cache
+        services.AddScoped<SystemInfoCache>();
+        services.AddScoped<ISystemInfoCache>(provider => provider.GetRequiredService<SystemInfoCache>());
         
         return services.BuildServiceProvider();
     }
@@ -137,34 +145,170 @@ class Program
         }
     }
     
-    static async Task TestMultiPortDeviceDiscovery(EnhancedSerialPortDiscoveryService discovery)
+    // ✅ SPRINT 8: New EEPROM enhancement demo
+    static async Task TestSprint8EepromEnhancement(IFtdiEepromReader eepromReader)
     {
-        var multiPortDevices = await discovery.DiscoverMultiPortDevicesAsync();
-        var deviceList = multiPortDevices.ToList();
-        
-        Console.WriteLine($"🎯 Multi-port devices found: {deviceList.Count}");
+        Console.WriteLine("🚀 SPRINT 8: Testing enhanced FTDI device info via FTD2XX_NET");
         Console.WriteLine();
         
-        if (deviceList.Count == 0)
+        try
         {
-            Console.WriteLine("   No multi-port devices detected on this system.");
-            Console.WriteLine("   💡 Multi-port devices include FT4232H (4 ports), FT2232H (2 ports), etc.");
-        }
-        else
-        {
-            foreach (var device in deviceList)
+            // Get all connected devices
+            var serialNumbers = await eepromReader.GetConnectedDeviceSerialNumbersAsync();
+            
+            if (!serialNumbers.Any())
             {
-                Console.WriteLine($"   🎯 {device.DeviceTypeDescription}");
-                Console.WriteLine($"      📍 Ports: {string.Join(", ", device.GetPortNames())}");
-                Console.WriteLine($"      📊 Utilization: {device.UtilizationPercentage:F0}% ({device.AllocatedPortCount}/{device.PortCount})");
-                Console.WriteLine($"      ✅ Client Valid: {(device.IsClientValidDevice ? "YES" : "NO")}");
+                Console.WriteLine("❌ No FTDI devices found via FTD2XX_NET");
+                return;
+            }
+            
+            Console.WriteLine($"📱 Found {serialNumbers.Count} FTDI device(s) via FTD2XX_NET:");
+            Console.WriteLine();
+            
+            foreach (var serialNumber in serialNumbers)
+            {
+                Console.WriteLine($"🔬 Analyzing device: {serialNumber}");
                 
-                if (device.SharedSystemInfo != null)
+                // Test accessibility
+                var accessible = await eepromReader.IsDeviceAccessibleAsync(serialNumber);
+                Console.WriteLine($"   🔍 Accessible: {(accessible ? "✅ YES" : "❌ NO")}");
+                
+                if (accessible)
                 {
-                    Console.WriteLine($"      💾 System Info: {device.SharedSystemInfo.GetSummary()}");
+                    // Read enhanced device data
+                    var eepromData = await eepromReader.ReadEepromAsync(serialNumber);
+                    
+                    if (eepromData.IsValid)
+                    {
+                        Console.WriteLine($"   ✅ Enhanced data read successfully:");
+                        Console.WriteLine($"      📝 Product Description: '{eepromData.ProductDescription}'");
+                        Console.WriteLine($"      🏭 Manufacturer: '{eepromData.Manufacturer}'");
+                        Console.WriteLine($"      🆔 VID/PID: {eepromData.VendorId}/{eepromData.ProductId}");
+                        Console.WriteLine($"      ⚡ Max Power: {eepromData.MaxPower}mA");
+                        Console.WriteLine($"      🔗 Source: {eepromData.Source}");
+                        
+                        // Test specific field reading
+                        var productDesc = await eepromReader.ReadEepromFieldAsync(serialNumber, "ProductDescription");
+                        Console.WriteLine($"      🎯 Field Test (ProductDescription): '{productDesc}'");
+                        
+                        if (eepromData.AdditionalFields.Any())
+                        {
+                            Console.WriteLine($"      📊 Additional fields: {eepromData.AdditionalFields.Count}");
+                            foreach (var field in eepromData.AdditionalFields.Take(3))
+                            {
+                                Console.WriteLine($"         - {field.Key}: {field.Value}");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"   ❌ Enhanced data read failed: {eepromData.ErrorMessage}");
+                    }
                 }
+                
                 Console.WriteLine();
             }
+            
+            // Test bulk reading
+            Console.WriteLine("📊 Testing bulk enhanced device reading...");
+            var allDeviceData = await eepromReader.ReadAllConnectedDevicesAsync();
+            var validDevices = allDeviceData.Values.Count(d => d.IsValid);
+            
+            Console.WriteLine($"   📈 Bulk read result: {validDevices}/{allDeviceData.Count} devices successfully enhanced");
+            
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ SPRINT 8 demo error: {ex.Message}");
+        }
+    }
+    
+    // ✅ SPRINT 8: Enhanced SystemInfo demo
+    static async Task TestEnhancedSystemInfo(ServiceProvider serviceProvider)
+    {
+        Console.WriteLine("💾 Testing Enhanced SystemInfo with EEPROM integration");
+        Console.WriteLine();
+        
+        try
+        {
+            var systemInfoCache = serviceProvider.GetRequiredService<ISystemInfoCache>();
+            var discovery = serviceProvider.GetRequiredService<ISerialPortDiscovery>();
+            
+            // Get all ports
+            var ports = await discovery.DiscoverPortsAsync();
+            var ftdiPorts = ports.Where(p => p.IsFtdiDevice).Take(2).ToList();
+            
+            if (!ftdiPorts.Any())
+            {
+                Console.WriteLine("❌ No FTDI ports found for SystemInfo testing");
+                return;
+            }
+            
+            Console.WriteLine($"🔍 Testing enhanced SystemInfo for {ftdiPorts.Count} FTDI port(s):");
+            Console.WriteLine();
+            
+            foreach (var port in ftdiPorts)
+            {
+                Console.WriteLine($"📡 Port {port.PortName} ({port.FtdiChipType}):");
+                
+                // Get enhanced system info
+                var systemInfo = await systemInfoCache.GetSystemInfoAsync(port.PortName, forceRefresh: true);
+                
+                if (systemInfo?.IsDataValid == true)
+                {
+                    Console.WriteLine($"   ✅ Enhanced SystemInfo available:");
+                    Console.WriteLine($"      📝 Product: {systemInfo.ProductDescription}");
+                    Console.WriteLine($"      🏭 Manufacturer: {systemInfo.Manufacturer}");
+                    Console.WriteLine($"      🔑 Serial: {systemInfo.SerialNumber}");
+                    Console.WriteLine($"      💾 EEPROM entries: {systemInfo.EepromData.Count}");
+                    Console.WriteLine($"      🔧 System properties: {systemInfo.SystemProperties.Count}");
+                    Console.WriteLine($"      ⚙️ Client config: {systemInfo.ClientConfiguration.Count}");
+                    Console.WriteLine($"      ⏰ Age: {systemInfo.Age.TotalSeconds:F1}s");
+                    
+                    // Show some key EEPROM data
+                    var importantEntries = systemInfo.EepromData
+                        .Where(kvp => new[] { "Manufacturer", "ProductDescription", "ChipType", "VendorId", "ProductId" }.Contains(kvp.Key))
+                        .Take(3);
+                    
+                    if (importantEntries.Any())
+                    {
+                        Console.WriteLine($"      📊 Key EEPROM data:");
+                        foreach (var entry in importantEntries)
+                        {
+                            Console.WriteLine($"         - {entry.Key}: {entry.Value}");
+                        }
+                    }
+                    
+                    // Show client configuration
+                    if (systemInfo.ClientConfiguration.Any())
+                    {
+                        Console.WriteLine($"      🎯 Client configuration:");
+                        foreach (var config in systemInfo.ClientConfiguration.Take(3))
+                        {
+                            Console.WriteLine($"         - {config.Key}: {config.Value}");
+                        }
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"   ❌ Enhanced SystemInfo not available: {systemInfo?.ErrorMessage ?? "Unknown error"}");
+                }
+                
+                Console.WriteLine();
+            }
+            
+            // Test cache statistics
+            var cacheStats = systemInfoCache.GetStatistics();
+            Console.WriteLine($"📊 SystemInfo Cache Statistics:");
+            Console.WriteLine($"   📈 Total entries: {cacheStats.TotalEntries}");
+            Console.WriteLine($"   ✅ Cache hits: {cacheStats.TotalHits}");
+            Console.WriteLine($"   ❌ Cache misses: {cacheStats.TotalMisses}");
+            Console.WriteLine($"   📊 Hit ratio: {cacheStats.HitRatio:F1}%");
+            
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Enhanced SystemInfo demo error: {ex.Message}");
         }
     }
     
@@ -202,58 +346,6 @@ class Program
             if (ftdiRatio >= 80)
             {
                 Console.WriteLine("   ✅ High FTDI coverage - good for professional applications");
-            }
-        }
-    }
-    
-    static async Task TestPortToDeviceLookup(EnhancedSerialPortDiscoveryService discovery)
-    {
-        // Get all device groups first
-        var deviceGroups = await discovery.DiscoverDeviceGroupsAsync();
-        var allPorts = deviceGroups.SelectMany(g => g.Ports).ToList();
-        
-        if (!allPorts.Any())
-        {
-            Console.WriteLine("❌ No ports available for lookup test");
-            return;
-        }
-        
-        // Test lookup for first few ports
-        var portsToTest = allPorts.Take(3).ToList();
-        
-        Console.WriteLine($"🔍 Testing port-to-device lookup for {portsToTest.Count} port(s):");
-        Console.WriteLine();
-        
-        foreach (var port in portsToTest)
-        {
-            var deviceGroup = await discovery.FindDeviceGroupByPortAsync(port.PortName);
-            
-            if (deviceGroup != null)
-            {
-                Console.WriteLine($"   📍 Port {port.PortName}:");
-                Console.WriteLine($"      🏠 Belongs to: {deviceGroup.DeviceTypeDescription}");
-                Console.WriteLine($"      👥 Shares device with: {string.Join(", ", deviceGroup.GetPortNames().Where(p => p != port.PortName))}");
-                Console.WriteLine($"      📊 Device utilization: {deviceGroup.UtilizationPercentage:F0}%");
-            }
-            else
-            {
-                Console.WriteLine($"   ❌ Port {port.PortName}: Device group not found");
-            }
-            Console.WriteLine();
-        }
-        
-        // Test specific device analysis if we have a multi-port device
-        var multiPortDevice = deviceGroups.FirstOrDefault(g => g.IsMultiPortDevice);
-        if (multiPortDevice != null)
-        {
-            Console.WriteLine($"🎯 Detailed analysis of multi-port device: {multiPortDevice.DeviceId}");
-            var analysis = await discovery.GetDeviceGroupAnalysisAsync(multiPortDevice.DeviceId);
-            
-            if (analysis != null)
-            {
-                Console.WriteLine($"   📋 Summary: {analysis.GetSummary()}");
-                Console.WriteLine($"   📍 Available ports: {string.Join(", ", analysis.GetAvailablePorts().Select(p => p.PortName))}");
-                Console.WriteLine($"   🔒 Allocated ports: {string.Join(", ", analysis.GetAllocatedPorts().Select(p => p.PortName))}");
             }
         }
     }
