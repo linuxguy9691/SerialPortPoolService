@@ -1,8 +1,8 @@
 // ===================================================================
-// FIXED: FtdiEepromReader.cs - Version avec vraie API FTD2XX_NET
+// FIXED: FtdiEepromReader.cs - Corrected API calls based on FTD2XX_NET
 // File: SerialPortPool.Core/Services/FtdiEepromReader.cs
-// Purpose: VRAIE lecture EEPROM via FTD2XX_NET avec API native D2XX
-// CORRECTIONS: Utilise les vraies méthodes et propriétés de l'API
+// Purpose: VRAIE lecture EEPROM via FTD2XX_NET avec API correcte
+// FIXES: VendorId/ProductId via GetDeviceID() bit manipulation + ref parameters
 // ===================================================================
 
 using FTD2XX_NET;
@@ -28,7 +28,7 @@ public class FtdiEepromReader : IFtdiEepromReader
 
     /// <summary>
     /// Read VRAIE EEPROM data via D2XX drivers natifs
-    /// FIXED: Utilise les vraies méthodes API
+    /// FIXED: Utilise les vraies méthodes API avec GetDeviceID() pour VID/PID
     /// </summary>
     public async Task<FtdiEepromData> ReadEepromAsync(string serialNumber)
     {
@@ -101,7 +101,7 @@ public class FtdiEepromReader : IFtdiEepromReader
 
     /// <summary>
     /// Read VRAIE EEPROM data using D2XX native API
-    /// FIXED: Utilise les vraies structures et méthodes EEPROM
+    /// FIXED: Utilise les vraies structures et méthodes EEPROM + GetDeviceID() pour VID/PID
     /// </summary>
     private FtdiEepromData ReadRealEepromData(FTDI ftdi, string serialNumber)
     {
@@ -113,6 +113,12 @@ public class FtdiEepromReader : IFtdiEepromReader
                 ReadAt = DateTime.Now,
                 Source = "D2XX_NATIVE_EEPROM"
             };
+
+            // FIXED: First get VID/PID via GetDeviceID() (common to all device types)
+            if (!ReadVidPidFromDevice(ftdi, result))
+            {
+                _logger.LogWarning("⚠️ Cannot read VID/PID from device");
+            }
 
             // Method 1: Try reading EEPROM using specific structure methods (preferred)
             if (TryReadEepromWithStructures(ftdi, result))
@@ -138,8 +144,44 @@ public class FtdiEepromReader : IFtdiEepromReader
     }
 
     /// <summary>
+    /// FIXED: Read VID/PID using GetDeviceID() and bit manipulation
+    /// This is the CORRECT way according to current FTD2XX_NET API
+    /// </summary>
+    private bool ReadVidPidFromDevice(FTDI ftdi, FtdiEepromData result)
+    {
+        try
+        {
+            _logger.LogDebug("🔍 Reading VID/PID via GetDeviceID()");
+
+            uint deviceId = 0;
+            var status = ftdi.GetDeviceID(ref deviceId);
+            
+            if (status == FTDI.FT_STATUS.FT_OK)
+            {
+                // FIXED: Extract VID/PID using bit manipulation (as per documentation)
+                ushort vendorId = (ushort)(deviceId >> 16);    // Upper 16 bits = VID
+                ushort productId = (ushort)(deviceId & 0xFFFF); // Lower 16 bits = PID
+                
+                result.VendorId = vendorId.ToString("X4");
+                result.ProductId = productId.ToString("X4");
+                
+                _logger.LogDebug("✅ VID/PID extracted: {VendorId}/{ProductId}", result.VendorId, result.ProductId);
+                return true;
+            }
+            
+            _logger.LogDebug("⚠️ GetDeviceID failed: {Status}", status);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "⚠️ Error reading VID/PID from device");
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Method 1: Try reading EEPROM using device-specific structure methods
-    /// FIXED: Utilise les vraies méthodes ReadFTxxxxEEPROM
+    /// FIXED: Remove VendorId/ProductId from EEPROM structures (use GetDeviceID instead)
     /// </summary>
     private bool TryReadEepromWithStructures(FTDI ftdi, FtdiEepromData result)
     {
@@ -148,7 +190,7 @@ public class FtdiEepromReader : IFtdiEepromReader
             _logger.LogDebug("🔍 Attempting EEPROM read via device-specific structures");
 
             // Get device type first
-            var deviceType = FTDI.FT_DEVICE.FT_DEVICE_UNKNOWN;
+            FTDI.FT_DEVICE deviceType = FTDI.FT_DEVICE.FT_DEVICE_UNKNOWN;
             var status = ftdi.GetDeviceType(ref deviceType);
             
             if (status != FTDI.FT_STATUS.FT_OK)
@@ -189,7 +231,7 @@ public class FtdiEepromReader : IFtdiEepromReader
 
     /// <summary>
     /// Read FT232R EEPROM structure
-    /// FIXED: Utilise la vraie structure FT232R_EEPROM_STRUCTURE
+    /// FIXED: Remove non-existent VendorId/ProductId properties
     /// </summary>
     private bool ReadFT232REeprom(FTDI ftdi, FtdiEepromData result)
     {
@@ -200,11 +242,11 @@ public class FtdiEepromReader : IFtdiEepromReader
             
             if (status == FTDI.FT_STATUS.FT_OK)
             {
-                // FIXED: Utilise les vraies propriétés de la structure
+                // FIXED: Only use properties that actually exist in the structure
                 result.ProductDescription = eepromData.Description ?? "";
                 result.Manufacturer = eepromData.Manufacturer ?? "";
-                result.VendorId = eepromData.VendorId.ToString("X4");
-                result.ProductId = eepromData.ProductId.ToString("X4");
+                
+                // EEPROM-specific fields that DO exist
                 result.MaxPower = eepromData.MaxPower;
                 result.SelfPowered = eepromData.SelfPowered;
                 result.RemoteWakeup = eepromData.RemoteWakeup;
@@ -227,7 +269,7 @@ public class FtdiEepromReader : IFtdiEepromReader
 
     /// <summary>
     /// Read FT232H EEPROM structure
-    /// FIXED: Utilise la vraie structure FT232H_EEPROM_STRUCTURE
+    /// FIXED: Remove non-existent VendorId/ProductId properties
     /// </summary>
     private bool ReadFT232HEeprom(FTDI ftdi, FtdiEepromData result)
     {
@@ -238,11 +280,11 @@ public class FtdiEepromReader : IFtdiEepromReader
             
             if (status == FTDI.FT_STATUS.FT_OK)
             {
-                // FIXED: Utilise les vraies propriétés de la structure
+                // FIXED: Only use properties that actually exist in the structure
                 result.ProductDescription = eepromData.Description ?? "";
                 result.Manufacturer = eepromData.Manufacturer ?? "";
-                result.VendorId = eepromData.VendorId.ToString("X4");
-                result.ProductId = eepromData.ProductId.ToString("X4");
+                
+                // EEPROM-specific fields that DO exist
                 result.MaxPower = eepromData.MaxPower;
                 result.SelfPowered = eepromData.SelfPowered;
                 result.RemoteWakeup = eepromData.RemoteWakeup;
@@ -265,7 +307,7 @@ public class FtdiEepromReader : IFtdiEepromReader
 
     /// <summary>
     /// Read FT4232H EEPROM structure
-    /// FIXED: Utilise la vraie structure FT4232H_EEPROM_STRUCTURE
+    /// FIXED: Remove non-existent VendorId/ProductId properties
     /// </summary>
     private bool ReadFT4232HEeprom(FTDI ftdi, FtdiEepromData result)
     {
@@ -276,11 +318,11 @@ public class FtdiEepromReader : IFtdiEepromReader
             
             if (status == FTDI.FT_STATUS.FT_OK)
             {
-                // FIXED: Utilise les vraies propriétés de la structure
+                // FIXED: Only use properties that actually exist in the structure
                 result.ProductDescription = eepromData.Description ?? "";
                 result.Manufacturer = eepromData.Manufacturer ?? "";
-                result.VendorId = eepromData.VendorId.ToString("X4");
-                result.ProductId = eepromData.ProductId.ToString("X4");
+                
+                // EEPROM-specific fields that DO exist
                 result.MaxPower = eepromData.MaxPower;
                 result.SelfPowered = eepromData.SelfPowered;
                 result.RemoteWakeup = eepromData.RemoteWakeup;
@@ -303,7 +345,7 @@ public class FtdiEepromReader : IFtdiEepromReader
 
     /// <summary>
     /// Method 2: Fallback to basic device info
-    /// FIXED: Utilise les vraies méthodes GetDescription, GetSerialNumber
+    /// FIXED: Use proper GetDescription/GetSerialNumber with 'out' parameters
     /// </summary>
     private bool TryReadBasicDeviceInfo(FTDI ftdi, FtdiEepromData result)
     {
@@ -311,39 +353,25 @@ public class FtdiEepromReader : IFtdiEepromReader
         {
             _logger.LogDebug("🔍 Attempting basic device info fallback");
 
-            // Read basic device information using API methods
-            string description = "";
-            string serialNumber = "";
-            uint deviceId = 0;
+            // FIXED: Use 'out' parameters for API methods
+            string description;
+            string serialNumber;
 
             var descStatus = ftdi.GetDescription(out description);
             var serialStatus = ftdi.GetSerialNumber(out serialNumber);
-            var idStatus = ftdi.GetDeviceID(out deviceId);
 
-            if (descStatus == FTDI.FT_STATUS.FT_OK || 
-                serialStatus == FTDI.FT_STATUS.FT_OK || 
-                idStatus == FTDI.FT_STATUS.FT_OK)
+            if (descStatus == FTDI.FT_STATUS.FT_OK || serialStatus == FTDI.FT_STATUS.FT_OK)
             {
-                result.ProductDescription = description ?? "";
-                result.Manufacturer = "FTDI"; // Default manufacturer
+                if (descStatus == FTDI.FT_STATUS.FT_OK)
+                    result.ProductDescription = description ?? "";
                 
-                if (!string.IsNullOrEmpty(serialNumber))
-                {
+                if (serialStatus == FTDI.FT_STATUS.FT_OK && !string.IsNullOrEmpty(serialNumber))
                     result.SerialNumber = serialNumber;
-                }
 
-                // FIXED: Extract VID/PID from device ID using bit manipulation
-                if (idStatus == FTDI.FT_STATUS.FT_OK)
-                {
-                    ushort vendorId = (ushort)(deviceId >> 16);    // Upper 16 bits = VID
-                    ushort productId = (ushort)(deviceId & 0xFFFF); // Lower 16 bits = PID
-                    
-                    result.VendorId = vendorId.ToString("X4");
-                    result.ProductId = productId.ToString("X4");
-                }
+                result.Manufacturer = "FTDI"; // Default manufacturer
 
-                _logger.LogDebug("📱 Basic device info - Description: '{Description}', VID/PID: {VID}/{PID}",
-                    result.ProductDescription, result.VendorId, result.ProductId);
+                _logger.LogDebug("📱 Basic device info - Description: '{Description}', Serial: '{Serial}'",
+                    result.ProductDescription, result.SerialNumber);
 
                 return !string.IsNullOrEmpty(result.ProductDescription) || !string.IsNullOrEmpty(result.VendorId);
             }
@@ -446,7 +474,7 @@ public class FtdiEepromReader : IFtdiEepromReader
 
     /// <summary>
     /// Get list of all connected FTDI device serial numbers
-    /// FIXED: Utilise GetDeviceList() efficace
+    /// FIXED: Utilise GetDeviceList() efficace avec paramètre ref
     /// </summary>
     public async Task<List<string>> GetConnectedDeviceSerialNumbersAsync()
     {
@@ -461,7 +489,7 @@ public class FtdiEepromReader : IFtdiEepromReader
                 {
                     _logger.LogDebug("🔍 Scanning for connected FTDI devices...");
                     
-                    // Get number of FTDI devices
+                    // FIXED: Use 'ref' parameter for GetNumberOfDevices
                     uint deviceCount = 0;
                     var status = ftdi.GetNumberOfDevices(ref deviceCount);
                     
