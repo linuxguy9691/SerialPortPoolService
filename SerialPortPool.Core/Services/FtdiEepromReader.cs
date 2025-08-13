@@ -1,7 +1,8 @@
 // ===================================================================
-// FIXED: FtdiEepromReader.cs - Version avec vrais drivers D2XX FTDI
+// FIXED: FtdiEepromReader.cs - Version avec vraie API FTD2XX_NET
 // File: SerialPortPool.Core/Services/FtdiEepromReader.cs
 // Purpose: VRAIE lecture EEPROM via FTD2XX_NET avec API native D2XX
+// CORRECTIONS: Utilise les vraies méthodes et propriétés de l'API
 // ===================================================================
 
 using FTD2XX_NET;
@@ -14,7 +15,7 @@ namespace SerialPortPool.Core.Services;
 /// <summary>
 /// FTDI EEPROM Reader avec VRAIE lecture EEPROM via drivers D2XX natifs
 /// SPRINT 8 FEATURE: Lecture ProductDescription pour dynamic BIB selection
-/// APPROCHE: Utilise les API D2XX natives pour accéder directement à l'EEPROM
+/// FIXED: Utilise les vraies méthodes de l'API FTD2XX_NET actuelle
 /// </summary>
 public class FtdiEepromReader : IFtdiEepromReader
 {
@@ -27,6 +28,7 @@ public class FtdiEepromReader : IFtdiEepromReader
 
     /// <summary>
     /// Read VRAIE EEPROM data via D2XX drivers natifs
+    /// FIXED: Utilise les vraies méthodes API
     /// </summary>
     public async Task<FtdiEepromData> ReadEepromAsync(string serialNumber)
     {
@@ -99,6 +101,7 @@ public class FtdiEepromReader : IFtdiEepromReader
 
     /// <summary>
     /// Read VRAIE EEPROM data using D2XX native API
+    /// FIXED: Utilise les vraies structures et méthodes EEPROM
     /// </summary>
     private FtdiEepromData ReadRealEepromData(FTDI ftdi, string serialNumber)
     {
@@ -111,21 +114,14 @@ public class FtdiEepromReader : IFtdiEepromReader
                 Source = "D2XX_NATIVE_EEPROM"
             };
 
-            // Method 1: Try reading EEPROM using EE_Read (preferred)
-            if (TryReadEepromWithEERead(ftdi, result))
+            // Method 1: Try reading EEPROM using specific structure methods (preferred)
+            if (TryReadEepromWithStructures(ftdi, result))
             {
-                _logger.LogDebug("✅ EEPROM read successful via EE_Read method");
+                _logger.LogDebug("✅ EEPROM read successful via EEPROM structures");
                 return result;
             }
 
-            // Method 2: Fallback to string reading methods
-            if (TryReadEepromWithStringMethods(ftdi, result))
-            {
-                _logger.LogDebug("✅ EEPROM read successful via String methods");
-                return result;
-            }
-
-            // Method 3: Ultimate fallback to device info
+            // Method 2: Fallback to basic device info methods
             if (TryReadBasicDeviceInfo(ftdi, result))
             {
                 _logger.LogDebug("✅ Basic device info read successful");
@@ -142,142 +138,172 @@ public class FtdiEepromReader : IFtdiEepromReader
     }
 
     /// <summary>
-    /// Method 1: Try reading EEPROM using FT_EE_Read native function
+    /// Method 1: Try reading EEPROM using device-specific structure methods
+    /// FIXED: Utilise les vraies méthodes ReadFTxxxxEEPROM
     /// </summary>
-    private bool TryReadEepromWithEERead(FTDI ftdi, FtdiEepromData result)
+    private bool TryReadEepromWithStructures(FTDI ftdi, FtdiEepromData result)
     {
         try
         {
-            _logger.LogDebug("🔍 Attempting EEPROM read via EE_Read method");
+            _logger.LogDebug("🔍 Attempting EEPROM read via device-specific structures");
 
-            // Create EEPROM data structure for different chip types
-            var ft232rEeprom = new FTDI.FT232R_EEPROM_STRUCTURE();
-            var ft232hEeprom = new FTDI.FT232H_EEPROM_STRUCTURE();
-            var ft4232hEeprom = new FTDI.FT4232H_EEPROM_STRUCTURE();
-
-            // Try different EEPROM structures based on device type
+            // Get device type first
             var deviceType = FTDI.FT_DEVICE.FT_DEVICE_UNKNOWN;
-            var deviceId = 0U;
-            
             var status = ftdi.GetDeviceType(ref deviceType);
+            
+            if (status != FTDI.FT_STATUS.FT_OK)
+            {
+                _logger.LogDebug("⚠️ Cannot get device type: {Status}", status);
+                return false;
+            }
+
+            _logger.LogDebug("📱 Device type detected: {DeviceType}", deviceType);
+
+            // Read EEPROM based on device type
+            switch (deviceType)
+            {
+                case FTDI.FT_DEVICE.FT_DEVICE_232R:
+                    return ReadFT232REeprom(ftdi, result);
+
+                case FTDI.FT_DEVICE.FT_DEVICE_232H:
+                    return ReadFT232HEeprom(ftdi, result);
+
+                case FTDI.FT_DEVICE.FT_DEVICE_4232H:
+                    return ReadFT4232HEeprom(ftdi, result);
+
+                case FTDI.FT_DEVICE.FT_DEVICE_2232H:
+                    // Use FT232H structure for FT2232H (similar EEPROM layout)
+                    return ReadFT232HEeprom(ftdi, result);
+
+                default:
+                    _logger.LogWarning("⚠️ Unsupported device type for EEPROM reading: {DeviceType}", deviceType);
+                    return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "⚠️ EEPROM structure reading failed with exception");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Read FT232R EEPROM structure
+    /// FIXED: Utilise la vraie structure FT232R_EEPROM_STRUCTURE
+    /// </summary>
+    private bool ReadFT232REeprom(FTDI ftdi, FtdiEepromData result)
+    {
+        try
+        {
+            var eepromData = new FTDI.FT232R_EEPROM_STRUCTURE();
+            var status = ftdi.ReadFT232REEPROM(eepromData);
+            
             if (status == FTDI.FT_STATUS.FT_OK)
             {
-                _logger.LogDebug("📱 Device type detected: {DeviceType}", deviceType);
-
-                switch (deviceType)
-                {
-                    case FTDI.FT_DEVICE.FT_DEVICE_232R:
-                        status = ftdi.ReadFT232REEPROM(ft232rEeprom);
-                        if (status == FTDI.FT_STATUS.FT_OK)
-                        {
-                            result.ProductDescription = ft232rEeprom.Description ?? "";
-                            result.Manufacturer = ft232rEeprom.Manufacturer ?? "";
-                            result.VendorId = ft232rEeprom.VendorId.ToString("X4");
-                            result.ProductId = ft232rEeprom.ProductId.ToString("X4");
-                            result.MaxPower = ft232rEeprom.MaxPower;
-                            result.SelfPowered = ft232rEeprom.SelfPowered;
-                            result.RemoteWakeup = ft232rEeprom.RemoteWakeup;
-                            return true;
-                        }
-                        break;
-
-                    case FTDI.FT_DEVICE.FT_DEVICE_232H:
-                        status = ftdi.ReadFT232HEEPROM(ft232hEeprom);
-                        if (status == FTDI.FT_STATUS.FT_OK)
-                        {
-                            result.ProductDescription = ft232hEeprom.Description ?? "";
-                            result.Manufacturer = ft232hEeprom.Manufacturer ?? "";
-                            result.VendorId = ft232hEeprom.VendorId.ToString("X4");
-                            result.ProductId = ft232hEeprom.ProductId.ToString("X4");
-                            result.MaxPower = ft232hEeprom.MaxPower;
-                            result.SelfPowered = ft232hEeprom.SelfPowered;
-                            result.RemoteWakeup = ft232hEeprom.RemoteWakeup;
-                            return true;
-                        }
-                        break;
-
-                    case FTDI.FT_DEVICE.FT_DEVICE_4232H:
-                        status = ftdi.ReadFT4232HEEPROM(ft4232hEeprom);
-                        if (status == FTDI.FT_STATUS.FT_OK)
-                        {
-                            result.ProductDescription = ft4232hEeprom.Description ?? "";
-                            result.Manufacturer = ft4232hEeprom.Manufacturer ?? "";
-                            result.VendorId = ft4232hEeprom.VendorId.ToString("X4");
-                            result.ProductId = ft4232hEeprom.ProductId.ToString("X4");
-                            result.MaxPower = ft4232hEeprom.MaxPower;
-                            result.SelfPowered = ft4232hEeprom.SelfPowered;
-                            result.RemoteWakeup = ft4232hEeprom.RemoteWakeup;
-                            return true;
-                        }
-                        break;
-                }
+                // FIXED: Utilise les vraies propriétés de la structure
+                result.ProductDescription = eepromData.Description ?? "";
+                result.Manufacturer = eepromData.Manufacturer ?? "";
+                result.VendorId = eepromData.VendorId.ToString("X4");
+                result.ProductId = eepromData.ProductId.ToString("X4");
+                result.MaxPower = eepromData.MaxPower;
+                result.SelfPowered = eepromData.SelfPowered;
+                result.RemoteWakeup = eepromData.RemoteWakeup;
+                result.SerNumEnable = eepromData.SerNumEnable;
+                
+                _logger.LogDebug("📖 FT232R EEPROM read: '{Description}' by '{Manufacturer}'", 
+                    result.ProductDescription, result.Manufacturer);
+                return true;
             }
-
-            _logger.LogDebug("⚠️ EE_Read method failed or unsupported device type: {DeviceType}", deviceType);
+            
+            _logger.LogDebug("⚠️ FT232R EEPROM read failed: {Status}", status);
             return false;
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "⚠️ EE_Read method failed with exception");
+            _logger.LogDebug(ex, "⚠️ FT232R EEPROM read exception");
             return false;
         }
     }
 
     /// <summary>
-    /// Method 2: Try reading using string-specific methods
+    /// Read FT232H EEPROM structure
+    /// FIXED: Utilise la vraie structure FT232H_EEPROM_STRUCTURE
     /// </summary>
-    private bool TryReadEepromWithStringMethods(FTDI ftdi, FtdiEepromData result)
+    private bool ReadFT232HEeprom(FTDI ftdi, FtdiEepromData result)
     {
         try
         {
-            _logger.LogDebug("🔍 Attempting EEPROM read via String methods");
-
-            // Try to read strings directly
-            string manufacturer = "";
-            string description = "";
-            string serialNumber = "";
-
-            var manufacturerStatus = ftdi.GetManufacturer(out manufacturer);
-            var descriptionStatus = ftdi.GetDescription(out description);
-            var serialStatus = ftdi.GetSerialNumber(out serialNumber);
-
-            if (manufacturerStatus == FTDI.FT_STATUS.FT_OK || 
-                descriptionStatus == FTDI.FT_STATUS.FT_OK || 
-                serialStatus == FTDI.FT_STATUS.FT_OK)
+            var eepromData = new FTDI.FT232H_EEPROM_STRUCTURE();
+            var status = ftdi.ReadFT232HEEPROM(eepromData);
+            
+            if (status == FTDI.FT_STATUS.FT_OK)
             {
-                result.Manufacturer = manufacturer ?? "";
-                result.ProductDescription = description ?? "";
+                // FIXED: Utilise les vraies propriétés de la structure
+                result.ProductDescription = eepromData.Description ?? "";
+                result.Manufacturer = eepromData.Manufacturer ?? "";
+                result.VendorId = eepromData.VendorId.ToString("X4");
+                result.ProductId = eepromData.ProductId.ToString("X4");
+                result.MaxPower = eepromData.MaxPower;
+                result.SelfPowered = eepromData.SelfPowered;
+                result.RemoteWakeup = eepromData.RemoteWakeup;
+                result.SerNumEnable = eepromData.SerNumEnable;
                 
-                if (!string.IsNullOrEmpty(serialNumber))
-                {
-                    result.SerialNumber = serialNumber;
-                }
-
-                // Try to get VID/PID via device info
-                var deviceInfo = new FTDI.FT_DEVICE_INFO_NODE();
-                if (TryGetDeviceInfo(ftdi, ref deviceInfo))
-                {
-                    result.VendorId = "0403"; // Standard FTDI VID
-                    result.ProductId = GetProductIdFromDeviceType(deviceInfo.Type);
-                }
-
-                _logger.LogDebug("📝 String method results - Manufacturer: '{Manufacturer}', Description: '{Description}'",
-                    result.Manufacturer, result.ProductDescription);
-
-                return !string.IsNullOrEmpty(result.ProductDescription) || !string.IsNullOrEmpty(result.Manufacturer);
+                _logger.LogDebug("📖 FT232H EEPROM read: '{Description}' by '{Manufacturer}'", 
+                    result.ProductDescription, result.Manufacturer);
+                return true;
             }
-
+            
+            _logger.LogDebug("⚠️ FT232H EEPROM read failed: {Status}", status);
             return false;
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "⚠️ String methods failed with exception");
+            _logger.LogDebug(ex, "⚠️ FT232H EEPROM read exception");
             return false;
         }
     }
 
     /// <summary>
-    /// Method 3: Fallback to basic device info
+    /// Read FT4232H EEPROM structure
+    /// FIXED: Utilise la vraie structure FT4232H_EEPROM_STRUCTURE
+    /// </summary>
+    private bool ReadFT4232HEeprom(FTDI ftdi, FtdiEepromData result)
+    {
+        try
+        {
+            var eepromData = new FTDI.FT4232H_EEPROM_STRUCTURE();
+            var status = ftdi.ReadFT4232HEEPROM(eepromData);
+            
+            if (status == FTDI.FT_STATUS.FT_OK)
+            {
+                // FIXED: Utilise les vraies propriétés de la structure
+                result.ProductDescription = eepromData.Description ?? "";
+                result.Manufacturer = eepromData.Manufacturer ?? "";
+                result.VendorId = eepromData.VendorId.ToString("X4");
+                result.ProductId = eepromData.ProductId.ToString("X4");
+                result.MaxPower = eepromData.MaxPower;
+                result.SelfPowered = eepromData.SelfPowered;
+                result.RemoteWakeup = eepromData.RemoteWakeup;
+                result.SerNumEnable = eepromData.SerNumEnable;
+                
+                _logger.LogDebug("📖 FT4232H EEPROM read: '{Description}' by '{Manufacturer}'", 
+                    result.ProductDescription, result.Manufacturer);
+                return true;
+            }
+            
+            _logger.LogDebug("⚠️ FT4232H EEPROM read failed: {Status}", status);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "⚠️ FT4232H EEPROM read exception");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Method 2: Fallback to basic device info
+    /// FIXED: Utilise les vraies méthodes GetDescription, GetSerialNumber
     /// </summary>
     private bool TryReadBasicDeviceInfo(FTDI ftdi, FtdiEepromData result)
     {
@@ -285,18 +311,41 @@ public class FtdiEepromReader : IFtdiEepromReader
         {
             _logger.LogDebug("🔍 Attempting basic device info fallback");
 
-            var deviceInfo = new FTDI.FT_DEVICE_INFO_NODE();
-            if (TryGetDeviceInfo(ftdi, ref deviceInfo))
+            // Read basic device information using API methods
+            string description = "";
+            string serialNumber = "";
+            uint deviceId = 0;
+
+            var descStatus = ftdi.GetDescription(out description);
+            var serialStatus = ftdi.GetSerialNumber(out serialNumber);
+            var idStatus = ftdi.GetDeviceID(out deviceId);
+
+            if (descStatus == FTDI.FT_STATUS.FT_OK || 
+                serialStatus == FTDI.FT_STATUS.FT_OK || 
+                idStatus == FTDI.FT_STATUS.FT_OK)
             {
-                result.ProductDescription = deviceInfo.Description ?? GetProductDescriptionFromType(deviceInfo.Type);
-                result.Manufacturer = "FTDI";
-                result.VendorId = "0403";
-                result.ProductId = GetProductIdFromDeviceType(deviceInfo.Type);
+                result.ProductDescription = description ?? "";
+                result.Manufacturer = "FTDI"; // Default manufacturer
+                
+                if (!string.IsNullOrEmpty(serialNumber))
+                {
+                    result.SerialNumber = serialNumber;
+                }
 
-                _logger.LogDebug("📱 Basic device info - Type: {Type}, Description: '{Description}'",
-                    deviceInfo.Type, result.ProductDescription);
+                // FIXED: Extract VID/PID from device ID using bit manipulation
+                if (idStatus == FTDI.FT_STATUS.FT_OK)
+                {
+                    ushort vendorId = (ushort)(deviceId >> 16);    // Upper 16 bits = VID
+                    ushort productId = (ushort)(deviceId & 0xFFFF); // Lower 16 bits = PID
+                    
+                    result.VendorId = vendorId.ToString("X4");
+                    result.ProductId = productId.ToString("X4");
+                }
 
-                return true;
+                _logger.LogDebug("📱 Basic device info - Description: '{Description}', VID/PID: {VID}/{PID}",
+                    result.ProductDescription, result.VendorId, result.ProductId);
+
+                return !string.IsNullOrEmpty(result.ProductDescription) || !string.IsNullOrEmpty(result.VendorId);
             }
 
             return false;
@@ -309,33 +358,8 @@ public class FtdiEepromReader : IFtdiEepromReader
     }
 
     /// <summary>
-    /// Helper to get device info safely
-    /// </summary>
-    private bool TryGetDeviceInfo(FTDI ftdi, ref FTDI.FT_DEVICE_INFO_NODE deviceInfo)
-    {
-        try
-        {
-            uint deviceCount = 0;
-            if (ftdi.GetNumberOfDevices(ref deviceCount) == FTDI.FT_STATUS.FT_OK && deviceCount > 0)
-            {
-                var deviceInfoArray = new FTDI.FT_DEVICE_INFO_NODE[deviceCount];
-                if (ftdi.GetDeviceList(deviceInfoArray) == FTDI.FT_STATUS.FT_OK)
-                {
-                    // Find our device in the list by trying to match
-                    deviceInfo = deviceInfoArray[0]; // Take first one as fallback
-                    return true;
-                }
-            }
-            return false;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
     /// Read enhanced device data from all connected FTDI devices
+    /// FIXED: Utilise GetDeviceList() pour l'énumération efficace
     /// </summary>
     public async Task<Dictionary<string, FtdiEepromData>> ReadAllConnectedDevicesAsync()
     {
@@ -422,6 +446,7 @@ public class FtdiEepromReader : IFtdiEepromReader
 
     /// <summary>
     /// Get list of all connected FTDI device serial numbers
+    /// FIXED: Utilise GetDeviceList() efficace
     /// </summary>
     public async Task<List<string>> GetConnectedDeviceSerialNumbersAsync()
     {
@@ -454,7 +479,7 @@ public class FtdiEepromReader : IFtdiEepromReader
                     
                     _logger.LogDebug("📋 Found {DeviceCount} FTDI device(s)", deviceCount);
                     
-                    // Get device info list
+                    // FIXED: Get device info list using proper API
                     var deviceInfoArray = new FTDI.FT_DEVICE_INFO_NODE[deviceCount];
                     status = ftdi.GetDeviceList(deviceInfoArray);
                     
@@ -527,40 +552,4 @@ public class FtdiEepromReader : IFtdiEepromReader
             return string.Empty;
         }
     }
-
-    #region Helper Methods
-
-    /// <summary>
-    /// Get product description from FTDI device type
-    /// </summary>
-    private string GetProductDescriptionFromType(FTDI.FT_DEVICE type)
-    {
-        return type switch
-        {
-            FTDI.FT_DEVICE.FT_DEVICE_232R => "FT232R USB UART",
-            FTDI.FT_DEVICE.FT_DEVICE_2232H => "FT2232H Dual USB UART/FIFO",
-            FTDI.FT_DEVICE.FT_DEVICE_4232H => "FT4232H Quad USB UART/FIFO",
-            FTDI.FT_DEVICE.FT_DEVICE_232H => "FT232H Single Channel USB 2.0 Hi-Speed USB to MULTIPURPOSE UART/FIFO",
-            FTDI.FT_DEVICE.FT_DEVICE_X_SERIES => "FT X-Series USB UART",
-            _ => "FTDI USB Serial Device"
-        };
-    }
-
-    /// <summary>
-    /// Get Product ID from device type
-    /// </summary>
-    private string GetProductIdFromDeviceType(FTDI.FT_DEVICE type)
-    {
-        return type switch
-        {
-            FTDI.FT_DEVICE.FT_DEVICE_232R => "6001",
-            FTDI.FT_DEVICE.FT_DEVICE_2232H => "6010", 
-            FTDI.FT_DEVICE.FT_DEVICE_4232H => "6011",
-            FTDI.FT_DEVICE.FT_DEVICE_232H => "6014",
-            FTDI.FT_DEVICE.FT_DEVICE_X_SERIES => "6015",
-            _ => "0000"
-        };
-    }
-
-    #endregion
 }
