@@ -299,7 +299,8 @@ class Program
             // Sprint 5/6 services pour le workflow
             services.AddMemoryCache();
             services.AddScoped<IBibConfigurationLoader, XmlBibConfigurationLoader>();
-            services.AddScoped<IBibMappingService, TemporaryBibMappingService>();
+            //Needed before EEPROM mapping
+            //services.AddScoped<IBibMappingService, TemporaryBibMappingService>();
             services.AddScoped<IProtocolHandlerFactory, ProtocolHandlerFactory>();
             services.AddScoped<RS232ProtocolHandler>();
 

@@ -19,7 +19,8 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
 {
     private readonly IPortReservationService _reservationService;
     private readonly IBibConfigurationLoader _configLoader;
-    private readonly IBibMappingService _bibMapping; // ← Keep for backwards compatibility
+    //Needed only before EEPROM mapping implemented
+    //private readonly IBibMappingService _bibMapping; // ← Keep for backwards compatibility
     private readonly IDynamicPortMappingService _dynamicPortMapping; // ← NEW Sprint 8
     private readonly IProtocolHandlerFactory _protocolFactory;
     private readonly ILogger<BibWorkflowOrchestrator> _logger;
@@ -27,14 +28,16 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
     public BibWorkflowOrchestrator(
         IPortReservationService reservationService,
         IBibConfigurationLoader configLoader,
-        IBibMappingService bibMapping, // ← Keep existing
+        //Needed only before EEPROM mapping implemented
+        //IBibMappingService bibMapping, // ← Keep existing
         IDynamicPortMappingService dynamicPortMapping, // ← NEW Sprint 8
         IProtocolHandlerFactory protocolFactory,
         ILogger<BibWorkflowOrchestrator> logger)
     {
         _reservationService = reservationService ?? throw new ArgumentNullException(nameof(reservationService));
         _configLoader = configLoader ?? throw new ArgumentNullException(nameof(configLoader));
-        _bibMapping = bibMapping ?? throw new ArgumentNullException(nameof(bibMapping));
+        //
+        //_bibMapping = bibMapping ?? throw new ArgumentNullException(nameof(bibMapping));
         _dynamicPortMapping = dynamicPortMapping ?? throw new ArgumentNullException(nameof(dynamicPortMapping)); // ← NEW
         _protocolFactory = protocolFactory ?? throw new ArgumentNullException(nameof(protocolFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -153,13 +156,15 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
                 m.BibId.Equals(bibId, StringComparison.OrdinalIgnoreCase) && 
                 m.UutId.Equals(uutId, StringComparison.OrdinalIgnoreCase)).ToList();
 
-            if (!relevantMappings.Any())
+            //Not need after EEPROM mapping implemented
+            /*if (!relevantMappings.Any())
             {
                 _logger.LogWarning($"⚠️ SPRINT 8: No dynamic mappings found for {bibId}.{uutId}");
                 
                 // Fallback to legacy system
                 _logger.LogInformation($"🔄 Falling back to legacy BIB mapping for {bibId}.{uutId}");
-                var legacyPorts = await _bibMapping.GetUutPortsAsync(bibId, uutId);
+                // Use legacy BIB mapping service (if available)
+                //var legacyPorts = await _bibMapping.GetUutPortsAsync(bibId, uutId);
                 var mappedPorts = legacyPorts.Where(m => !string.IsNullOrEmpty(m.PhysicalPort)).ToList();
 
                 if (!mappedPorts.Any())
@@ -204,7 +209,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
                 };
                 
                 return fallbackResult.WithError($"All legacy ports failed for {bibId}.{uutId}");
-            }
+            }*/
 
             // ✨ SPRINT 8: Use dynamic mappings
             _logger.LogInformation($"🎯 SPRINT 8: Found {relevantMappings.Count} dynamic port mappings for {bibId}.{uutId}");
@@ -263,44 +268,34 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
     /// STRATEGY: Try dynamic discovery first, fallback to legacy mapping
     /// </summary>
     private async Task<string?> FindPhysicalPortDynamicAsync(string bibId, string uutId, int portNumber)
+{
+    try
     {
-        try
+        _logger.LogDebug($"🔍 SPRINT 8: Dynamic port discovery for {bibId}.{uutId}.{portNumber}");
+
+        // SEULEMENT le dynamic mapping - PAS de fallback
+        var dynamicPort = await _dynamicPortMapping.GetDynamicPortForUutPortAsync(bibId, uutId, portNumber);
+        if (!string.IsNullOrEmpty(dynamicPort))
         {
-            _logger.LogDebug($"🔍 SPRINT 8: Dynamic port discovery for {bibId}.{uutId}.{portNumber}");
-
-            // STEP 1: Try dynamic port mapping (Sprint 8)
-            var dynamicPort = await _dynamicPortMapping.GetDynamicPortForUutPortAsync(bibId, uutId, portNumber);
-            if (!string.IsNullOrEmpty(dynamicPort))
-            {
-                _logger.LogInformation($"🎯 SPRINT 8: Dynamic mapping SUCCESS - {bibId}.{uutId}.{portNumber} → {dynamicPort}");
-                return dynamicPort;
-            }
-
-            _logger.LogWarning($"⚠️ SPRINT 8: Dynamic mapping not available for {bibId}.{uutId}.{portNumber}");
-
-            // STEP 2: Fallback to legacy BIB mapping
-            _logger.LogInformation($"🔄 Attempting legacy BIB mapping for {bibId}.{uutId}.{portNumber}");
-            var legacyPort = await FindPhysicalPortLegacyAsync(bibId, uutId, portNumber);
-            if (!string.IsNullOrEmpty(legacyPort))
-            {
-                _logger.LogInformation($"🔄 Legacy mapping SUCCESS - {bibId}.{uutId}.{portNumber} → {legacyPort}");
-                return legacyPort;
-            }
-
-            _logger.LogError($"❌ SPRINT 8: Both dynamic and legacy mapping failed for {bibId}.{uutId}.{portNumber}");
-            return null;
+            _logger.LogInformation($"🎯 SPRINT 8: Dynamic mapping SUCCESS - {bibId}.{uutId}.{portNumber} → {dynamicPort}");
+            return dynamicPort;
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"❌ SPRINT 8: Error during dynamic port discovery for {bibId}.{uutId}.{portNumber}");
-            return null;
-        }
+
+        _logger.LogError($"❌ SPRINT 8: Dynamic mapping failed for {bibId}.{uutId}.{portNumber}");
+        return null; // ← Pas de fallback, FORCE le debug du dynamic mapping
     }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"❌ SPRINT 8: Error during dynamic port discovery for {bibId}.{uutId}.{portNumber}");
+        return null;
+    }
+}
 
     /// <summary>
     /// Legacy port mapping (preserved for backwards compatibility)
     /// </summary>
-    private async Task<string?> FindPhysicalPortLegacyAsync(string bibId, string uutId, int portNumber)
+    /// Not need after EEPROM mapping implemented
+    /*private async Task<string?> FindPhysicalPortLegacyAsync(string bibId, string uutId, int portNumber)
     {
         try
         {
@@ -320,7 +315,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
             _logger.LogError(ex, $"❌ Error in legacy port mapping for {bibId}.{uutId}.{portNumber}");
             return null;
         }
-    }
+    }*/
 
     #endregion
 
