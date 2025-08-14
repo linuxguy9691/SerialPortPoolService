@@ -306,23 +306,68 @@ public class RS232ProtocolHandler : IProtocolHandler
         }
     }
 
-    /// <summary>
-    /// Execute command with protocol command object
-    /// </summary>
-    public async Task<ProtocolResponse> ExecuteCommandAsync(ProtocolSession session, ProtocolCommand command, CancellationToken cancellationToken)
+    // <summary>
+/// Execute command with protocol command object - SPRINT 8 ENHANCED with regex validation
+/// </summary>
+public async Task<ProtocolResponse> ExecuteCommandAsync(ProtocolSession session, ProtocolCommand command, CancellationToken cancellationToken)
+{
+    var request = new ProtocolRequest
     {
-        var request = new ProtocolRequest
-        {
-            CommandId = command.CommandId,
-            Command = command.Command,
-            Data = command.Data.Length > 0 ? command.Data : Encoding.UTF8.GetBytes(command.Command),
-            Parameters = command.Parameters,
-            Timeout = command.Timeout,
-            CreatedAt = DateTime.UtcNow
-        };
+        CommandId = command.CommandId,
+        Command = command.Command,
+        Data = command.Data.Length > 0 ? command.Data : Encoding.UTF8.GetBytes(command.Command),
+        Parameters = command.Parameters,
+        Timeout = command.Timeout,
+        CreatedAt = DateTime.UtcNow
+    };
 
-        return await SendCommandAsync(request, cancellationToken);
+    var protocolResponse = await SendCommandAsync(request, cancellationToken);
+    
+    // ✨ SPRINT 8 NEW: Use enhanced validation with regex support
+    if (!string.IsNullOrEmpty(command.ExpectedResponse))
+    {
+        var validationResult = command.ValidateResponse(protocolResponse.DataAsString);
+        
+        if (!validationResult.IsValid)
+        {
+            _logger.LogWarning("📊 Response validation failed: {ValidationResult}", validationResult.GetSummary());
+            
+            // Add validation details to response metadata
+            protocolResponse.Metadata["ValidationResult"] = validationResult.IsValid.ToString();
+            protocolResponse.Metadata["ValidationMessage"] = validationResult.Message;
+            protocolResponse.Metadata["ValidationMethod"] = validationResult.ValidationMethod.ToString();
+            
+            // Add regex capture groups if available
+            if (validationResult.CapturedGroups.Any())
+            {
+                protocolResponse.Metadata["CapturedGroups"] = string.Join(", ", 
+                    validationResult.CapturedGroups.Select(g => $"{g.Key}={g.Value}"));
+                
+                _logger.LogDebug("🎯 Regex groups captured: {Groups}", 
+                    string.Join(", ", validationResult.CapturedGroups.Select(g => $"{g.Key}='{g.Value}'")));
+            }
+        }
+        else
+        {
+            _logger.LogDebug("✅ Response validation passed: {ValidationResult}", validationResult.GetSummary());
+            
+            // Add successful validation metadata
+            protocolResponse.Metadata["ValidationResult"] = "true";
+            protocolResponse.Metadata["ValidationMethod"] = validationResult.ValidationMethod.ToString();
+            
+            // Add regex capture groups for successful regex matches
+            if (validationResult.CapturedGroups.Any())
+            {
+                foreach (var group in validationResult.CapturedGroups)
+                {
+                    protocolResponse.Metadata[$"Captured_{group.Key}"] = group.Value;
+                }
+            }
+        }
     }
+
+    return protocolResponse;
+}
 
     /// <summary>
     /// Send command sequence

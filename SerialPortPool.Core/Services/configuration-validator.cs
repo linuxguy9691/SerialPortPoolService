@@ -78,7 +78,7 @@ public class ConfigurationValidator : IConfigurationValidator
             if (File.Exists(xsdPath))
             {
                 settings.Schemas.Add(null, xsdPath);
-                settings.ValidationType = ValidationType.Schema;
+                settings.ValidationType = System.Xml.ValidationType.Schema;
                 settings.ValidationEventHandler += (sender, e) =>
                 {
                     if (e.Severity == XmlSeverityType.Error)
