@@ -302,6 +302,11 @@ class Program
             services.AddScoped<IBibMappingService, TemporaryBibMappingService>();
             services.AddScoped<IProtocolHandlerFactory, ProtocolHandlerFactory>();
             services.AddScoped<RS232ProtocolHandler>();
+
+            // Sprint 8 EEPROM services mapping BIB
+            services.AddScoped<IFtdiEepromReader, FtdiEepromReader>();
+            services.AddScoped<IDynamicBibMappingService, DynamicBibMappingService>();
+            services.AddScoped<IDynamicPortMappingService, DynamicPortMappingService>();
             
             // BibWorkflowOrchestrator pour le client demo
             services.AddScoped<IBibWorkflowOrchestrator, BibWorkflowOrchestrator>();
