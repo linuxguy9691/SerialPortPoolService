@@ -1,6 +1,6 @@
 // ===================================================================
-// SPRINT 8: Dynamic BIB Mapping Service Implementation
-// File: SerialPortPool.Core/Services/DynamicBibMappingService.cs  
+// SPRINT 8: Dynamic BIB Mapping Service Implementation - FIXED PARSING
+// File: SerialPortPool.Core/Services/DynamicBibMappingService.cs
 // Purpose: Ultra-simple EEPROM → BIB_ID mapping with robust fallback
 // Philosophy: "Minimum Change" - ProductDescription = BIB_ID directly
 // ===================================================================
@@ -12,7 +12,7 @@ namespace SerialPortPool.Core.Services;
 
 /// <summary>
 /// SPRINT 8: Dynamic BIB mapping via FTDI EEPROM ProductDescription
-/// SIMPLE STRATEGY: ProductDescription content = BIB_ID (no parsing required)
+/// SIMPLE STRATEGY: ProductDescription content = BIB_ID directly (no parsing)
 /// ROBUST DESIGN: Always provides valid BIB_ID (fallback strategy)
 /// </summary>
 public class DynamicBibMappingService : IDynamicBibMappingService
@@ -69,21 +69,21 @@ public class DynamicBibMappingService : IDynamicBibMappingService
                 return null;
             }
 
-            // ✨ SPRINT 8 CORE: ProductDescription = BIB_ID directly (no parsing)
-            var bibId = eepromData.ProductDescription.Trim();
+            // 🔥 FIXED: Parse "client_demo A" → "client_demo"
+            var bibId = ParseBibIdFromProductDescription(eepromData.ProductDescription.Trim());
 
             // Validate BIB_ID format (basic sanity check)
             if (IsValidBibId(bibId))
             {
-                _logger.LogInformation("✅ Dynamic BIB detected: {SerialNumber} → '{BibId}' (Port: {PortName})", 
-                    serialNumber, bibId, portName);
+                _logger.LogInformation("✅ Dynamic BIB detected: {SerialNumber} → '{BibId}' (from '{ProductDescription}', Port: {PortName})", 
+                    serialNumber, bibId, eepromData.ProductDescription, portName);
                 UpdateStatistics(success: true, usedFallback: false, hadError: false);
                 return bibId;
             }
             else
             {
-                _logger.LogWarning("⚠️ Invalid BIB_ID format in ProductDescription: '{ProductDescription}' (Serial: {SerialNumber})", 
-                    eepromData.ProductDescription, serialNumber);
+                _logger.LogWarning("⚠️ Invalid BIB_ID format after parsing: '{BibId}' from '{ProductDescription}' (Serial: {SerialNumber})", 
+                    bibId, eepromData.ProductDescription, serialNumber);
                 UpdateStatistics(success: false, usedFallback: false, hadError: false);
                 return null;
             }
@@ -95,6 +95,45 @@ public class DynamicBibMappingService : IDynamicBibMappingService
             UpdateStatistics(success: false, usedFallback: false, hadError: true);
             return null;
         }
+    }
+
+    /// <summary>
+    /// 🔥 FIXED: Parse BIB_ID from ProductDescription 
+    /// Examples: "client_demo A" → "client_demo"
+    ///          "client_demo" → "client_demo"
+    ///          "production_test B" → "production_test"
+    /// </summary>
+    private string ParseBibIdFromProductDescription(string productDescription)
+    {
+        if (string.IsNullOrEmpty(productDescription))
+            return string.Empty;
+
+        var trimmed = productDescription.Trim();
+        
+        // Check if ends with single letter suffix (A, B, C, D) preceded by space
+        if (trimmed.Length > 2 && 
+            char.IsLetter(trimmed[trimmed.Length - 1]) && 
+            trimmed[trimmed.Length - 2] == ' ')
+        {
+            var suffix = trimmed[trimmed.Length - 1].ToString().ToUpper();
+            
+            // Only parse if it's a valid port suffix (A, B, C, D)
+            if (suffix == "A" || suffix == "B" || suffix == "C" || suffix == "D")
+            {
+                var bibId = trimmed.Substring(0, trimmed.Length - 2).Trim();
+                
+                _logger.LogDebug("📝 Parsed ProductDescription: '{ProductDescription}' → BIB_ID: '{BibId}', Suffix: '{Suffix}'", 
+                    productDescription, bibId, suffix);
+                
+                return bibId;
+            }
+        }
+
+        // No valid suffix found, use as-is
+        _logger.LogDebug("📝 No valid suffix in ProductDescription: '{ProductDescription}' → BIB_ID: '{BibId}'", 
+            productDescription, trimmed);
+        
+        return trimmed;
     }
 
     /// <summary>

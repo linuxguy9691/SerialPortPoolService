@@ -1,5 +1,5 @@
 // ===================================================================
-// SPRINT 8: Service Collection Extensions - ZERO TOUCH Approach
+// SPRINT 8: Service Collection Extensions - FIXED VERSION
 // File: SerialPortPool.Core/Extensions/Sprint8ServiceCollectionExtensions.cs
 // Purpose: Simple service registration for Sprint 8 features  
 // Philosophy: "Zero Touch" - Additive registration, preserves existing services
@@ -25,19 +25,13 @@ public static class Sprint8ServiceCollectionExtensions
     /// ADDS: Only new Sprint 8 dynamic BIB mapping capabilities
     /// </summary>
     public static IServiceCollection AddSprint8Services(this IServiceCollection services)
-    {
-        // ✨ SPRINT 8: New EEPROM services
-        services.AddScoped<IFtdiEepromReader, FtdiEepromReader>();
-        
-        // ✨ SPRINT 8: Dynamic BIB mapping
-        services.AddScoped<IDynamicBibMappingService, DynamicBibMappingService>();
-        
-        // ✨ SPRINT 8: Wrapper service (uses existing discovery via DI)
-        services.AddScoped<ISprint8DynamicBibService, Sprint8DynamicBibService>();
-        
-        return services;
-    }
-
+{
+    services.AddScoped<IFtdiEepromReader, FtdiEepromReader>();
+    services.AddScoped<IDynamicBibMappingService, DynamicBibMappingService>();
+    services.AddScoped<IDynamicPortMappingService, DynamicPortMappingService>(); // ← AJOUTER ÇA !
+    services.AddScoped<ISprint8DynamicBibService, Sprint8DynamicBibService>();
+    return services;
+}
     /// <summary>
     /// Add complete Sprint 8 setup with existing Sprint 6 foundation
     /// ONE-LINE: Complete setup including existing services + Sprint 8 enhancements
@@ -125,6 +119,10 @@ public static class Sprint8ServiceCollectionExtensions
 
             var dynamicBibMapping = serviceProvider.GetRequiredService<IDynamicBibMappingService>();
             Console.WriteLine("✅ IDynamicBibMappingService registered");
+
+            // 🔥 FIXED: Test IDynamicPortMappingService
+            var dynamicPortMapping = serviceProvider.GetRequiredService<IDynamicPortMappingService>();
+            Console.WriteLine("✅ IDynamicPortMappingService registered");
 
             var sprint8Service = serviceProvider.GetRequiredService<ISprint8DynamicBibService>();
             Console.WriteLine("✅ ISprint8DynamicBibService registered");
