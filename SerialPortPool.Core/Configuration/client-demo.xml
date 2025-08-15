@@ -1,32 +1,86 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <root>
-  <bib id="client_demo" description="Production Client Demo BIB">
+  <bib id="client_demo" description="Production Client Demo BIB - Sprint 9 Enhanced">
     <metadata>
       <board_type>production</board_type>
-      <revision>v1.0</revision>
-      <client>CLIENT_DEMO</client>
+      <revision>v9.0</revision>
+      <client>CLIENT_DEMO_SPRINT9</client>
+      <features>multi_level_validation,hardware_integration</features>
     </metadata>
     
-    <uut id="production_uut" description="Client Production UUT">
+    <uut id="production_uut" description="Client Production UUT with Multi-Level Validation">
       <port number="1">
         <protocol>rs232</protocol>
         <speed>115200</speed>
         <data_pattern>n81</data_pattern>
         <auto_discover>true</auto_discover>
         
-        <!-- Simple TEST command as requested -->
+        <!-- ✅ EXISTING: Simple START command (unchanged) -->
         <start>
           <command>INIT_RS232</command>
           <expected_response>READY</expected_response>
           <timeout_ms>3000</timeout_ms>
         </start>
         
+        <!-- ✨ ENHANCED: Original TEST command - now PASS level -->
         <test>
           <command>TEST</command>
           <expected_response>PASS</expected_response>
           <timeout_ms>5000</timeout_ms>
         </test>
         
+        <!-- 🎯 NEW: Test with WARNING level - dummy responds "PASS" but we treat as WARNING -->
+        <test>
+          <command>TEST</command>
+          <!-- Primary expected_response = PASS level (dummy UUT will send this) -->
+          <expected_response>NEVER_MATCH_THIS</expected_response>
+          
+          <!-- ✨ SPRINT 9: Multi-level validation patterns -->
+          <validation_levels>
+            <!-- When dummy sends "PASS", we interpret it as WARNING for this test -->
+            <warn regex="true">^PASS(\r\n)?$</warn>
+            <fail regex="true">^(ERROR|FAIL|TIMEOUT)(\r\n)?$</fail>
+            <critical regex="true">^(CRITICAL|EMERGENCY|SHUTDOWN)(\r\n)?$</critical>
+          </validation_levels>
+          
+          <timeout_ms>5000</timeout_ms>
+        </test>
+        
+        <!-- ❌ NEW: Test with FAIL level - dummy responds "PASS" but we treat as FAIL -->
+        <test>
+          <command>TEST</command>
+          <!-- Primary expected_response won't match -->
+          <expected_response>NEVER_MATCH_THIS</expected_response>
+          
+          <!-- ✨ SPRINT 9: Multi-level validation patterns -->
+          <validation_levels>
+            <!-- When dummy sends "PASS", we interpret it as FAIL for this test -->
+            <warn regex="true">^(SLOW|WARNING|CAUTION)(\r\n)?$</warn>
+            <fail regex="true">^PASS(\r\n)?$</fail>
+            <critical regex="true">^(CRITICAL|EMERGENCY|SHUTDOWN)(\r\n)?$</critical>
+          </validation_levels>
+          
+          <timeout_ms>5000</timeout_ms>
+        </test>
+        
+        <!-- 🚨 NEW: Test with CRITICAL level - dummy responds "PASS" but we treat as CRITICAL -->
+        <test>
+          <command>TEST</command>
+          <!-- Primary expected_response won't match -->
+          <expected_response>NEVER_MATCH_THIS</expected_response>
+          
+          <!-- ✨ SPRINT 9: Multi-level validation patterns + hardware trigger -->
+          <validation_levels>
+            <warn regex="true">^(SLOW|WARNING|CAUTION)(\r\n)?$</warn>
+            <fail regex="true">^(ERROR|FAIL|TIMEOUT)(\r\n)?$</fail>
+            <!-- When dummy sends "PASS", we interpret it as CRITICAL + trigger hardware -->
+            <critical regex="true" trigger_hardware="true">^PASS(\r\n)?$</critical>
+          </validation_levels>
+          
+          <timeout_ms>5000</timeout_ms>
+        </test>
+        
+        <!-- ✅ EXISTING: Simple STOP command (unchanged) -->
         <stop>
           <command>AT+QUIT</command>
           <expected_response>BYE</expected_response>
