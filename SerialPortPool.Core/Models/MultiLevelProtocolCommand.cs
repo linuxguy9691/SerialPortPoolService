@@ -283,7 +283,7 @@ public class MultiLevelProtocolCommand : ProtocolCommand
         catch (ArgumentException ex)
         {
             // Invalid regex pattern - log error but don't fail
-            ValidationMetadata[$"RegexError_{level}"] = ex.Message;
+            Metadata[$"RegexError_{level}"] = ex.Message;
         }
     }
 
