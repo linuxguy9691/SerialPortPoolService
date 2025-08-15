@@ -423,3 +423,114 @@ public class BitBangStatus
         return GetSummary();
     }
 }
+
+/// <summary>
+/// Hardware health levels for status monitoring
+/// </summary>
+public enum HardwareHealthLevel
+{
+    /// <summary>
+    /// Hardware is healthy and operating normally
+    /// </summary>
+    Healthy,
+    
+    /// <summary>
+    /// Hardware is operating but with some issues
+    /// </summary>
+    Warning,
+    
+    /// <summary>
+    /// Hardware has errors but is still connected
+    /// </summary>
+    Error,
+    
+    /// <summary>
+    /// Hardware is disconnected
+    /// </summary>
+    Disconnected
+}
+
+/// <summary>
+/// Input state for all GPIO input bits
+/// </summary>
+public class BitBangInputState
+{
+    /// <summary>
+    /// Power On Ready signal state (Bit 0)
+    /// </summary>
+    public bool PowerOnReady { get; set; }
+    
+    /// <summary>
+    /// Power Down Heads-Up signal state (Bit 1)
+    /// </summary>
+    public bool PowerDownHeadsUp { get; set; }
+    
+    /// <summary>
+    /// Raw input byte value (for advanced use)
+    /// </summary>
+    public byte RawInputValue { get; set; }
+    
+    /// <summary>
+    /// Timestamp when this state was read
+    /// </summary>
+    public DateTime Timestamp { get; set; } = DateTime.Now;
+    
+    /// <summary>
+    /// Individual bit states as array for programmatic access
+    /// </summary>
+    public bool[] GetBitArray() => new[] { PowerOnReady, PowerDownHeadsUp };
+    
+    public override string ToString()
+    {
+        return $"Inputs: PowerReady={PowerOnReady}, PowerDown={PowerDownHeadsUp} [Raw: 0x{RawInputValue:X2}]";
+    }
+}
+
+/// <summary>
+/// Output state for all GPIO output bits
+/// </summary>
+public class BitBangOutputState
+{
+    /// <summary>
+    /// Critical Fail Signal state (Bit 2)
+    /// </summary>
+    public bool CriticalFailSignal { get; set; }
+    
+    /// <summary>
+    /// Workflow Active signal state (Bit 3)
+    /// </summary>
+    public bool WorkflowActiveSignal { get; set; }
+    
+    /// <summary>
+    /// Raw output byte value (for advanced use)
+    /// </summary>
+    public byte RawOutputValue { get; set; }
+    
+    /// <summary>
+    /// Timestamp when this state was set
+    /// </summary>
+    public DateTime Timestamp { get; set; } = DateTime.Now;
+    
+    /// <summary>
+    /// Individual bit states as array for programmatic access
+    /// </summary>
+    public bool[] GetBitArray() => new[] { false, false, CriticalFailSignal, WorkflowActiveSignal };
+    
+    /// <summary>
+    /// Create output state from individual signals
+    /// </summary>
+    public static BitBangOutputState Create(bool criticalFail = false, bool workflowActive = false)
+    {
+        return new BitBangOutputState
+        {
+            CriticalFailSignal = criticalFail,
+            WorkflowActiveSignal = workflowActive,
+            RawOutputValue = (byte)((criticalFail ? 0x04 : 0x00) | (workflowActive ? 0x08 : 0x00))
+        };
+    }
+    
+    public override string ToString()
+    {
+        return $"Outputs: CriticalFail={CriticalFailSignal}, WorkflowActive={WorkflowActiveSignal} [Raw: 0x{RawOutputValue:X2}]";
+    }
+}
