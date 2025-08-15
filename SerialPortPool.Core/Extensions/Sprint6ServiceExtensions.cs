@@ -29,7 +29,6 @@ public static class Sprint6ServiceExtensions
 
         // 2️⃣ XML Configuration Services - FIXED
         services.AddScoped<IBibConfigurationLoader, XmlBibConfigurationLoader>();
-        services.AddScoped<IXmlConfigurationLoader, XmlConfigurationLoader>();  // ← NOW IMPLEMENTED
         services.AddScoped<IConfigurationValidator, ConfigurationValidator>();
 
         // 3️⃣ Protocol Handler Services  

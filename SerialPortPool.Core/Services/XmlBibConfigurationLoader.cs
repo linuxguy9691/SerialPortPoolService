@@ -1,5 +1,7 @@
 // SerialPortPool.Core/Services/XmlBibConfigurationLoader.cs - COMPLETE IMPLEMENTATION
+// Sprint 8 Enhanced: Now with REGEX support from XmlConfigurationLoader
 using System.Xml;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
@@ -8,8 +10,9 @@ using SerialPortPool.Core.Models;
 namespace SerialPortPool.Core.Services;
 
 /// <summary>
-/// XML BIB Configuration Loader - Complete Implementation
+/// XML BIB Configuration Loader - Complete Implementation with Sprint 8 Regex Support
 /// Parses BIB → UUT → PORT → PROTOCOL hierarchy from XML files
+/// ENHANCED: Now supports regex="true" attributes in expected_response elements
 /// </summary>
 public class XmlBibConfigurationLoader : IBibConfigurationLoader
 {
@@ -311,7 +314,7 @@ public class XmlBibConfigurationLoader : IBibConfigurationLoader
             }
         }
 
-        // Parse command sequences
+        // Parse command sequences with Sprint 8 regex support
         port.StartCommands = ParseCommandSequence(portNode.SelectSingleNode("start"));
         port.TestCommands = ParseCommandSequence(portNode.SelectSingleNode("test"));
         port.StopCommands = ParseCommandSequence(portNode.SelectSingleNode("stop"));
@@ -320,12 +323,14 @@ public class XmlBibConfigurationLoader : IBibConfigurationLoader
     }
 
     /// <summary>
-    /// Parse command sequence from XML node
+    /// SPRINT 8 ENHANCED: Parse command sequence with regex support
+    /// BACKWARD COMPATIBLE: Existing XML files without regex="true" work unchanged
+    /// NEW FEATURE: Supports regex="true" attribute for advanced pattern matching
     /// </summary>
     private CommandSequence ParseCommandSequence(XmlNode? sequenceNode)
     {
         var sequence = new CommandSequence();
-        
+
         if (sequenceNode != null)
         {
             var commandText = GetOptionalElement(sequenceNode, "command");
@@ -334,15 +339,118 @@ public class XmlBibConfigurationLoader : IBibConfigurationLoader
                 var command = new ProtocolCommand
                 {
                     Command = commandText,
-                    ExpectedResponse = GetOptionalElement(sequenceNode, "expected_response"),
                     TimeoutMs = int.Parse(GetOptionalElement(sequenceNode, "timeout_ms") ?? "2000"),
                     RetryCount = int.Parse(GetOptionalElement(sequenceNode, "retry_count") ?? "0")
                 };
+
+                // ✨ SPRINT 8 NEW: Enhanced response parsing with regex support
+                var responseNode = sequenceNode.SelectSingleNode("expected_response");
+                if (responseNode != null)
+                {
+                    command.ExpectedResponse = responseNode.InnerText;
+                    
+                    // Check for regex attribute
+                    var regexAttr = responseNode.Attributes?["regex"]?.Value;
+                    command.IsRegexPattern = bool.Parse(regexAttr ?? "false");
+                    
+                    if (command.IsRegexPattern)
+                    {
+                        _logger.LogDebug("📊 Regex pattern detected in XML: {Pattern}", command.ExpectedResponse);
+                        
+                        // Parse regex options if specified
+                        var optionsAttr = responseNode.Attributes?["options"]?.Value;
+                        if (!string.IsNullOrEmpty(optionsAttr))
+                        {
+                            command.RegexOptions = ParseRegexOptions(optionsAttr);
+                            _logger.LogDebug("📊 Regex options parsed: {Options}", command.RegexOptions);
+                        }
+                        
+                        // Validate regex pattern at load time
+                        try
+                        {
+                            _ = new Regex(command.ExpectedResponse, command.RegexOptions);
+                            _logger.LogDebug("✅ Regex pattern validated successfully: {Pattern}", command.ExpectedResponse);
+                        }
+                        catch (ArgumentException ex)
+                        {
+                            _logger.LogError("❌ Invalid regex pattern in XML: {Pattern} - {Error}", 
+                                command.ExpectedResponse, ex.Message);
+                            command.RegexValidationError = ex.Message;
+                            
+                            // Add to command metadata for troubleshooting
+                            command.Metadata["RegexError"] = ex.Message;
+                            command.Metadata["InvalidRegexPattern"] = command.ExpectedResponse;
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogDebug("📝 String pattern detected in XML: {Pattern}", command.ExpectedResponse);
+                    }
+                }
+
                 sequence.Commands.Add(command);
             }
         }
 
         return sequence;
+    }
+
+    /// <summary>
+    /// SPRINT 8: Parse regex options from XML attribute string
+    /// Supports: IgnoreCase, Multiline, Singleline, ExplicitCapture, Compiled, IgnorePatternWhitespace
+    /// </summary>
+    private RegexOptions ParseRegexOptions(string optionsString)
+    {
+        var options = RegexOptions.None;
+        
+        if (string.IsNullOrWhiteSpace(optionsString))
+            return options;
+
+        var optionNames = optionsString.Split(',', StringSplitOptions.RemoveEmptyEntries);
+        
+        foreach (var optionName in optionNames)
+        {
+            var trimmed = optionName.Trim();
+            
+            switch (trimmed.ToLowerInvariant())
+            {
+                case "ignorecase":
+                case "i":
+                    options |= RegexOptions.IgnoreCase;
+                    break;
+                    
+                case "multiline":
+                case "m":
+                    options |= RegexOptions.Multiline;
+                    break;
+                    
+                case "singleline":
+                case "s":
+                    options |= RegexOptions.Singleline;
+                    break;
+                    
+                case "explicitcapture":
+                case "n":
+                    options |= RegexOptions.ExplicitCapture;
+                    break;
+                    
+                case "compiled":
+                case "c":
+                    options |= RegexOptions.Compiled;
+                    break;
+                    
+                case "ignorepatternwhitespace":
+                case "x":
+                    options |= RegexOptions.IgnorePatternWhitespace;
+                    break;
+                    
+                default:
+                    _logger.LogWarning("⚠️ Unknown regex option in XML: {Option}", trimmed);
+                    break;
+            }
+        }
+        
+        return options;
     }
 
     /// <summary>

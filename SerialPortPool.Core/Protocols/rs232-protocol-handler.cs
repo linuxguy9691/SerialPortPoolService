@@ -326,7 +326,11 @@ public async Task<ProtocolResponse> ExecuteCommandAsync(ProtocolSession session,
     // ✨ SPRINT 8 NEW: Use enhanced validation with regex support
     if (!string.IsNullOrEmpty(command.ExpectedResponse))
     {
-        var validationResult = command.ValidateResponse(protocolResponse.DataAsString);
+        var cleanResponse = protocolResponse.DataAsString.Trim();
+        _logger.LogDebug($"🔍 Debug validation - Response: '{cleanResponse}' (Length: {cleanResponse.Length})");
+        _logger.LogDebug($"🔍 Debug validation - Bytes: [{string.Join(",", Encoding.UTF8.GetBytes(cleanResponse))}]");
+        _logger.LogDebug($"🔍 Debug validation - Expected: '{command.ExpectedResponse}'");
+        var validationResult = command.ValidateResponse(cleanResponse);;
         
         if (!validationResult.IsValid)
         {
