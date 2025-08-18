@@ -23,7 +23,7 @@
         </start>
         
         <!-- ✨ ENHANCED: Original TEST command - now PASS level -->
-        <test>
+        <test continue_on_failure="true">
           <command>TEST</command>
           <expected_response>PASS</expected_response>
           <timeout_ms>5000</timeout_ms>

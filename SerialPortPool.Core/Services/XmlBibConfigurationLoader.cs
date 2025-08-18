@@ -322,73 +322,102 @@ public class XmlBibConfigurationLoader : IBibConfigurationLoader
     /// <summary>
     /// Parse command sequence from XML node
     /// </summary>
-    private CommandSequence ParseCommandSequence(XmlNode? sequenceNode)
+   // <summary>
+/// Parse command sequence from XML node - FIXED: Added continue_on_failure support
+/// </summary>
+private CommandSequence ParseCommandSequence(XmlNode? sequenceNode)
+{
+    var sequence = new CommandSequence();
+    
+    if (sequenceNode != null)
     {
-        var sequence = new CommandSequence();
+        // 🔥 FIX: Read continue_on_failure attribute
+        var continueOnFailureAttr = GetOptionalAttribute(sequenceNode, "continue_on_failure");
+        sequence.ContinueOnFailure = bool.Parse(continueOnFailureAttr ?? "false");
         
-        if (sequenceNode != null)
+        _logger.LogDebug($"🔧 ParseCommandSequence: continue_on_failure = {sequence.ContinueOnFailure} (from XML: '{continueOnFailureAttr}')");
+        
+        var commandText = GetOptionalElement(sequenceNode, "command");
+        if (!string.IsNullOrEmpty(commandText))
         {
-            var commandText = GetOptionalElement(sequenceNode, "command");
-            if (!string.IsNullOrEmpty(commandText))
+            var command = new ProtocolCommand
             {
-                var command = new ProtocolCommand
-                {
-                    Command = commandText,
-                    ExpectedResponse = GetOptionalElement(sequenceNode, "expected_response"),
-                    TimeoutMs = int.Parse(GetOptionalElement(sequenceNode, "timeout_ms") ?? "2000"),
-                    RetryCount = int.Parse(GetOptionalElement(sequenceNode, "retry_count") ?? "0")
-                };
-                sequence.Commands.Add(command);
-            }
+                Command = commandText,
+                ExpectedResponse = GetOptionalElement(sequenceNode, "expected_response"),
+                TimeoutMs = int.Parse(GetOptionalElement(sequenceNode, "timeout_ms") ?? "2000"),
+                RetryCount = int.Parse(GetOptionalElement(sequenceNode, "retry_count") ?? "0")
+            };
+            sequence.Commands.Add(command);
         }
-
-        return sequence;
     }
 
-    /// <summary>
-    /// 🆕 SPRINT 9: Parse multiple <test> elements with multi-level validation support
-    /// </summary>
-    private CommandSequence ParseMultipleTestCommands(XmlNode portNode)
+    return sequence;
+}
+
+/// <summary>
+/// 🆕 SPRINT 9: Parse multiple <test> elements with multi-level validation support - FIXED: Added continue_on_failure support
+/// </summary>
+private CommandSequence ParseMultipleTestCommands(XmlNode portNode)
+{
+    var sequence = new CommandSequence();
+    
+    // 🔥 FIX: Use SelectNodes("test") to get ALL <test> elements
+    var testNodes = portNode.SelectNodes("test");
+    
+    if (testNodes != null && testNodes.Count > 0)
     {
-        var sequence = new CommandSequence();
+        _logger.LogDebug($"📊 Found {testNodes.Count} test elements in XML");
         
-        // 🔥 FIX: Use SelectNodes("test") to get ALL <test> elements
-        var testNodes = portNode.SelectNodes("test");
+        // 🔥 FIX: Determine continue_on_failure from test nodes
+        bool shouldContinueOnFailure = false;
         
-        if (testNodes != null && testNodes.Count > 0)
+        for (int i = 0; i < testNodes.Count; i++)
         {
-            _logger.LogDebug($"📊 Found {testNodes.Count} test elements in XML");
+            var testNode = testNodes[i];
             
-            for (int i = 0; i < testNodes.Count; i++)
+            // 🔥 FIX: Read continue_on_failure from each test node
+            var continueOnFailureAttr = GetOptionalAttribute(testNode, "continue_on_failure");
+            var testContinueOnFailure = bool.Parse(continueOnFailureAttr ?? "false");
+            
+            _logger.LogDebug($"🔧 Test {i + 1}: continue_on_failure = {testContinueOnFailure} (from XML: '{continueOnFailureAttr}')");
+            
+            // 🎯 LOGIC: If ANY test has continue_on_failure=true, then sequence continues on failure
+            if (testContinueOnFailure)
             {
-                var testNode = testNodes[i];
-                var command = ParseSingleTestCommand(testNode, i + 1);
+                shouldContinueOnFailure = true;
+            }
+            
+            var command = ParseSingleTestCommand(testNode, i + 1);
+            
+            if (command != null)
+            {
+                sequence.Commands.Add(command);
                 
-                if (command != null)
+                // ✨ Enhanced logging for multi-level commands
+                if (command is MultiLevelProtocolCommand multiLevelCmd)
                 {
-                    sequence.Commands.Add(command);
-                    
-                    // ✨ Enhanced logging for multi-level commands
-                    if (command is MultiLevelProtocolCommand multiLevelCmd)
-                    {
-                        _logger.LogInformation($"✨ Test {i + 1}: Multi-level command - {multiLevelCmd.ValidationPatterns.Count} additional validation levels");
-                    }
-                    else
-                    {
-                        _logger.LogDebug($"✅ Test {i + 1}: Standard command - {command.Command}");
-                    }
+                    _logger.LogInformation($"✨ Test {i + 1}: Multi-level command - {multiLevelCmd.ValidationPatterns.Count} additional validation levels");
+                }
+                else
+                {
+                    _logger.LogDebug($"✅ Test {i + 1}: Standard command - {command.Command}");
                 }
             }
-            
-            _logger.LogInformation($"🎯 Parsed {sequence.Commands.Count} test commands ({sequence.Commands.OfType<MultiLevelProtocolCommand>().Count()} multi-level)");
-        }
-        else
-        {
-            _logger.LogDebug("⚠️ No test elements found in XML");
         }
         
-        return sequence;
+        // 🔥 FIX: Set the continue_on_failure for the entire sequence
+        sequence.ContinueOnFailure = shouldContinueOnFailure;
+        
+        _logger.LogInformation($"🎯 TEST Sequence: continue_on_failure = {sequence.ContinueOnFailure} (from {testNodes.Count} test commands)");
+        _logger.LogInformation($"🎯 Parsed {sequence.Commands.Count} test commands ({sequence.Commands.OfType<MultiLevelProtocolCommand>().Count()} multi-level)");
     }
+    else
+    {
+        _logger.LogDebug("⚠️ No test elements found in XML");
+    }
+    
+    return sequence;
+}
 
     /// <summary>
     /// 🆕 SPRINT 9: Parse single <test> command with multi-level validation support

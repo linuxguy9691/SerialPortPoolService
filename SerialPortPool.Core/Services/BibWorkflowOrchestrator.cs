@@ -441,64 +441,78 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
     /// <summary>
     /// Execute a command sequence (Start/Test/Stop)
     /// </summary>
-    private async Task<CommandSequenceResult> ExecuteCommandSequenceAsync(
-        IProtocolHandler protocolHandler,
-        ProtocolSession session,
-        CommandSequence commandSequence,
-        string phaseName,
-        CancellationToken cancellationToken)
+    /// <summary>
+/// Execute a command sequence (Start/Test/Stop) - ENHANCED Sprint 9
+/// </summary>
+private async Task<CommandSequenceResult> ExecuteCommandSequenceAsync(
+    IProtocolHandler protocolHandler,
+    ProtocolSession session,
+    CommandSequence commandSequence,
+    string phaseName,
+    CancellationToken cancellationToken)
+{
+    var sequenceResult = new CommandSequenceResult();
+    var sequenceStartTime = DateTime.Now;
+
+    try
     {
-        var sequenceResult = new CommandSequenceResult();
-        var sequenceStartTime = DateTime.Now;
+        _logger.LogInformation($"📤 {phaseName} phase: executing {commandSequence.Commands.Count} command(s) " +
+                             $"(continue_on_failure: {commandSequence.ContinueOnFailure})");
 
-        try
+        foreach (var command in commandSequence.Commands)
         {
-            _logger.LogDebug($"📤 {phaseName} phase: executing {commandSequence.Commands.Count} command(s)");
-
-            foreach (var command in commandSequence.Commands)
+            if (cancellationToken.IsCancellationRequested)
             {
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    _logger.LogWarning($"⚠️ {phaseName} phase cancelled");
-                    break;
-                }
-
-                // Execute command via protocol handler
-                var protocolResponse = await protocolHandler.ExecuteCommandAsync(session, command, cancellationToken);
-                
-                // Convert ProtocolResponse to CommandResult
-                var commandResult = ConvertToCommandResult(command, protocolResponse);
-                sequenceResult.CommandResults.Add(commandResult);
-
-                _logger.LogDebug($"📥 {phaseName} command result: {commandResult}");
-
-                // Check if we should continue on failure
-                if (!commandResult.IsSuccess && !commandSequence.ContinueOnFailure)
-                {
-                    _logger.LogWarning($"⚠️ {phaseName} phase stopped due to command failure (continue_on_failure=false)");
-                    break;
-                }
-
-                // Small delay between commands
-                await Task.Delay(100, cancellationToken);
+                _logger.LogWarning($"⚠️ {phaseName} phase cancelled");
+                break;
             }
 
-            var sequenceDuration = DateTime.Now - sequenceStartTime;
-            _logger.LogInformation($"📊 {phaseName} phase completed: {sequenceResult.SuccessfulCommands}/{sequenceResult.TotalCommands} commands succeeded in {sequenceDuration.TotalSeconds:F1}s");
+            _logger.LogDebug($"📤 {phaseName}: Executing command '{command.Command.Trim()}'");
 
-            return sequenceResult;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"❌ Error during {phaseName} phase execution");
+            // Execute command via protocol handler
+            var protocolResponse = await protocolHandler.ExecuteCommandAsync(session, command, cancellationToken);
             
-            // Create error result
-            var errorResult = CommandResult.Failure($"{phaseName}_PHASE_ERROR", ex.Message, DateTime.Now - sequenceStartTime);
-            sequenceResult.CommandResults.Add(errorResult);
-            
-            return sequenceResult;
+            // Convert ProtocolResponse to CommandResult
+            var commandResult = ConvertToCommandResult(command, protocolResponse);
+            sequenceResult.CommandResults.Add(commandResult);
+
+            // 🚀 SPRINT 9: Enhanced continue_on_failure logic
+            var shouldContinue = DetermineIfShouldContinue(
+                commandResult, 
+                protocolResponse, 
+                commandSequence, 
+                command, 
+                phaseName);
+
+            _logger.LogInformation($"📥 {phaseName} command result: {commandResult} | Continue: {shouldContinue}");
+
+            if (!shouldContinue)
+            {
+                _logger.LogWarning($"🛑 {phaseName} phase stopped due to validation result");
+                break;
+            }
+
+            // Small delay between commands
+            await Task.Delay(100, cancellationToken);
         }
+
+        var sequenceDuration = DateTime.Now - sequenceStartTime;
+        _logger.LogInformation($"📊 {phaseName} phase completed: {sequenceResult.SuccessfulCommands}/{sequenceResult.TotalCommands} " +
+                             $"commands succeeded in {sequenceDuration.TotalSeconds:F1}s");
+
+        return sequenceResult;
     }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"❌ Error during {phaseName} phase execution");
+        
+        // Create error result
+        var errorResult = CommandResult.Failure($"{phaseName}_PHASE_ERROR", ex.Message, DateTime.Now - sequenceStartTime);
+        sequenceResult.CommandResults.Add(errorResult);
+        
+        return sequenceResult;
+    }
+}
 
     /// <summary>
     /// Convert ProtocolResponse to CommandResult
@@ -645,4 +659,100 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
     }
 
     #endregion
+
+    /// <summary>
+/// 🎯 SPRINT 9: Intelligent logic to determine if workflow should continue
+/// </summary>
+private bool DetermineIfShouldContinue(
+    CommandResult commandResult,
+    ProtocolResponse protocolResponse,
+    CommandSequence commandSequence,
+    ProtocolCommand command,
+    string phaseName)
+{
+    try
+    {
+        // 🚀 SPRINT 9: Check if we have enhanced validation result
+        if (protocolResponse.Metadata.TryGetValue("ValidationResult", out var validationObj) &&
+            validationObj is EnhancedValidationResult enhancedResult)
+        {
+            _logger.LogDebug($"🎯 {phaseName}: Enhanced validation detected - Level: {enhancedResult.Level}");
+            
+            return ProcessEnhancedValidationResult(enhancedResult, commandSequence, command, phaseName);
+        }
+        
+        // 🔄 LEGACY: Fall back to basic success/failure logic
+        _logger.LogDebug($"📊 {phaseName}: Legacy validation mode - Success: {commandResult.IsSuccess}");
+        
+        return ProcessLegacyValidationResult(commandResult, commandSequence, phaseName);
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"❌ Error determining continue logic for {phaseName}");
+        return commandResult.IsSuccess || commandSequence.ContinueOnFailure;
+    }
+}
+
+/// <summary>
+/// 🚀 SPRINT 9: Process enhanced validation result with multi-level logic
+/// </summary>
+private bool ProcessEnhancedValidationResult(
+    EnhancedValidationResult enhancedResult,
+    CommandSequence commandSequence,
+    ProtocolCommand command,
+    string phaseName)
+{
+    var level = enhancedResult.Level;
+    var sequenceSetting = commandSequence.ContinueOnFailure;
+    
+    // 🚨 CRITICAL: Always stop
+    if (level == ValidationLevel.CRITICAL)
+    {
+        _logger.LogCritical($"🚨 {phaseName}: CRITICAL validation - EMERGENCY STOP");
+        return false;
+    }
+    
+    // ❌ FAIL: Check continue_on_failure setting
+    if (level == ValidationLevel.FAIL)
+    {
+        _logger.LogWarning($"❌ {phaseName}: FAIL validation - continue_on_failure: {sequenceSetting}");
+        return sequenceSetting;
+    }
+    
+    // ⚠️ WARN: Continue with alert
+    if (level == ValidationLevel.WARN)
+    {
+        _logger.LogWarning($"⚠️ {phaseName}: WARN validation - CONTINUING with alert");
+        return true;
+    }
+    
+    // ✅ PASS: Always continue
+    return true;
+}
+
+/// <summary>
+/// 🔄 LEGACY: Process basic validation result (backward compatibility)
+/// </summary>
+private bool ProcessLegacyValidationResult(
+    CommandResult commandResult,
+    CommandSequence commandSequence,
+    string phaseName)
+{
+    if (commandResult.IsSuccess)
+    {
+        return true;
+    }
+    
+    // Command failed - check continue_on_failure
+    if (commandSequence.ContinueOnFailure)
+    {
+        _logger.LogWarning($"⚠️ {phaseName}: Command failed but continue_on_failure=true - continuing");
+        return true;
+    }
+    else
+    {
+        _logger.LogWarning($"🛑 {phaseName}: Command failed and continue_on_failure=false - stopping");
+        return false;
+    }
+}
 }
