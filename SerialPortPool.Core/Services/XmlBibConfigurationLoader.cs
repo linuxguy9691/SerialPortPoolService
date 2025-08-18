@@ -1,4 +1,4 @@
-// SerialPortPool.Core/Services/XmlBibConfigurationLoader.cs - COMPLETE IMPLEMENTATION
+// SerialPortPool.Core/Services/XmlBibConfigurationLoader.cs - SPRINT 9 ENHANCED VERSION
 using System.Xml;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -8,8 +8,8 @@ using SerialPortPool.Core.Models;
 namespace SerialPortPool.Core.Services;
 
 /// <summary>
-/// XML BIB Configuration Loader - Complete Implementation
-/// Parses BIB → UUT → PORT → PROTOCOL hierarchy from XML files
+/// XML BIB Configuration Loader - SPRINT 9 Enhanced with Multi-Level Validation
+/// Parses BIB → UUT → PORT → PROTOCOL hierarchy from XML files with 4-level validation support
 /// </summary>
 public class XmlBibConfigurationLoader : IBibConfigurationLoader
 {
@@ -346,79 +346,204 @@ public class XmlBibConfigurationLoader : IBibConfigurationLoader
     }
 
     /// <summary>
-/// 🆕 SPRINT 9: Parse multiple <test> elements
-/// </summary>
-private CommandSequence ParseMultipleTestCommands(XmlNode portNode)
-{
-    var sequence = new CommandSequence();
-    
-    // 🔥 FIX: Use SelectNodes("test") to get ALL <test> elements
-    var testNodes = portNode.SelectNodes("test");
-    
-    if (testNodes != null && testNodes.Count > 0)
+    /// 🆕 SPRINT 9: Parse multiple <test> elements with multi-level validation support
+    /// </summary>
+    private CommandSequence ParseMultipleTestCommands(XmlNode portNode)
     {
-        _logger.LogDebug($"📊 Found {testNodes.Count} test elements in XML");
+        var sequence = new CommandSequence();
         
-        for (int i = 0; i < testNodes.Count; i++)
+        // 🔥 FIX: Use SelectNodes("test") to get ALL <test> elements
+        var testNodes = portNode.SelectNodes("test");
+        
+        if (testNodes != null && testNodes.Count > 0)
         {
-            var testNode = testNodes[i];
-            var command = ParseSingleTestCommand(testNode, i + 1);
+            _logger.LogDebug($"📊 Found {testNodes.Count} test elements in XML");
             
-            if (command != null)
+            for (int i = 0; i < testNodes.Count; i++)
             {
-                sequence.Commands.Add(command);
-                _logger.LogDebug($"✅ Parsed test command {i + 1}: {command.Command}");
+                var testNode = testNodes[i];
+                var command = ParseSingleTestCommand(testNode, i + 1);
+                
+                if (command != null)
+                {
+                    sequence.Commands.Add(command);
+                    
+                    // ✨ Enhanced logging for multi-level commands
+                    if (command is MultiLevelProtocolCommand multiLevelCmd)
+                    {
+                        _logger.LogInformation($"✨ Test {i + 1}: Multi-level command - {multiLevelCmd.ValidationPatterns.Count} additional validation levels");
+                    }
+                    else
+                    {
+                        _logger.LogDebug($"✅ Test {i + 1}: Standard command - {command.Command}");
+                    }
+                }
+            }
+            
+            _logger.LogInformation($"🎯 Parsed {sequence.Commands.Count} test commands ({sequence.Commands.OfType<MultiLevelProtocolCommand>().Count()} multi-level)");
+        }
+        else
+        {
+            _logger.LogDebug("⚠️ No test elements found in XML");
+        }
+        
+        return sequence;
+    }
+
+    /// <summary>
+    /// 🆕 SPRINT 9: Parse single <test> command with multi-level validation support
+    /// </summary>
+    private ProtocolCommand? ParseSingleTestCommand(XmlNode testNode, int testIndex)
+    {
+        var commandText = GetOptionalElement(testNode, "command");
+        if (string.IsNullOrEmpty(commandText))
+        {
+            _logger.LogWarning($"⚠️ Test command {testIndex} has no command text, skipping");
+            return null;
+        }
+
+        // 🔥 NEW: Check if this test has validation_levels (multi-level) or just expected_response (legacy)
+        var validationLevelsNode = testNode.SelectSingleNode("validation_levels");
+        
+        ProtocolCommand command;
+        
+        if (validationLevelsNode != null)
+        {
+            // ✨ Create MultiLevelProtocolCommand for advanced validation
+            command = CreateMultiLevelProtocolCommand(testNode, commandText, testIndex);
+            _logger.LogDebug($"🎯 Test {testIndex}: Multi-level command created with validation levels");
+        }
+        else
+        {
+            // ✅ Create standard ProtocolCommand for backward compatibility
+            command = CreateStandardProtocolCommand(testNode, commandText, testIndex);
+            _logger.LogDebug($"📊 Test {testIndex}: Standard command created (legacy mode)");
+        }
+        
+        return command;
+    }
+
+    /// <summary>
+    /// 🆕 SPRINT 9: Create MultiLevelProtocolCommand with validation levels
+    /// </summary>
+    private MultiLevelProtocolCommand CreateMultiLevelProtocolCommand(XmlNode testNode, string commandText, int testIndex)
+    {
+        var command = new MultiLevelProtocolCommand
+        {
+            CommandId = Guid.NewGuid().ToString(),
+            Command = commandText,
+            TimeoutMs = int.Parse(GetOptionalElement(testNode, "timeout_ms") ?? "5000"),
+            RetryCount = int.Parse(GetOptionalElement(testNode, "retry_count") ?? "0"),
+            Data = System.Text.Encoding.UTF8.GetBytes(commandText)
+        };
+        
+        // Parse primary expected_response (PASS level)
+        var responseNode = testNode.SelectSingleNode("expected_response");
+        if (responseNode != null)
+        {
+            command.ExpectedResponse = responseNode.InnerText;
+            var regexAttr = responseNode.Attributes?["regex"]?.Value;
+            command.IsRegexPattern = bool.Parse(regexAttr ?? "false");
+            
+            _logger.LogDebug($"🎯 Test {testIndex} PASS pattern: {command.ExpectedResponse} (Regex: {command.IsRegexPattern})");
+        }
+        
+        // ✨ Parse validation_levels node
+        var validationLevelsNode = testNode.SelectSingleNode("validation_levels");
+        if (validationLevelsNode != null)
+        {
+            ParseValidationLevelsIntoCommand(command, validationLevelsNode, testIndex);
+        }
+        
+        return command;
+    }
+
+    /// <summary>
+    /// 🆕 SPRINT 9: Parse validation levels from XML into MultiLevelProtocolCommand
+    /// </summary>
+    private void ParseValidationLevelsIntoCommand(MultiLevelProtocolCommand command, XmlNode validationLevelsNode, int testIndex)
+    {
+        var levelMappings = new Dictionary<string, ValidationLevel>
+        {
+            ["warn"] = ValidationLevel.WARN,
+            ["fail"] = ValidationLevel.FAIL,
+            ["critical"] = ValidationLevel.CRITICAL
+        };
+        
+        foreach (var levelMapping in levelMappings)
+        {
+            var levelName = levelMapping.Key;
+            var level = levelMapping.Value;
+            
+            var levelNode = validationLevelsNode.SelectSingleNode(levelName);
+            if (levelNode != null)
+            {
+                var pattern = levelNode.InnerText;
+                if (!string.IsNullOrEmpty(pattern))
+                {
+                    // Add pattern to command
+                    command.ValidationPatterns[level] = pattern;
+                    
+                    // Check for regex attribute
+                    var regexAttr = levelNode.Attributes?["regex"]?.Value;
+                    var isRegex = bool.Parse(regexAttr ?? "false");
+                    
+                    // For now, assume all patterns use same regex setting
+                    if (isRegex)
+                    {
+                        command.IsRegexPattern = true;
+                    }
+                    
+                    // 🔌 Parse hardware trigger attribute (for CRITICAL level)
+                    if (level == ValidationLevel.CRITICAL)
+                    {
+                        var triggerHardware = bool.Parse(levelNode.Attributes?["trigger_hardware"]?.Value ?? "false");
+                        command.TriggerHardwareOnCritical = triggerHardware;
+                        
+                        if (triggerHardware)
+                        {
+                            _logger.LogInformation($"🔌 Test {testIndex}: Hardware trigger ENABLED for CRITICAL validation");
+                        }
+                    }
+                    
+                    _logger.LogDebug($"🎯 Test {testIndex} {level} pattern: {pattern} (Regex: {isRegex})");
+                }
             }
         }
-    }
-    else
-    {
-        _logger.LogDebug("⚠️ No test elements found in XML");
-    }
-    
-    return sequence;
-}
-
-
-/// <summary>
-/// 🆕 SPRINT 9: Parse single <test> command
-/// </summary>
-private ProtocolCommand? ParseSingleTestCommand(XmlNode testNode, int testIndex)
-{
-    var commandText = GetOptionalElement(testNode, "command");
-    if (string.IsNullOrEmpty(commandText))
-    {
-        _logger.LogWarning($"⚠️ Test command {testIndex} has no command text, skipping");
-        return null;
-    }
-
-    var command = new ProtocolCommand
-    {
-        CommandId = Guid.NewGuid().ToString(),
-        Command = commandText,
-        TimeoutMs = int.Parse(GetOptionalElement(testNode, "timeout_ms") ?? "5000"),
-        RetryCount = int.Parse(GetOptionalElement(testNode, "retry_count") ?? "0"),
-        Data = System.Text.Encoding.UTF8.GetBytes(commandText)
-    };
-    
-    // Parse expected_response
-    var responseNode = testNode.SelectSingleNode("expected_response");
-    if (responseNode != null)
-    {
-        command.ExpectedResponse = responseNode.InnerText;
         
-        // Check for regex attribute
-        var regexAttr = responseNode.Attributes?["regex"]?.Value;
-        command.IsRegexPattern = bool.Parse(regexAttr ?? "false");
-        
-        if (command.IsRegexPattern)
+        _logger.LogInformation($"✨ Test {testIndex}: Multi-level validation configured - {command.ValidationPatterns.Count} additional levels");
+    }
+
+    /// <summary>
+    /// ✅ Create standard ProtocolCommand (backward compatibility)
+    /// </summary>
+    private ProtocolCommand CreateStandardProtocolCommand(XmlNode testNode, string commandText, int testIndex)
+    {
+        var command = new ProtocolCommand
         {
-            _logger.LogDebug($"📊 Test {testIndex}: Regex pattern: {command.ExpectedResponse}");
+            CommandId = Guid.NewGuid().ToString(),
+            Command = commandText,
+            TimeoutMs = int.Parse(GetOptionalElement(testNode, "timeout_ms") ?? "5000"),
+            RetryCount = int.Parse(GetOptionalElement(testNode, "retry_count") ?? "0"),
+            Data = System.Text.Encoding.UTF8.GetBytes(commandText)
+        };
+        
+        // Parse expected_response
+        var responseNode = testNode.SelectSingleNode("expected_response");
+        if (responseNode != null)
+        {
+            command.ExpectedResponse = responseNode.InnerText;
+            
+            // Check for regex attribute
+            var regexAttr = responseNode.Attributes?["regex"]?.Value;
+            command.IsRegexPattern = bool.Parse(regexAttr ?? "false");
+            
+            _logger.LogDebug($"📊 Test {testIndex}: Standard pattern: {command.ExpectedResponse} (Regex: {command.IsRegexPattern})");
         }
+
+        return command;
     }
 
-    return command;
-}
     /// <summary>
     /// Get required XML attribute
     /// </summary>
