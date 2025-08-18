@@ -30,7 +30,7 @@
         </test>
         
         <!-- 🎯 NEW: Test with WARNING level - dummy responds "PASS" but we treat as WARNING -->
-        <test>
+        <test continue_on_failure="true">
           <command>TEST</command>
           <!-- Primary expected_response = PASS level (dummy UUT will send this) -->
           <expected_response>NEVER_MATCH_THIS</expected_response>
@@ -47,7 +47,7 @@
         </test>
         
         <!-- ❌ NEW: Test with FAIL level - dummy responds "PASS" but we treat as FAIL -->
-        <test>
+        <test continue_on_failure="true">
           <command>TEST</command>
           <!-- Primary expected_response won't match -->
           <expected_response>NEVER_MATCH_THIS</expected_response>
@@ -64,7 +64,7 @@
         </test>
         
         <!-- 🚨 NEW: Test with CRITICAL level - dummy responds "PASS" but we treat as CRITICAL -->
-        <test>
+        <test continue_on_failure="true">
           <command>TEST</command>
           <!-- Primary expected_response won't match -->
           <expected_response>NEVER_MATCH_THIS</expected_response>
@@ -83,7 +83,7 @@
         <!-- ✅ EXISTING: Simple STOP command (unchanged) -->
         <stop>
           <command>AT+QUIT</command>
-          <expected_response>BYE</expected_response>
+          <expected_response>GOODBYE</expected_response>
           <timeout_ms>2000</timeout_ms>
         </stop>
       </port>
