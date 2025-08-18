@@ -312,9 +312,9 @@ public class XmlBibConfigurationLoader : IBibConfigurationLoader
         }
 
         // Parse command sequences
-        port.StartCommands = ParseCommandSequence(portNode.SelectSingleNode("start"));
+        port.StartCommands = ParseMultipleStartCommands(portNode);
         port.TestCommands = ParseMultipleTestCommands(portNode);
-        port.StopCommands = ParseCommandSequence(portNode.SelectSingleNode("stop"));
+        port.StopCommands = ParseMultipleStopCommands(portNode);
 
         return port;
     }
@@ -357,6 +357,157 @@ private CommandSequence ParseCommandSequence(XmlNode? sequenceNode)
 /// <summary>
 /// 🆕 SPRINT 9: Parse multiple <test> elements with multi-level validation support - FIXED: Added continue_on_failure support
 /// </summary>
+
+/// <summary>
+/// 🆕 SPRINT 9+: Parse multiple <start> elements with continue_on_failure support
+/// </summary>
+private CommandSequence ParseMultipleStartCommands(XmlNode portNode)
+{
+    var sequence = new CommandSequence();
+    
+    // Obtenir TOUS les éléments <start>
+    var startNodes = portNode.SelectNodes("start");
+    
+    if (startNodes != null && startNodes.Count > 0)
+    {
+        _logger.LogDebug($"📊 Found {startNodes.Count} start elements in XML");
+        
+        // Déterminer continue_on_failure pour la séquence
+        bool shouldContinueOnFailure = false;
+        
+        for (int i = 0; i < startNodes.Count; i++)
+        {
+            var startNode = startNodes[i];
+            
+            // Lire continue_on_failure de chaque élément start
+            var continueOnFailureAttr = GetOptionalAttribute(startNode, "continue_on_failure");
+            var startContinueOnFailure = bool.Parse(continueOnFailureAttr ?? "false");
+            
+            _logger.LogDebug($"🔧 Start {i + 1}: continue_on_failure = {startContinueOnFailure} (from XML: '{continueOnFailureAttr}')");
+            
+            // Si ANY start a continue_on_failure=true, alors la séquence continue
+            if (startContinueOnFailure)
+            {
+                shouldContinueOnFailure = true;
+            }
+            
+            var command = ParseSingleStartCommand(startNode, i + 1);
+            
+            if (command != null)
+            {
+                sequence.Commands.Add(command);
+                _logger.LogDebug($"✅ Start {i + 1}: Command added - {command.Command}");
+            }
+        }
+        
+        // Définir continue_on_failure pour toute la séquence
+        sequence.ContinueOnFailure = shouldContinueOnFailure;
+        
+        _logger.LogInformation($"🎯 START Sequence: continue_on_failure = {sequence.ContinueOnFailure} (from {startNodes.Count} start commands)");
+        _logger.LogInformation($"🎯 Parsed {sequence.Commands.Count} start commands");
+    }
+    else
+    {
+        _logger.LogDebug("⚠️ No start elements found in XML");
+    }
+    
+    return sequence;
+}
+
+/// <summary>
+/// 🆕 SPRINT 9+: Parse multiple <stop> elements with continue_on_failure support
+/// </summary>
+private CommandSequence ParseMultipleStopCommands(XmlNode portNode)
+{
+    var sequence = new CommandSequence();
+    
+    // Obtenir TOUS les éléments <stop>
+    var stopNodes = portNode.SelectNodes("stop");
+    
+    if (stopNodes != null && stopNodes.Count > 0)
+    {
+        _logger.LogDebug($"📊 Found {stopNodes.Count} stop elements in XML");
+        
+        // Déterminer continue_on_failure pour la séquence
+        bool shouldContinueOnFailure = false;
+        
+        for (int i = 0; i < stopNodes.Count; i++)
+        {
+            var stopNode = stopNodes[i];
+            
+            // Lire continue_on_failure de chaque élément stop
+            var continueOnFailureAttr = GetOptionalAttribute(stopNode, "continue_on_failure");
+            var stopContinueOnFailure = bool.Parse(continueOnFailureAttr ?? "false");
+            
+            _logger.LogDebug($"🔧 Stop {i + 1}: continue_on_failure = {stopContinueOnFailure} (from XML: '{continueOnFailureAttr}')");
+            
+            // Si ANY stop a continue_on_failure=true, alors la séquence continue
+            if (stopContinueOnFailure)
+            {
+                shouldContinueOnFailure = true;
+            }
+            
+            var command = ParseSingleStopCommand(stopNode, i + 1);
+            
+            if (command != null)
+            {
+                sequence.Commands.Add(command);
+                _logger.LogDebug($"✅ Stop {i + 1}: Command added - {command.Command}");
+            }
+        }
+        
+        // Définir continue_on_failure pour toute la séquence
+        sequence.ContinueOnFailure = shouldContinueOnFailure;
+        
+        _logger.LogInformation($"🎯 STOP Sequence: continue_on_failure = {sequence.ContinueOnFailure} (from {stopNodes.Count} stop commands)");
+        _logger.LogInformation($"🎯 Parsed {sequence.Commands.Count} stop commands");
+    }
+    else
+    {
+        _logger.LogDebug("⚠️ No stop elements found in XML");
+    }
+    
+    return sequence;
+}
+
+/// <summary>
+/// 🆕 Parse single <start> command (standard protocol command only)
+/// </summary>
+private ProtocolCommand? ParseSingleStartCommand(XmlNode startNode, int startIndex)
+{
+    var commandText = GetOptionalElement(startNode, "command");
+    if (string.IsNullOrEmpty(commandText))
+    {
+        _logger.LogWarning($"⚠️ Start command {startIndex} has no command text, skipping");
+        return null;
+    }
+
+    // Créer commande standard (pas de multi-level pour start)
+    var command = CreateStandardProtocolCommand(startNode, commandText, startIndex);
+    _logger.LogDebug($"📊 Start {startIndex}: Standard command created - {commandText}");
+    
+    return command;
+}
+
+/// <summary>
+/// 🆕 Parse single <stop> command (standard protocol command only)
+/// </summary>
+private ProtocolCommand? ParseSingleStopCommand(XmlNode stopNode, int stopIndex)
+{
+    var commandText = GetOptionalElement(stopNode, "command");
+    if (string.IsNullOrEmpty(commandText))
+    {
+        _logger.LogWarning($"⚠️ Stop command {stopIndex} has no command text, skipping");
+        return null;
+    }
+
+    // Créer commande standard (pas de multi-level pour stop)
+    var command = CreateStandardProtocolCommand(stopNode, commandText, stopIndex);
+    _logger.LogDebug($"📊 Stop {stopIndex}: Standard command created - {commandText}");
+    
+    return command;
+}
+
 private CommandSequence ParseMultipleTestCommands(XmlNode portNode)
 {
     var sequence = new CommandSequence();
