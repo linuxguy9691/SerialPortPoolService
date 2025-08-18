@@ -1,7 +1,5 @@
 // SerialPortPool.Core/Services/XmlBibConfigurationLoader.cs - COMPLETE IMPLEMENTATION
-// Sprint 8 Enhanced: Now with REGEX support from XmlConfigurationLoader
 using System.Xml;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
@@ -10,9 +8,8 @@ using SerialPortPool.Core.Models;
 namespace SerialPortPool.Core.Services;
 
 /// <summary>
-/// XML BIB Configuration Loader - Complete Implementation with Sprint 8 Regex Support
+/// XML BIB Configuration Loader - Complete Implementation
 /// Parses BIB → UUT → PORT → PROTOCOL hierarchy from XML files
-/// ENHANCED: Now supports regex="true" attributes in expected_response elements
 /// </summary>
 public class XmlBibConfigurationLoader : IBibConfigurationLoader
 {
@@ -314,23 +311,21 @@ public class XmlBibConfigurationLoader : IBibConfigurationLoader
             }
         }
 
-        // Parse command sequences with Sprint 8 regex support
+        // Parse command sequences
         port.StartCommands = ParseCommandSequence(portNode.SelectSingleNode("start"));
-        port.TestCommands = ParseCommandSequence(portNode.SelectSingleNode("test"));
+        port.TestCommands = ParseMultipleTestCommands(portNode);
         port.StopCommands = ParseCommandSequence(portNode.SelectSingleNode("stop"));
 
         return port;
     }
 
     /// <summary>
-    /// SPRINT 8 ENHANCED: Parse command sequence with regex support
-    /// BACKWARD COMPATIBLE: Existing XML files without regex="true" work unchanged
-    /// NEW FEATURE: Supports regex="true" attribute for advanced pattern matching
+    /// Parse command sequence from XML node
     /// </summary>
     private CommandSequence ParseCommandSequence(XmlNode? sequenceNode)
     {
         var sequence = new CommandSequence();
-
+        
         if (sequenceNode != null)
         {
             var commandText = GetOptionalElement(sequenceNode, "command");
@@ -339,55 +334,10 @@ public class XmlBibConfigurationLoader : IBibConfigurationLoader
                 var command = new ProtocolCommand
                 {
                     Command = commandText,
+                    ExpectedResponse = GetOptionalElement(sequenceNode, "expected_response"),
                     TimeoutMs = int.Parse(GetOptionalElement(sequenceNode, "timeout_ms") ?? "2000"),
                     RetryCount = int.Parse(GetOptionalElement(sequenceNode, "retry_count") ?? "0")
                 };
-
-                // ✨ SPRINT 8 NEW: Enhanced response parsing with regex support
-                var responseNode = sequenceNode.SelectSingleNode("expected_response");
-                if (responseNode != null)
-                {
-                    command.ExpectedResponse = responseNode.InnerText;
-                    
-                    // Check for regex attribute
-                    var regexAttr = responseNode.Attributes?["regex"]?.Value;
-                    command.IsRegexPattern = bool.Parse(regexAttr ?? "false");
-                    
-                    if (command.IsRegexPattern)
-                    {
-                        _logger.LogDebug("📊 Regex pattern detected in XML: {Pattern}", command.ExpectedResponse);
-                        
-                        // Parse regex options if specified
-                        var optionsAttr = responseNode.Attributes?["options"]?.Value;
-                        if (!string.IsNullOrEmpty(optionsAttr))
-                        {
-                            command.RegexOptions = ParseRegexOptions(optionsAttr);
-                            _logger.LogDebug("📊 Regex options parsed: {Options}", command.RegexOptions);
-                        }
-                        
-                        // Validate regex pattern at load time
-                        try
-                        {
-                            _ = new Regex(command.ExpectedResponse, command.RegexOptions);
-                            _logger.LogDebug("✅ Regex pattern validated successfully: {Pattern}", command.ExpectedResponse);
-                        }
-                        catch (ArgumentException ex)
-                        {
-                            _logger.LogError("❌ Invalid regex pattern in XML: {Pattern} - {Error}", 
-                                command.ExpectedResponse, ex.Message);
-                            command.RegexValidationError = ex.Message;
-                            
-                            // Add to command metadata for troubleshooting
-                            command.Metadata["RegexError"] = ex.Message;
-                            command.Metadata["InvalidRegexPattern"] = command.ExpectedResponse;
-                        }
-                    }
-                    else
-                    {
-                        _logger.LogDebug("📝 String pattern detected in XML: {Pattern}", command.ExpectedResponse);
-                    }
-                }
-
                 sequence.Commands.Add(command);
             }
         }
@@ -396,63 +346,79 @@ public class XmlBibConfigurationLoader : IBibConfigurationLoader
     }
 
     /// <summary>
-    /// SPRINT 8: Parse regex options from XML attribute string
-    /// Supports: IgnoreCase, Multiline, Singleline, ExplicitCapture, Compiled, IgnorePatternWhitespace
-    /// </summary>
-    private RegexOptions ParseRegexOptions(string optionsString)
+/// 🆕 SPRINT 9: Parse multiple <test> elements
+/// </summary>
+private CommandSequence ParseMultipleTestCommands(XmlNode portNode)
+{
+    var sequence = new CommandSequence();
+    
+    // 🔥 FIX: Use SelectNodes("test") to get ALL <test> elements
+    var testNodes = portNode.SelectNodes("test");
+    
+    if (testNodes != null && testNodes.Count > 0)
     {
-        var options = RegexOptions.None;
+        _logger.LogDebug($"📊 Found {testNodes.Count} test elements in XML");
         
-        if (string.IsNullOrWhiteSpace(optionsString))
-            return options;
-
-        var optionNames = optionsString.Split(',', StringSplitOptions.RemoveEmptyEntries);
-        
-        foreach (var optionName in optionNames)
+        for (int i = 0; i < testNodes.Count; i++)
         {
-            var trimmed = optionName.Trim();
+            var testNode = testNodes[i];
+            var command = ParseSingleTestCommand(testNode, i + 1);
             
-            switch (trimmed.ToLowerInvariant())
+            if (command != null)
             {
-                case "ignorecase":
-                case "i":
-                    options |= RegexOptions.IgnoreCase;
-                    break;
-                    
-                case "multiline":
-                case "m":
-                    options |= RegexOptions.Multiline;
-                    break;
-                    
-                case "singleline":
-                case "s":
-                    options |= RegexOptions.Singleline;
-                    break;
-                    
-                case "explicitcapture":
-                case "n":
-                    options |= RegexOptions.ExplicitCapture;
-                    break;
-                    
-                case "compiled":
-                case "c":
-                    options |= RegexOptions.Compiled;
-                    break;
-                    
-                case "ignorepatternwhitespace":
-                case "x":
-                    options |= RegexOptions.IgnorePatternWhitespace;
-                    break;
-                    
-                default:
-                    _logger.LogWarning("⚠️ Unknown regex option in XML: {Option}", trimmed);
-                    break;
+                sequence.Commands.Add(command);
+                _logger.LogDebug($"✅ Parsed test command {i + 1}: {command.Command}");
             }
         }
-        
-        return options;
+    }
+    else
+    {
+        _logger.LogDebug("⚠️ No test elements found in XML");
+    }
+    
+    return sequence;
+}
+
+
+/// <summary>
+/// 🆕 SPRINT 9: Parse single <test> command
+/// </summary>
+private ProtocolCommand? ParseSingleTestCommand(XmlNode testNode, int testIndex)
+{
+    var commandText = GetOptionalElement(testNode, "command");
+    if (string.IsNullOrEmpty(commandText))
+    {
+        _logger.LogWarning($"⚠️ Test command {testIndex} has no command text, skipping");
+        return null;
     }
 
+    var command = new ProtocolCommand
+    {
+        CommandId = Guid.NewGuid().ToString(),
+        Command = commandText,
+        TimeoutMs = int.Parse(GetOptionalElement(testNode, "timeout_ms") ?? "5000"),
+        RetryCount = int.Parse(GetOptionalElement(testNode, "retry_count") ?? "0"),
+        Data = System.Text.Encoding.UTF8.GetBytes(commandText)
+    };
+    
+    // Parse expected_response
+    var responseNode = testNode.SelectSingleNode("expected_response");
+    if (responseNode != null)
+    {
+        command.ExpectedResponse = responseNode.InnerText;
+        
+        // Check for regex attribute
+        var regexAttr = responseNode.Attributes?["regex"]?.Value;
+        command.IsRegexPattern = bool.Parse(regexAttr ?? "false");
+        
+        if (command.IsRegexPattern)
+        {
+            _logger.LogDebug($"📊 Test {testIndex}: Regex pattern: {command.ExpectedResponse}");
+        }
+    }
+
+    return command;
+}
     /// <summary>
     /// Get required XML attribute
     /// </summary>

@@ -17,8 +17,8 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
     
     <!-- WMI et System -->
-    <PackageReference Include="System.Management" Version="8.0.0" />
-    <PackageReference Include="System.IO.Ports" Version="8.0.0" />
+    <PackageReference Include="System.Management" Version="9.0.0" />
+    <PackageReference Include="System.IO.Ports" Version="9.0.0" />
     
     <!-- JSON et Configuration -->
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
