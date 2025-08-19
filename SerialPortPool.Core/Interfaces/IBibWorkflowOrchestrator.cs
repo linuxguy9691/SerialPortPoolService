@@ -15,7 +15,7 @@ namespace SerialPortPool.Core.Interfaces;
 public interface IBibWorkflowOrchestrator
 {
     // ✅ EXISTING METHODS (Sprint 8/9) - PRESERVED
-    
+
     /// <summary>
     /// Execute complete BIB workflow for specific port
     /// </summary>
@@ -46,7 +46,7 @@ public interface IBibWorkflowOrchestrator
     Task<BibWorkflowStatistics> GetWorkflowStatisticsAsync();
 
     // 🆕 SPRINT 10: Multi-UUT Wrapper Methods (Option 1)
-    
+
     /// <summary>
     /// 🆕 SPRINT 10: Execute workflow for ALL ports in a specific UUT
     /// OPTION 1: Simple sequential execution reusing proven single-port method
@@ -84,4 +84,48 @@ public interface IBibWorkflowOrchestrator
         bool includeDetailedLogs = true,
         string clientId = "SummaryWorkflow",
         CancellationToken cancellationToken = default);
+
+// ===================================================================
+// SPRINT 10: IBibWorkflowOrchestrator Interface Update - Multi-BIB Methods
+// ADD to IBibWorkflowOrchestrator.cs (after existing methods)
+// ===================================================================
+
+// 🆕 SPRINT 10: Multi-BIB Wrapper Methods (Client Priority #1)
+
+/// <summary>
+/// 🆕 SPRINT 10: Execute workflow for MULTIPLE BIB_IDs sequentially
+/// CLIENT PRIORITY #1: Support multiple BIB configurations (client_demo_A, client_demo_B, etc.)
+/// </summary>
+Task<List<BibWorkflowResult>> ExecuteMultipleBibsAsync(
+    List<string> bibIds,
+    string clientId = "MultiBibWorkflow",
+    CancellationToken cancellationToken = default);
+
+/// <summary>
+/// 🆕 SPRINT 10: Execute workflow for ALL configured BIB_IDs
+/// CLIENT CONVENIENCE: Discover and execute all BIBs in configuration
+/// </summary>
+Task<List<BibWorkflowResult>> ExecuteAllConfiguredBibsAsync(
+    string clientId = "AllBibsWorkflow",
+    CancellationToken cancellationToken = default);
+
+/// <summary>
+/// 🆕 SPRINT 10: Execute MULTIPLE BIBs with enhanced summary reporting
+/// CLIENT PRIORITY #1: Multi-BIB execution with professional reporting
+/// </summary>
+Task<MultiBibWorkflowResult> ExecuteMultipleBibsWithSummaryAsync(
+    List<string> bibIds,
+    bool includeDetailedLogs = true,
+    string clientId = "MultiBibSummaryWorkflow",
+    CancellationToken cancellationToken = default);
+
+/// <summary>
+/// 🆕 SPRINT 10: Execute ALL configured BIBs with complete summary
+/// CLIENT ULTIMATE: Complete system execution with comprehensive reporting
+/// </summary>
+Task<MultiBibWorkflowResult> ExecuteAllConfiguredBibsWithSummaryAsync(
+    bool includeDetailedLogs = true,
+    string clientId = "CompleteBibSystemWorkflow",
+    CancellationToken cancellationToken = default);
 }
+
