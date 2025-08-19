@@ -755,4 +755,287 @@ private bool ProcessLegacyValidationResult(
         return false;
     }
 }
+
+// ===================================================================
+// SPRINT 10: Multi-UUT Wrapper Methods - Option 1 (Simple Sequential)
+// File: SerialPortPool.Core/Services/BibWorkflowOrchestrator.cs
+// Purpose: Simple wrapper methods reusing 100% existing proven code
+// Effort: 45 minutes | Risk: MINIMAL | Value: IMMEDIATE
+// ===================================================================
+
+// 🚀 ADD THESE METHODS TO EXISTING BibWorkflowOrchestrator CLASS
+
+#region SPRINT 10: Multi-UUT Wrapper Methods (Option 1)
+
+/// <summary>
+/// 🆕 SPRINT 10: Execute workflow for ALL ports in a specific UUT
+/// OPTION 1: Simple sequential execution reusing proven single-port method
+/// </summary>
+public async Task<List<BibWorkflowResult>> ExecuteBibWorkflowAllPortsAsync(
+    string bibId,
+    string uutId,
+    string clientId = "MultiPortWorkflow",
+    CancellationToken cancellationToken = default)
+{
+    var results = new List<BibWorkflowResult>();
+    
+    try
+    {
+        _logger.LogInformation($"🚀 SPRINT 10: Starting Multi-Port workflow: {bibId}.{uutId} (ALL PORTS)");
+
+        // Load BIB configuration to get port list
+        var bibConfig = await _configLoader.LoadBibConfigurationAsync(bibId);
+        if (bibConfig == null)
+        {
+            var errorResult = CreateErrorResult(bibId, uutId, 0, clientId, "BIB configuration not found");
+            results.Add(errorResult);
+            return results;
+        }
+
+        var uut = bibConfig.GetUut(uutId);
+        var totalPorts = uut.Ports.Count;
+        
+        _logger.LogInformation($"📊 Multi-Port execution: {totalPorts} ports discovered in {bibId}.{uutId}");
+
+        // 🔄 OPTION 1: Sequential execution reusing existing method
+        for (int i = 0; i < uut.Ports.Count; i++)
+        {
+            var port = uut.Ports[i];
+            var portNumber = port.PortNumber;
+            
+            if (cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogWarning($"⚠️ Multi-Port workflow cancelled at port {i + 1}/{totalPorts}");
+                break;
+            }
+
+            _logger.LogInformation($"🔌 Executing port {i + 1}/{totalPorts}: {bibId}.{uutId}.{portNumber}");
+
+            // ✅ REUSE: 100% existing proven method
+            var portResult = await ExecuteBibWorkflowAsync(bibId, uutId, portNumber, clientId, cancellationToken);
+            results.Add(portResult);
+
+            // Log intermediate result
+            var status = portResult.Success ? "✅ SUCCESS" : "❌ FAILED";
+            _logger.LogInformation($"{status} Port {portNumber}: {portResult.GetSummary()}");
+
+            // Small delay between ports for hardware stability
+            if (i < uut.Ports.Count - 1) // Don't delay after last port
+            {
+                await Task.Delay(500, cancellationToken);
+            }
+        }
+
+        // 📊 Final summary
+        var successCount = results.Count(r => r.Success);
+        var totalTime = results.Sum(r => r.Duration.TotalSeconds);
+        
+        _logger.LogInformation($"🎯 Multi-Port workflow completed: {successCount}/{results.Count} ports successful in {totalTime:F1}s");
+
+        return results;
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"💥 Multi-Port workflow failed for {bibId}.{uutId}");
+        
+        var errorResult = CreateErrorResult(bibId, uutId, 0, clientId, $"Multi-Port workflow error: {ex.Message}");
+        results.Add(errorResult);
+        return results;
+    }
+}
+
+/// <summary>
+/// 🆕 SPRINT 10: Execute workflow for ALL UUTs in a BIB
+/// OPTION 1: Simple sequential execution reusing proven methods
+/// </summary>
+public async Task<List<BibWorkflowResult>> ExecuteBibWorkflowAllUutsAsync(
+    string bibId,
+    string clientId = "MultiUutWorkflow", 
+    CancellationToken cancellationToken = default)
+{
+    var results = new List<BibWorkflowResult>();
+
+    try
+    {
+        _logger.LogInformation($"🚀 SPRINT 10: Starting Multi-UUT workflow: {bibId} (ALL UUTS)");
+
+        // Load BIB configuration to get UUT list
+        var bibConfig = await _configLoader.LoadBibConfigurationAsync(bibId);
+        if (bibConfig == null)
+        {
+            var errorResult = CreateErrorResult(bibId, "unknown", 0, clientId, "BIB configuration not found");
+            results.Add(errorResult);
+            return results;
+        }
+
+        var totalUuts = bibConfig.Uuts.Count;
+        _logger.LogInformation($"📊 Multi-UUT execution: {totalUuts} UUTs discovered in {bibId}");
+
+        // 🔄 OPTION 1: Sequential execution per UUT
+        for (int i = 0; i < bibConfig.Uuts.Count; i++)
+        {
+            var uut = bibConfig.Uuts[i];
+            
+            if (cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogWarning($"⚠️ Multi-UUT workflow cancelled at UUT {i + 1}/{totalUuts}");
+                break;
+            }
+
+            _logger.LogInformation($"🏭 Executing UUT {i + 1}/{totalUuts}: {bibId}.{uut.UutId} ({uut.Ports.Count} ports)");
+
+            // ✅ REUSE: Use the Multi-Port method we just created
+            var uutResults = await ExecuteBibWorkflowAllPortsAsync(bibId, uut.UutId, clientId, cancellationToken);
+            results.AddRange(uutResults);
+
+            // UUT-level summary
+            var uutSuccessCount = uutResults.Count(r => r.Success);
+            var uutStatus = uutSuccessCount == uutResults.Count ? "✅ SUCCESS" : "⚠️ PARTIAL";
+            
+            _logger.LogInformation($"{uutStatus} UUT {uut.UutId}: {uutSuccessCount}/{uutResults.Count} ports successful");
+
+            // Delay between UUTs for system stability
+            if (i < bibConfig.Uuts.Count - 1)
+            {
+                await Task.Delay(1000, cancellationToken);
+            }
+        }
+
+        // 📊 Final BIB-level summary
+        var totalSuccessCount = results.Count(r => r.Success);
+        var totalExecutionTime = results.Sum(r => r.Duration.TotalSeconds);
+        
+        _logger.LogInformation($"🎯 Multi-UUT workflow completed: {totalSuccessCount}/{results.Count} total ports successful in {totalExecutionTime:F1}s");
+
+        return results;
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"💥 Multi-UUT workflow failed for {bibId}");
+        
+        var errorResult = CreateErrorResult(bibId, "unknown", 0, clientId, $"Multi-UUT workflow error: {ex.Message}");
+        results.Add(errorResult);
+        return results;
+    }
+}
+
+/// <summary>
+/// 🆕 SPRINT 10: Execute COMPLETE BIB workflow (all UUTs, all ports)
+/// OPTION 1: Convenience method with enhanced summary reporting
+/// </summary>
+public async Task<AggregatedWorkflowResult> ExecuteBibWorkflowCompleteAsync(
+    string bibId,
+    string clientId = "CompleteBibWorkflow",
+    CancellationToken cancellationToken = default)
+{
+    var startTime = DateTime.Now;
+    
+    try
+    {
+        _logger.LogInformation($"🚀 SPRINT 10: Starting COMPLETE BIB workflow: {bibId}");
+
+        // ✅ REUSE: Use Multi-UUT method
+        var allResults = await ExecuteBibWorkflowAllUutsAsync(bibId, clientId, cancellationToken);
+        
+        // 📊 Create aggregated summary
+        var aggregated = new AggregatedWorkflowResult
+        {
+            BibId = bibId,
+            TotalWorkflows = allResults.Count,
+            SuccessfulWorkflows = allResults.Count(r => r.Success),
+            FailedWorkflows = allResults.Count(r => !r.Success),
+            TotalExecutionTime = DateTime.Now - startTime,
+            Results = allResults,
+            GeneratedAt = DateTime.Now
+        };
+
+        // Enhanced statistics
+        aggregated.UniqueUuts = allResults.Select(r => r.UutId).Distinct().Count();
+        aggregated.AverageWorkflowDuration = allResults.Any() ? 
+            TimeSpan.FromTicks((long)allResults.Average(r => r.Duration.Ticks)) : TimeSpan.Zero;
+
+        _logger.LogInformation($"🎉 COMPLETE BIB workflow finished: {aggregated.GetDetailedSummary()}");
+
+        return aggregated;
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"💥 Complete BIB workflow failed for {bibId}");
+        
+        return new AggregatedWorkflowResult
+        {
+            BibId = bibId,
+            TotalExecutionTime = DateTime.Now - startTime,
+            ErrorMessage = $"Complete workflow error: {ex.Message}",
+            GeneratedAt = DateTime.Now
+        };
+    }
+}
+
+/// <summary>
+/// 🆕 SPRINT 10: Execute workflow with SUMMARY reporting focus
+/// OPTION 1: Enhanced logging and reporting for management/monitoring
+/// </summary>
+public async Task<AggregatedWorkflowResult> ExecuteBibWorkflowWithSummaryAsync(
+    string bibId,
+    bool includeDetailedLogs = true,
+    string clientId = "SummaryWorkflow",
+    CancellationToken cancellationToken = default)
+{
+    if (includeDetailedLogs)
+    {
+        _logger.LogInformation($"📋 SUMMARY WORKFLOW: Enhanced logging enabled for {bibId}");
+    }
+
+    // ✅ REUSE: Use Complete method
+    var result = await ExecuteBibWorkflowCompleteAsync(bibId, clientId, cancellationToken);
+
+    if (includeDetailedLogs)
+    {
+        // 📊 Log detailed breakdown
+        _logger.LogInformation($"📊 ═══ SUMMARY REPORT FOR {bibId} ═══");
+        _logger.LogInformation($"📊 Total Workflows: {result.TotalWorkflows}");
+        _logger.LogInformation($"📊 Success Rate: {result.SuccessRate:F1}%");
+        _logger.LogInformation($"📊 Execution Time: {result.TotalExecutionTime.TotalMinutes:F1} minutes");
+        _logger.LogInformation($"📊 Average per Workflow: {result.AverageWorkflowDuration.TotalSeconds:F1} seconds");
+        
+        // Group by UUT for detailed breakdown
+        var uutGroups = result.Results.GroupBy(r => r.UutId).ToList();
+        foreach (var uutGroup in uutGroups)
+        {
+            var uutSuccess = uutGroup.Count(r => r.Success);
+            var uutTotal = uutGroup.Count();
+            _logger.LogInformation($"📊   UUT {uutGroup.Key}: {uutSuccess}/{uutTotal} successful");
+        }
+        
+        _logger.LogInformation($"📊 ═══ END SUMMARY REPORT ═══");
+    }
+
+    return result;
+}
+
+#region Helper Methods
+
+/// <summary>
+/// Create error result for failed workflows
+/// </summary>
+private BibWorkflowResult CreateErrorResult(string bibId, string uutId, int portNumber, string clientId, string errorMessage)
+{
+    return new BibWorkflowResult
+    {
+        WorkflowId = Guid.NewGuid().ToString(),
+        BibId = bibId,
+        UutId = uutId,
+        PortNumber = portNumber,
+        ClientId = clientId,
+        StartTime = DateTime.Now,
+        EndTime = DateTime.Now,
+        Success = false,
+        ErrorMessage = errorMessage
+    };
+}
+
+#endregion
+
+#endregion
 }
