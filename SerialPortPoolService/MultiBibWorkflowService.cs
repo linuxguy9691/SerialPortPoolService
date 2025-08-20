@@ -385,6 +385,11 @@ public class MultiBibServiceConfiguration
     /// Interval for scheduled mode
     /// </summary>
     public TimeSpan ScheduleInterval { get; set; } = TimeSpan.FromHours(4);
+
+    /// <summary>
+    /// 🆕 SPRINT 11: Metadata for enhanced configuration options
+    /// </summary>
+    public Dictionary<string, object> Metadata { get; set; } = new();
 }
 
 /// <summary>
@@ -424,3 +429,4 @@ public class MultiBibServiceStatus
     public DateTime ServiceStartTime { get; set; }
     public DateTime LastExecutionTime { get; set; }
 }
+
