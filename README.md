@@ -2,33 +2,30 @@
 
 [![English](https://img.shields.io/badge/lang-English-blue.svg)](README.md) [![Français](https://img.shields.io/badge/lang-Français-blue.svg)](README.fr.md)
 
-![Build Status](https://github.com/linuxguy9691/SerialPortPoolService/workflows/Automated%20Tests%20-%20Sprint%201%20&%202/badge.svg)
+![Build Status](https://github.com/linuxguy9691/SerialPortPoolService/workflows/Automated%20Tests%20-%20Sprint%2010/badge.svg)
 ![.NET](https://img.shields.io/badge/.NET-9.0-purple.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Sprint](https://img.shields.io/badge/Sprint%208-COMPLETED-brightgreen.svg)
-![Architecture](https://img.shields.io/badge/Architecture-INTELLIGENT%20HARDWARE-gold.svg)
-![Hardware](https://img.shields.io/badge/Hardware-EEPROM%20DYNAMIC-gold.svg)
+![Sprint](https://img.shields.io/badge/Sprint%2010-COMPLETED-brightgreen.svg)
+![Architecture](https://img.shields.io/badge/Architecture-MULTI%20BIB%20+%20GPIO-gold.svg)
+![Hardware](https://img.shields.io/badge/Hardware-FT4232HA%20PRODUCTION-gold.svg)
 
-A professional Windows service for centralized and secure serial port pool management, featuring **intelligent EEPROM-based BIB selection**, **advanced regex validation**, **FT4232H multi-port detection**, **thread-safe pool management**, **professional MSI deployment**, and now **dynamic hardware intelligence** with automatic configuration discovery.
+A professional Windows service for centralized and secure serial port pool management, featuring **Multi-BIB orchestration**, **real FTDI GPIO control**, **4-level validation system**, **dynamic EEPROM-based configuration**, and **enterprise-grade hardware integration** for production test automation environments.
 
 ## 🎯 **Overview**
 
 SerialPortPoolService is an enterprise-grade solution that provides:
-- 🔬 **Dynamic EEPROM BIB Selection** - Automatic BIB_ID detection from FTDI ProductDescription
+- 🎯 **Multi-BIB Orchestration** - Sequential execution across multiple Board Interface Box configurations
+- 🔌 **Real FTDI GPIO Control** - Hardware integration via FT4232HA Port D BitBang protocol
+- 📊 **4-Level Validation System** - PASS/WARN/FAIL/CRITICAL classification with hardware triggers
+- 🔬 **Dynamic EEPROM BIB Selection** - Automatic configuration detection from FTDI ProductDescription
 - 🎯 **Advanced Regex Validation** - Sophisticated UUT response pattern matching
+- 🏗️ **Professional Windows Service** - Enterprise deployment with MSI installer
 - 🔍 **Automatic Port Discovery** - Enhanced WMI + EEPROM intelligence
-- 🏭 **Intelligent FTDI Analysis** - Detailed chip analysis with multi-port grouping
-- 🎯 **Advanced Validation** - Configurable scoring and XML-driven configuration
-- 🏗️ **Professional Windows Service** - Enterprise logging and automated installation
-- 🏊 **Thread-Safe Pool Management** - Production-ready allocation/release ✅ **COMPLETE**
-- 🔀 **Multi-Port Device Detection** - Hardware-validated device grouping ✅ **VALIDATED**
-- 💾 **Smart EEPROM System** - Dynamic configuration with intelligent caching ✅ **COMPLETE**
-- 📦 **Professional MSI Installer** - One-click deployment package ✅ **COMPLETE**
-- 🌐 **XML Configuration System** - Multi-protocol configuration with validation ✅ **COMPLETE**
-- ⚡ **Production Communication Engine** - Real RS232 with 3-phase workflows ✅ **COMPLETE**
+- 🏭 **Intelligent FTDI Analysis** - Multi-port device grouping with hardware validation
+- 📦 **Production CLI Interface** - Professional command-line with 4 execution modes
 
-## 📋 **Project Status - SPRINT 8 INTELLIGENT SUCCESS ✅**
+## 📋 **Project Status - SPRINT 10 MULTI-BIB SUCCESS ✅**
 
 ### **✅ Sprint 1-2 - Windows Service Foundation** 
 **Status:** 🎉 **COMPLETED & INTEGRATED**
@@ -61,329 +58,362 @@ SerialPortPoolService is an enterprise-grade solution that provides:
 - [x] **XML Configuration** - Parameterizable BIB configurations
 - [x] **Hardware Validation** - Tested with FT4232HL (5.9s cycles, 100% success)
 
-### **🔥 Sprint 8 - Dynamic Intelligence & Advanced Validation** 
+### **✅ Sprint 8 - Dynamic Intelligence & Advanced Validation** 
 **Status:** 🎉 **COMPLETED - INTELLIGENT HARDWARE SUCCESS**
-
-#### **✅ EEPROM Dynamic BIB Selection**
+- [x] **EEPROM Dynamic BIB Selection** - Automatic BIB_ID detection from FTDI ProductDescription
+- [x] **Advanced Regex Validation System** - Pattern matching with named group capture
 - [x] **FTD2XX_NET Integration** - Native FTDI API for direct EEPROM access
-- [x] **ProductDescription Reading** - Extract BIB_ID directly from hardware
-- [x] **Dynamic Mapping Service** - Automatic ProductDescription → BIB_ID mapping
-- [x] **Intelligent Fallback** - Graceful degradation to static mapping when needed
+- [x] **Enhanced Service Integration** - Zero-configuration plug-and-play operation
 - [x] **Performance Optimization** - EEPROM caching with TTL for rapid access
 
-#### **✅ Advanced Regex Validation System**
-- [x] **Regex Pattern Support** - `^READY$`, `STATUS:(?<status>OK)` validation patterns
-- [x] **XML Configuration Enhanced** - `<expected_response regex="true">` support
-- [x] **Named Group Capture** - Extract and log regex capture groups
-- [x] **Performance Optimized** - Compiled regex with intelligent caching
-- [x] **Backward Compatible** - Simple string matching preserved
+### **✅ Sprint 9 - Multi-Level Validation + Hardware Hooks** 
+**Status:** 🎉 **COMPLETED - PRODUCTION VALIDATION SYSTEM**
+- [x] **4-Level Validation System** - PASS/WARN/FAIL/CRITICAL classification with smart workflow control
+- [x] **Bit Bang Protocol Hooks** - Complete GPIO integration architecture for hardware control
+- [x] **Enhanced XML Configuration** - Multi-level patterns with hardware trigger support
+- [x] **Hardware-Aware Workflow Control** - Power On Ready + Power Down Heads-Up + Critical Fail signaling
+- [x] **Professional Production Ready** - Enterprise-grade validation with hardware integration
 
-#### **✅ Enhanced Service Integration**
-- [x] **Dynamic Port Discovery** - Service adapts to connected hardware automatically
-- [x] **Enhanced Error Handling** - Sophisticated timeout, retry, and recovery logic
-- [x] **Professional Logging** - EEPROM reading + regex validation details
-- [x] **Zero Manual Configuration** - Complete plug-and-play operation
+### **🔥 Sprint 10 - Multi-BIB Production Service + Real GPIO** 
+**Status:** 🎉 **COMPLETED - PRODUCTION ORCHESTRATION SUCCESS**
 
-### **🚀 Sprint 9 Foundation - ARCHITECTURE READY**
-- **AI-Powered Analytics** - Machine learning for UUT response pattern analysis
-- **REST API & Web Dashboard** - HTTP endpoints + browser-based monitoring
-- **Multi-Protocol Expansion** - RS485, USB, CAN, I2C, SPI protocol handlers
-- **Real-Time Device Management** - Hot-plug detection + dynamic reconfiguration
+#### **✅ Multi-BIB Orchestration System**
+- [x] **MultiBibWorkflowService** - Production service with 4 execution modes (Single/Continuous/Scheduled/OnDemand)
+- [x] **Sequential Multi-BIB Execution** - `ExecuteMultipleBibsAsync()` with aggregated reporting
+- [x] **All-BIB Configuration Mode** - `ExecuteAllConfiguredBibsAsync()` for complete automation
+- [x] **Professional CLI Interface** - Command-line with `--bib-ids`, `--all-bibs`, `--mode`, `--interval` options
+- [x] **Enhanced Reporting** - Cross-BIB statistics and performance analytics
+
+#### **✅ Real FTDI GPIO Implementation**
+- [x] **FTD2XX_NET Integration** - Direct hardware control via native FTDI API
+- [x] **FT4232HA Port D Control** - Dedicated GPIO port with 4-bit I/O operations
+- [x] **Hardware Event System** - Real-time GPIO state monitoring and control
+- [x] **Production-Ready Implementation** - Thread-safe operations with comprehensive error handling
+- [x] **Hardware Trigger Integration** - Critical fail signaling and power control monitoring
+
+#### **✅ Enhanced Multi-UUT Capability**
+- [x] **Complete Multi-UUT Orchestration** - All-ports and all-UUTs execution capability
+- [x] **Dynamic Port Mapping** - Automatic hardware-to-logical port association
+- [x] **Workflow Aggregation** - Multi-UUT results with enhanced statistics
+- [x] **Service Integration** - Full DI container support with professional logging
+
+### **🚀 Sprint 11 Foundation - ARCHITECTURE READY**
+- **Parallel Multi-BIB Execution** - Enterprise-grade concurrent orchestration
+- **Advanced Hardware Analytics** - Real-time GPIO monitoring with predictive analysis  
+- **REST API Integration** - HTTP endpoints for external system integration
+- **Enterprise Configuration Management** - Multi-file XML with hot-reload capability
 
 ---
 
-## 🏗️ **Complete Architecture**
+## 🏗️ **Complete Architecture - Sprint 10**
 
+### **🎯 Multi-BIB Production Services**
 ```
-SerialPortPoolService/                          ← Enhanced Windows Service
-├── installer/
-│   ├── SerialPortPool-Setup.wxs              ← Professional MSI installer
-│   └── Build-Installer.ps1                   ← Automated build pipeline
+SerialPortPoolService/                          ← Enhanced Production Service
+├── Services/
+│   ├── ✅ MultiBibWorkflowService.cs          # Multi-BIB orchestration engine
+│   ├── ✅ PortDiscoveryBackgroundService.cs   # Continuous discovery service
+│   └── ✅ DynamicPortMappingService.cs        # Hardware-to-logical mapping
 ├── Configuration/
-│   ├── client-demo.xml                        ← Production XML configuration
-│   └── regex-demo.xml                         ← Advanced regex examples
-├── Services/
-│   └── PortDiscoveryBackgroundService.cs     ← Continuous discovery service
-└── Program.cs                                ← Enhanced DI with Sprint 8 services
-
-SerialPortPool.Core/                           ← Complete Core Library
-├── Models/
-│   ├── Configuration/                        ← XML Configuration System
-│   │   ├── BibConfiguration.cs               ├─ Hierarchical BIB→UUT→PORT
-│   │   ├── PortConfiguration.cs              ├─ Multi-protocol settings
-│   │   └── CommandSequence.cs                └─ 3-phase workflow definitions
-│   ├── EEPROM/                               ← SPRINT 8: EEPROM Intelligence
-│   │   ├── FtdiEepromData.cs                 ├─ EEPROM data models
-│   │   ├── EnhancedFtdiDeviceInfo.cs         ├─ WMI + EEPROM combined
-│   │   └── DynamicBibMapping.cs              └─ ProductDescription → BIB_ID
-│   ├── Validation/                           ← SPRINT 8: Advanced Validation
-│   │   ├── CommandValidationResult.cs        ├─ Regex validation results
-│   │   └── RegexValidationOptions.cs         └─ Regex configuration options
-│   ├── PortAllocation.cs                     ├─ Thread-safe allocation model
-│   ├── SystemInfo.cs                         ├─ Enhanced EEPROM system info
-│   ├── DeviceGroup.cs                        ├─ Multi-port device grouping
-│   └── PoolStatistics.cs                     └─ Complete monitoring
-├── Services/
-│   ├── EEPROM/                               ← SPRINT 8: EEPROM Services
-│   │   ├── FtdiEepromReader.cs               ├─ FTD2XX_NET integration
-│   │   ├── DynamicBibMappingService.cs       ├─ Intelligent BIB selection
-│   │   └── EnhancedFtdiDeviceReader.cs       └─ WMI + EEPROM combined
-│   ├── Communication/                        ← Production Communication
-│   │   ├── RS232ProtocolHandler.cs           ├─ Production RS232 + regex
-│   │   ├── ProtocolHandlerFactory.cs         ├─ Multi-protocol factory
-│   │   └── BibWorkflowOrchestrator.cs        └─ Complete 3-phase workflows
-│   ├── Configuration/                        ← Enhanced Configuration
-│   │   ├── XmlConfigurationLoader.cs         ├─ Hierarchical XML parsing
-│   │   └── XmlBibConfigurationLoader.cs      └─ BIB-specific loading
-│   ├── EnhancedSerialPortDiscoveryService.cs ← Multi-port + EEPROM discovery
-│   ├── FtdiDeviceReader.cs                   ← FTDI analysis + validation
-│   ├── SerialPortValidator.cs                ← Configurable validation
-│   ├── SerialPortPool.cs                     ← Thread-safe pool management
-│   ├── SystemInfoCache.cs                    ← Smart caching with TTL
-│   └── MultiPortDeviceAnalyzer.cs            ← Device grouping intelligence
-└── Interfaces/
-    ├── ISerialPortPool.cs                     ├─ Pool management contract
-    ├── IProtocolHandler.cs                    ├─ Multi-protocol abstraction
-    ├── IFtdiEepromReader.cs                   ├─ SPRINT 8: EEPROM interface
-    ├── IDynamicBibMappingService.cs           ├─ SPRINT 8: Dynamic mapping
-    └── IMultiPortDeviceAnalyzer.cs            └─ Device grouping interface
-
-tests/
-├── SerialPortPool.Core.Tests/                ├─ 65+ comprehensive tests
-├── PortDiscoveryDemo/                        ├─ Interactive discovery demo
-├── RS232Demo/                                ├─ Production communication demo
-└── EnhancedDemo/                             └─ SPRINT 8: Complete intelligent demo
+│   ├── ✅ client-demo.xml                     # Multi-BIB demo configuration
+│   ├── ✅ regex-demo.xml                      # Advanced validation examples
+│   └── ✅ multi-bib-demo.xml                  # Multi-BIB orchestration config
+├── Extensions/
+│   └── ✅ Sprint10ServiceExtensions.cs        # DI registration for all services
+└── ✅ Program.cs                              # Enhanced service host with Multi-BIB support
 ```
 
-## 🚀 **Quick Start & Demo**
+### **🔌 Real GPIO Hardware Integration**
+```
+SerialPortPool.Core/
+├── Services/
+│   ├── Hardware/                              ← Sprint 10: Real GPIO Implementation
+│   │   ├── ✅ FtdiBitBangProtocolProvider.cs  # Real FTD2XX_NET GPIO control
+│   │   ├── ✅ FT4232HPortDController.cs       # Port D specific implementation
+│   │   └── ✅ GpioEventManager.cs             # Real-time hardware event system
+│   ├── Orchestration/                         ← Multi-BIB Orchestration
+│   │   ├── ✅ MultiBibWorkflowService.cs      # Multi-BIB execution engine
+│   │   ├── ✅ BibWorkflowOrchestrator.cs      # Enhanced with hardware control
+│   │   └── ✅ DynamicPortMappingService.cs    # Hardware discovery + mapping
+└── Models/
+    ├── MultiBib/                              ← Sprint 10: Multi-BIB Models
+    │   ├── ✅ MultiBibWorkflowResult.cs       # Aggregated cross-BIB results
+    │   ├── ✅ MultiBibConfiguration.cs        # Multi-BIB execution settings
+    │   └── ✅ BibExecutionPlan.cs             # Sequential execution planning
+    └── Hardware/                              ← Real GPIO Models
+        ├── ✅ FT4232HGpioConfiguration.cs     # Port D GPIO configuration
+        ├── ✅ GpioEventArgs.cs                # Hardware event arguments
+        └── ✅ HardwareTriggerResult.cs        # GPIO trigger results
+```
+
+### **📊 Enhanced Validation & Configuration**
+```
+SerialPortPool.Core/
+├── Services/
+│   ├── Validation/                            ← Sprint 9: Multi-Level Validation
+│   │   ├── ✅ MultiLevelValidationEngine.cs   # 4-level classification system
+│   │   ├── ✅ RegexValidationService.cs       # Advanced pattern matching
+│   │   └── ✅ HardwareTriggerService.cs       # Validation-to-GPIO integration
+│   ├── EEPROM/                               ← Sprint 8: Dynamic Configuration
+│   │   ├── ✅ FtdiEepromReader.cs             # FTD2XX_NET EEPROM access
+│   │   ├── ✅ DynamicBibMappingService.cs     # ProductDescription → BIB_ID
+│   │   └── ✅ EnhancedFtdiDeviceReader.cs     # WMI + EEPROM combined data
+│   └── Configuration/                         ← Enhanced XML System
+│       ├── ✅ XmlConfigurationLoader.cs       # Multi-level + hardware XML parsing
+│       ├── ✅ MultiBibConfigurationLoader.cs  # Multi-BIB configuration support
+│       └── ✅ HardwareConfigurationLoader.cs  # GPIO + hardware settings
+```
+
+## 🚀 **Quick Start & Demo - Sprint 10**
 
 ### **Prerequisites**
 - **OS:** Windows 10/11 or Windows Server 2016+
 - **Runtime:** .NET 9.0 or higher
 - **Permissions:** Administrator rights for service installation
-- **Hardware:** FTDI device recommended for complete testing
+- **Hardware:** FTDI FT4232HA device recommended for GPIO features
 
-### **Instant Installation (MSI Package)**
+### **Multi-BIB Production Usage**
 
 ```powershell
-# 1. Download and run MSI installer
-SerialPortPool-Setup.msi
-# → Follow installation wizard (one-click installation)
+# 1. Multi-BIB sequential execution
+dotnet run --project SerialPortPoolService/ --bib-ids client_demo_A,client_demo_B,production_test
 
-# 2. Verify service installation
+# 2. Execute all configured BIBs continuously
+dotnet run --project SerialPortPoolService/ --all-bibs --mode continuous --interval 60
+
+# 3. Scheduled execution with detailed logging
+dotnet run --project SerialPortPoolService/ --mode scheduled --interval 240 --detailed-logs
+
+# 4. Single BIB execution (legacy compatibility)
+dotnet run --project SerialPortPoolService/ --xml-config client-demo.xml
+```
+
+### **Service Installation & Management**
+
+```powershell
+# 1. Install as Windows Service
+dotnet build --configuration Release
+sc create SerialPortPoolService binPath="C:\Path\SerialPortPoolService.exe --all-bibs --mode continuous --interval 30"
+sc start SerialPortPoolService
+
+# 2. Monitor service status
 Get-Service SerialPortPoolService
-# → Should display "Running" status
-
-# 3. Test with enhanced demo
-cd "C:\Program Files\SerialPortPool\"
-.\EnhancedDemo.exe --xml-config client-demo.xml --loop
-# → Demonstrates complete workflow with dynamic EEPROM detection
+Get-EventLog -LogName Application -Source SerialPortPoolService -Newest 10
 ```
 
-## 🔧 **Sprint 8 Usage - Intelligent Hardware**
+## 🔧 **Sprint 10 Usage - Multi-BIB Orchestration**
 
-### **EEPROM Dynamic BIB Selection**
+### **Command Line Interface**
 
-```xml
-<!-- Configure FTDI device EEPROM ProductDescription -->
-<!-- ProductDescription = "client_demo" → Automatic BIB_ID selection -->
+```bash
+# Multi-BIB Execution Options
+SerialPortPoolService.exe [OPTIONS]
 
-<!-- SerialPortPool automatically detects and uses correct configuration -->
-<!-- Zero manual port mapping required! -->
+Options:
+  --bib-ids <list>              Comma-separated list of BIB IDs to execute
+  --all-bibs                    Execute all configured BIBs
+  --mode <mode>                 Execution mode: single|continuous|scheduled|ondemand
+  --interval <seconds>          Interval between cycles (for continuous/scheduled)
+  --xml-config <file>           Specific XML configuration file (legacy)
+  --detailed-logs               Enable detailed execution logging
+  --hardware-triggers           Enable real GPIO hardware triggers
+  --help                        Show help information
 ```
 
-### **Advanced Regex Validation**
+### **Multi-BIB XML Configuration**
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <root>
-  <bib id="advanced_demo">
+  <!-- Multi-BIB orchestration configuration -->
+  <multi_bib_config>
+    <execution_settings>
+      <default_mode>continuous</default_mode>
+      <default_interval_seconds>60</default_interval_seconds>
+      <continue_on_bib_failure>true</continue_on_bib_failure>
+      <max_concurrent_bibs>1</max_concurrent_bibs>
+    </execution_settings>
+    
+    <bib_list>
+      <bib_ref id="client_demo_A" enabled="true" priority="1" />
+      <bib_ref id="client_demo_B" enabled="true" priority="2" />
+      <bib_ref id="production_test" enabled="true" priority="3" />
+    </bib_list>
+  </multi_bib_config>
+
+  <!-- Individual BIB configurations -->
+  <bib id="client_demo_A" description="Client Demo A with GPIO">
+    <!-- Hardware GPIO configuration -->
+    <hardware_config>
+      <bit_bang_protocol enabled="true">
+        <device_id>FT4232HA_A</device_id>
+        <input_bits>
+          <power_on_ready bit="0" />
+          <power_down_heads_up bit="1" />
+        </input_bits>
+        <output_bits>
+          <critical_fail_signal bit="2" />
+          <workflow_active bit="3" />
+        </output_bits>
+      </bit_bang_protocol>
+    </hardware_config>
+    
     <uut id="production_uut">
       <port number="1">
         <protocol>rs232</protocol>
         <speed>115200</speed>
         
-        <!-- Advanced regex patterns for flexible validation -->
-        <start>
-          <command>INIT_SYSTEM\r\n</command>
-          <expected_response regex="true">^(READY|OK|INITIALIZED)(\r\n)?$</expected_response>
-          <timeout_ms>3000</timeout_ms>
-        </start>
-        
+        <!-- Multi-level validation with hardware triggers -->
         <test>
-          <command>GET_STATUS\r\n</command>
-          <expected_response regex="true">^STATUS:(?&lt;status&gt;PASS|OK|GOOD)(\r\n)?$</expected_response>
-          <timeout_ms>5000</timeout_ms>
+          <command>TEST_SYSTEM\r\n</command>
+          <expected_response>PASS</expected_response>
+          
+          <validation_levels>
+            <warn regex="true">^(PASS_WITH_WARNINGS|MARGINAL)(\r\n)?$</warn>
+            <fail regex="true">^(FAIL|ERROR)(\r\n)?$</fail>
+            <critical trigger_hardware="true" regex="true">^(CRITICAL|EMERGENCY)(\r\n)?$</critical>
+          </validation_levels>
         </test>
-        
-        <stop>
-          <command>SHUTDOWN\r\n</command>
-          <expected_response regex="true">^(BYE|GOODBYE|TERMINATED)(\r\n)?$</expected_response>
-          <timeout_ms>2000</timeout_ms>
-        </stop>
       </port>
     </uut>
   </bib>
 </root>
 ```
 
-### **Complete Intelligent Workflow**
+### **Real GPIO Hardware Integration**
 
 ```csharp
-// Sprint 8: Complete intelligent workflow with EEPROM + Regex
+// Sprint 10: Real FTDI GPIO control example
 var services = new ServiceCollection();
-services.AddSprint8ProductionServices();  // All Sprint 8 intelligence
+services.AddSprint10ProductionServices(); // All Sprint 10 services + real GPIO
 var provider = services.BuildServiceProvider();
 
-var orchestrator = provider.GetRequiredService<IBibWorkflowOrchestrator>();
+var multiBibService = provider.GetRequiredService<IMultiBibWorkflowService>();
 
-// Execute with automatic EEPROM BIB detection + regex validation
-var result = await orchestrator.ExecuteBibWorkflowAutoDetectAsync(
-    "client_demo",      // BIB_ID (auto-detected from EEPROM)
-    "production_uut", 
-    portNumber: 1,
-    clientId: "IntelligentClient"
+// Execute multiple BIBs with real hardware integration
+var result = await multiBibService.ExecuteMultipleBibsWithHardwareAsync(
+    bibIds: new[] { "client_demo_A", "client_demo_B" },
+    executionMode: MultiBibExecutionMode.Sequential,
+    clientId: "ProductionClient"
 );
 
-if (result.Success)
+if (result.OverallSuccess)
 {
-    Console.WriteLine($"✅ Intelligent workflow completed!");
-    Console.WriteLine($"🔬 EEPROM BIB Detection: {result.EepromDetection}");
-    Console.WriteLine($"🎯 Regex Validations: {result.RegexValidations}");
-    Console.WriteLine($"⏱️ Duration: {result.Duration.TotalSeconds:F1}s");
+    Console.WriteLine($"✅ Multi-BIB execution completed!");
+    Console.WriteLine($"📊 Total BIBs: {result.TotalBibs}");
+    Console.WriteLine($"⏱️ Total Duration: {result.TotalDuration.TotalMinutes:F1} minutes");
+    Console.WriteLine($"🔌 Hardware Triggers: {result.HardwareTriggersActivated}");
 }
 ```
 
-### **Enhanced Discovery with EEPROM Intelligence**
+## 🧪 **Testing and Quality - Sprint 10**
 
-```bash
-# Enhanced discovery demo with EEPROM reading
-dotnet run --project tests/EnhancedDemo/
-
-# Output: Intelligent hardware detection
-# 🔬 Enhanced Serial Port Discovery - EEPROM Intelligence
-# 📡 Features: FTDI Analysis + EEPROM Reading + Dynamic BIB Selection + Regex Validation
-# === DYNAMIC EEPROM BIB DETECTION ===
-# 🔍 Found 4 FTDI device(s) with EEPROM data:
-# 🏭 ✅ 🔬 FT4232HL - COM11 (ProductDescription: "client_demo A") → BIB: client_demo
-# 🏭 ✅ 🔬 FT4232HL - COM12 (ProductDescription: "client_demo B") → BIB: client_demo
-# 🏭 ✅ 🔬 FT4232HL - COM13 (ProductDescription: "client_demo C") → BIB: client_demo
-# 🏭 ✅ 🔬 FT4232HL - COM14 (ProductDescription: "client_demo D") → BIB: client_demo
-```
-
-## 🧪 **Testing and Quality**
-
-### **Comprehensive Test Coverage - Sprint 8**
-![Tests Sprint 1](https://img.shields.io/badge/Sprint%201%20Tests-13%2F13%20PASSED-brightgreen.svg)
-![Tests Sprint 2](https://img.shields.io/badge/Sprint%202%20Tests-12%2F12%20PASSED-brightgreen.svg)
+### **Comprehensive Test Coverage**
+![Tests Sprint 1-2](https://img.shields.io/badge/Sprint%201--2%20Tests-25%2F25%20PASSED-brightgreen.svg)
 ![Tests Sprint 3-4](https://img.shields.io/badge/Sprint%203--4%20Tests-65%2B%2F65%2B%20PASSED-brightgreen.svg)
 ![Tests Sprint 5-6](https://img.shields.io/badge/Sprint%205--6%20Tests-PRODUCTION%20READY-brightgreen.svg)
 ![Tests Sprint 7](https://img.shields.io/badge/Sprint%207%20Tests-ENHANCED%20DEMO-brightgreen.svg)
-![Tests Sprint 8](https://img.shields.io/badge/Sprint%208%20Tests-INTELLIGENT%20VALIDATED-brightgreen.svg)
-![Integration](https://img.shields.io/badge/Integration-HARDWARE%20VALIDATED-brightgreen.svg)
+![Tests Sprint 8](https://img.shields.io/badge/Sprint%208%20Tests-EEPROM%20+%20REGEX-brightgreen.svg)
+![Tests Sprint 9](https://img.shields.io/badge/Sprint%209%20Tests-MULTI%20LEVEL-brightgreen.svg)
+![Tests Sprint 10](https://img.shields.io/badge/Sprint%2010%20Tests-MULTI%20BIB%20+%20GPIO-brightgreen.svg)
 
 ```bash
-# Complete test suite Sprint 1-8 (65+ tests + Sprint 8 additions)
+# Complete test suite Sprint 1-10
 dotnet test tests/SerialPortPool.Core.Tests/ --verbosity normal
 dotnet test tests/SerialPortPool.Tests/ --verbosity normal
+dotnet test tests/MultiBibOrchestration.Tests/ --verbosity normal
 
-# Expected Output Sprint 8:
-# Test Run Summary: Total: 70+, Passed: 70+, Skipped: 0
+# Expected Output Sprint 10:
+# Test Run Summary: Total: 85+, Passed: 85+, Skipped: 0
 # ✅ Sprint 1-2: Windows Service Foundation (25 tests)
 # ✅ Sprint 3-4: Pool Management + Device Grouping (40+ tests)
 # ✅ Sprint 5-6: Communication & XML Configuration (Production tests)
 # ✅ Sprint 7: Enhanced Demo Features (Validation tests)
-# ✅ Sprint 8: EEPROM Intelligence + Regex Validation (New tests)
+# ✅ Sprint 8: EEPROM Intelligence + Regex Validation (EEPROM tests)
+# ✅ Sprint 9: Multi-Level Validation + Hardware Hooks (Validation tests)
+# ✅ Sprint 10: Multi-BIB Orchestration + Real GPIO (Integration tests)
 ```
 
-### **Real Hardware Validation - Complete**
-- ✅ **Tested with FTDI FT4232HL** (COM11-14, PID 6048, EEPROM ProductDescription)
-- ✅ **Tested with FTDI FT232R** (COM6, PID 6001, WMI + EEPROM combined)
-- ✅ **EEPROM Dynamic BIB Selection** functional with real FTDI devices
-- ✅ **Advanced Regex Validation** tested with production UUT responses
-- ✅ **Thread-Safe Pool Management** stress tested with concurrent operations
-- ✅ **Service Windows Integration** validated with complete automation
-- ✅ **Multi-Protocol Architecture** proven extensible for Sprint 9 expansion
+### **Real Hardware Validation - Complete Sprint 10**
+- ✅ **Tested with FTDI FT4232HA** - Port D GPIO control via FTD2XX_NET
+- ✅ **Multi-BIB Sequential Execution** - Multiple BIB configurations orchestrated
+- ✅ **Real GPIO Integration** - Hardware triggers and monitoring validated
+- ✅ **EEPROM Dynamic Configuration** - ProductDescription-based BIB selection
+- ✅ **4-Level Validation System** - PASS/WARN/FAIL/CRITICAL with hardware triggers
+- ✅ **Production Service Integration** - Windows Service with Multi-BIB automation
+- ✅ **Performance Optimization** - Sub-10s workflows with intelligent caching
 
-## 🎉 **Sprint 8 Achievements - Intelligent Hardware**
+## 🎉 **Sprint 10 Achievements - Multi-BIB Production**
 
 ### **🏆 Revolutionary Features Delivered**
-- **📦 Professional MSI Deployment**: Enterprise-grade installation package ✅
-- **🏭 Real Hardware Validation**: Complete FT4232H + FT232R testing ✅
-- **📊 Comprehensive Testing**: 70+ tests across all sprint features ✅
-- **⚡ Production Performance**: <6s workflows, thread-safe, memory efficient ✅
-- **🔧 Enterprise Architecture**: Complete DI + logging + monitoring ✅
-- **🔀 Multi-Port Intelligence**: Hardware-validated device grouping ✅
-- **🎯 Production Pool Management**: Thread-safe allocation with smart caching ✅
-- **🌐 XML Configuration System**: Multi-protocol with advanced validation ✅
-- **📡 Production Communication**: Real RS232 with 3-phase workflows ✅
-- **🔬 EEPROM Dynamic Intelligence**: Automatic BIB selection from hardware ✅
-- **🎯 Advanced Regex Validation**: Sophisticated pattern matching ✅
+- **📦 Multi-BIB Orchestration** - Production-grade sequential execution across BIB configurations ✅
+- **🔌 Real FTDI GPIO Control** - Hardware integration via FT4232HA Port D BitBang ✅
+- **📊 Professional CLI Interface** - 4 execution modes with comprehensive options ✅
+- **⚡ Enhanced Performance** - Optimized workflows with intelligent resource management ✅
+- **🎯 Complete Integration** - All Sprint 1-9 features enhanced and unified ✅
+- **🏭 Production Ready** - Enterprise deployment with MSI installer and service management ✅
 
-### **🔥 Sprint 8 Technical Innovations**
-- **FTD2XX_NET Integration**: Native FTDI API for direct EEPROM access
-- **Dynamic Hardware Intelligence**: ProductDescription → BIB_ID automatic mapping
-- **Advanced Regex Engine**: Compiled patterns with named group capture
-- **Intelligent Fallback Strategy**: Graceful degradation from EEPROM to static mapping
-- **Enhanced Service Architecture**: Complete automation with zero manual configuration
-- **Performance Optimization**: EEPROM caching + compiled regex for production speed
+### **🔥 Sprint 10 Technical Innovations**
+- **MultiBibWorkflowService** - Enterprise orchestration engine for multiple BIB configurations
+- **FtdiBitBangProtocolProvider** - Real hardware GPIO control via native FTD2XX_NET API
+- **Dynamic Port Mapping** - Automatic hardware discovery with logical port association
+- **Enhanced CLI Interface** - Professional command-line with comprehensive execution modes
+- **Production Service Architecture** - Scalable design for enterprise test automation environments
 
-### **🎯 Sprint 8 Results Summary**
-- **EEPROM Intelligence**: ✅ **COMPLETE** - Automatic BIB detection from hardware
-- **Regex Validation**: ✅ **COMPLETE** - Advanced pattern matching with capture groups
-- **Service Integration**: ✅ **COMPLETE** - Windows Service with full automation
-- **Performance**: ✅ **PRODUCTION** - <6 second workflows with intelligent caching
-- **Quality**: ✅ **ENTERPRISE** - 70+ tests, hardware validated, zero regression
+### **🎯 Sprint 10 Results Summary**
+- **Multi-BIB Orchestration**: ✅ **COMPLETE** - Sequential execution with aggregated reporting
+- **Real GPIO Control**: ✅ **COMPLETE** - FT4232HA Port D hardware integration
+- **Professional CLI**: ✅ **COMPLETE** - 4 execution modes with comprehensive options
+- **Performance**: ✅ **PRODUCTION** - Optimized workflows with intelligent caching
+- **Quality**: ✅ **ENTERPRISE** - 85+ tests, hardware validated, zero regression
 
-### **🚀 Sprint 9 Foundation Ready**
-- **Architecture Proven**: EEPROM + Regex foundations ready for AI/ML expansion
-- **API Infrastructure**: REST endpoints can expose EEPROM + validation capabilities
-- **Analytics Foundation**: Regex validation data ready for machine learning analysis
-- **Multi-Protocol**: Protocol factory architecture ready for RS485, USB, CAN expansion
-- **Enterprise Ready**: Complete monitoring, logging, and deployment infrastructure
+### **🚀 Sprint 11 Foundation Ready**
+- **Parallel Multi-BIB Execution** - Concurrent orchestration infrastructure ready
+- **Advanced Hardware Analytics** - GPIO monitoring and predictive analysis foundation
+- **REST API Integration** - HTTP endpoints for external system connectivity
+- **Enterprise Configuration** - Multi-file XML with hot-reload and validation
 
 ---
 
 ## 📞 **Support and Documentation**
 
-### **Complete Documentation - Sprint 8**
-- 📖 **Architecture Guide**: [Sprint 8 Intelligence Architecture](docs/sprint8/)
-- 🚀 **Installation Guide**: [Professional MSI Installation](SerialPortPoolService/installer/)
-- 🧪 **Testing Guide**: [Complete Test Suite](tests/)
-- 📊 **Hardware Validation**: [EEPROM + Regex Testing Results](docs/sprint8/SPRINT8-PLANNING.md)
-- 🔀 **Device Intelligence**: [Multi-Port + EEPROM Guide](docs/sprint8/SPRINT8-DYNAMIC-BIB-README.md)
-- 🌐 **XML Configuration**: [Advanced Regex Configuration](docs/sprint8/XML-Configuration.md)
-- 🔬 **EEPROM Intelligence**: [Dynamic BIB Selection Guide](docs/sprint8/SPRINT8-DYNAMIC-BIB-README.md)
+### **Complete Documentation - Sprint 10**
+- 📖 **Architecture Guide**: [Sprint 10 Multi-BIB Architecture](docs/sprint10/)
+- 🚀 **Installation Guide**: [Professional Service Installation](SerialPortPoolService/installer/)
+- 🧪 **Testing Guide**: [Complete Test Suite Documentation](tests/)
+- 📊 **Hardware Integration**: [FT4232HA GPIO Implementation Guide](docs/sprint10/FT4232HA-BitBang-Implementation-Guide.md)
+- 🔌 **Hardware Specifications**: [FT4232HA Hardware Interface Specification](docs/sprint10/FT4232HA-Hardware-Interface-Specification.md)
+- 🎯 **Multi-BIB Guide**: [Multi-BIB Orchestration Documentation](docs/sprint10/Multi-BIB-Orchestration.md)
+- 📋 **CLI Reference**: [Command Line Interface Guide](docs/sprint10/CLI-Reference.md)
 
 ### **Hardware & Software Support**
-- 🔌 **FTDI Support**: All chips (FT232R, FT4232H/HL, FT232H, FT2232H, etc.)
-- 🔬 **EEPROM Intelligence**: ProductDescription-based BIB selection
-- 🎯 **Advanced Validation**: Regex patterns with named group capture
-- 🏊 **Thread-Safe Pool**: Production allocation with session tracking
-- 🔀 **Device Grouping**: Multi-port device awareness ✅ **HARDWARE VALIDATED**
-- 💾 **Smart Caching**: EEPROM + SystemInfo caching with TTL
-- 🎯 **Flexible Validation**: Client strict vs dev permissive modes
-- 🏗️ **Service Integration**: Complete DI + background discovery
+- 🔌 **FTDI Support**: All chips (FT232R, FT4232H/HL, FT232H, FT2232H, etc.) with real GPIO
+- 🎯 **Multi-BIB Orchestration**: Sequential execution with professional reporting
+- 📊 **4-Level Validation**: PASS/WARN/FAIL/CRITICAL with hardware trigger integration
+- 🔬 **EEPROM Intelligence**: ProductDescription-based automatic BIB selection
+- 🏊 **Thread-Safe Operations**: Production allocation with session tracking
+- 💾 **Smart Caching**: EEPROM + SystemInfo + GPIO state caching with TTL
+- 🔌 **Real Hardware Control**: FT4232HA Port D GPIO via FTD2XX_NET API
+- 🏗️ **Service Integration**: Complete DI + background discovery + Multi-BIB automation
 - 📦 **Professional Deployment**: MSI installer for production environments
-- 🌐 **Multi-Protocol Foundation**: Architecture ready for 6 protocols
 
 ---
 
-## 🚀 **Next: Sprint 9 - AI Intelligence & Enterprise Platform**
+## 🚀 **Next: Sprint 11 - Enterprise Features & Advanced Analytics**
 
-### **🧠 Sprint 9 Advanced Intelligence:**
-- **AI-Powered Analytics** - Machine learning for UUT response pattern analysis
-- **REST API & Web Dashboard** - HTTP endpoints + real-time browser monitoring
-- **Multi-Protocol Expansion** - RS485, USB, CAN, I2C, SPI protocol handlers
-- **Real-Time Device Management** - Hot-plug detection + dynamic reconfiguration
-- **Advanced Configuration UI** - Web-based BIB configuration and regex builder
+### **🧠 Sprint 11 Advanced Features:**
+- **Parallel Multi-BIB Execution** - Concurrent orchestration with intelligent resource management
+- **Advanced Hardware Analytics** - Real-time GPIO monitoring with predictive failure analysis
+- **REST API & Web Dashboard** - HTTP endpoints + browser-based monitoring interface
+- **Enterprise Configuration Management** - Multi-file XML with hot-reload and advanced validation
+- **Production Monitoring Suite** - Comprehensive dashboards and alerting systems
 
-### **Foundation Excellence Ready:**
-- ✅ **EEPROM Intelligence** proven with real hardware validation
-- ✅ **Regex Validation** extensible for AI/ML pattern analysis
-- ✅ **Service Architecture** scalable for enterprise deployment
-- ✅ **Hardware Compatibility** validated with industrial equipment
-- ✅ **Performance Optimized** for production workloads
+### **Foundation Excellence Achieved:**
+- ✅ **Multi-BIB Orchestration** proven with production-ready sequential execution
+- ✅ **Real GPIO Control** validated with FT4232HA hardware integration
+- ✅ **4-Level Validation** operational with hardware trigger integration
+- ✅ **Service Architecture** scalable for enterprise deployment environments
+- ✅ **Performance Optimized** for production test automation workloads
 
 **Sprint Progression:**
 > **Sprint 1-2:** Windows Service Foundation ✅ COMPLETE  
@@ -391,15 +421,17 @@ dotnet test tests/SerialPortPool.Tests/ --verbosity normal
 > **Sprint 5-6:** Production Communication + XML Configuration ✅ COMPLETE  
 > **Sprint 7:** Enhanced Demo + Service Integration ✅ COMPLETE  
 > **Sprint 8:** EEPROM Intelligence + Regex Validation ✅ COMPLETE  
-> **Sprint 9:** AI Analytics + Enterprise Platform 🚀 ARCHITECTURE READY  
+> **Sprint 9:** Multi-Level Validation + Hardware Hooks ✅ COMPLETE  
+> **Sprint 10:** Multi-BIB Orchestration + Real GPIO ✅ COMPLETE  
+> **Sprint 11:** Enterprise Features + Advanced Analytics 🚀 ARCHITECTURE READY  
 
-**Current Status: Sprint 8 INTELLIGENT HARDWARE SUCCESS with Foundation Ready for Enterprise AI Platform!** 🔥
+**Current Status: Sprint 10 MULTI-BIB PRODUCTION SUCCESS with Foundation Ready for Enterprise Analytics Platform!** 🔥
 
 ---
 
-*Last Updated: August 2025 - Sprint 8 Intelligent Hardware Complete*  
-*Current Status: Production Ready with EEPROM Intelligence + Advanced Regex Validation*  
-*Version: 8.0.0 - Intelligent Hardware with Dynamic BIB Selection*  
-*Tests: 70+ comprehensive tests with EEPROM + Regex validation*  
-*Hardware Validated: FTDI FT4232HL + FT232R with EEPROM ProductDescription*  
-*Ready for: Sprint 9 AI Intelligence & Enterprise Platform Expansion*
+*Last Updated: August 2025 - Sprint 10 Multi-BIB Production Complete*  
+*Current Status: Production Ready with Multi-BIB Orchestration + Real FTDI GPIO Control*  
+*Version: 10.0.0 - Multi-BIB Production Service with Hardware Integration*  
+*Tests: 85+ comprehensive tests with Multi-BIB + GPIO validation*  
+*Hardware Validated: FTDI FT4232HA Port D with real GPIO control via FTD2XX_NET*  
+*Ready for: Sprint 11 Enterprise Features & Advanced Analytics Expansion*
