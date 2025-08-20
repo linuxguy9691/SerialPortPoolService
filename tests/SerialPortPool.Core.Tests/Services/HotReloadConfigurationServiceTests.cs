@@ -7,6 +7,7 @@
 using Microsoft.Extensions.Logging;
 using Moq;
 using SerialPortPool.Core.Services;
+using SerialPortPool.Core.Services.Configuration; 
 using Xunit;
 
 namespace SerialPortPool.Core.Tests.Services;

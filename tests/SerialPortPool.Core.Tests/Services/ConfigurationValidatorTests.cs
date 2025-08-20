@@ -7,7 +7,8 @@
 using Microsoft.Extensions.Logging;
 using Moq;
 using SerialPortPool.Core.Models;
-using SerialPortPool.Core.Services;
+using Sprint11ConfigValidator = SerialPortPool.Core.Services.Configuration.ConfigurationValidator;
+using Sprint11ConfigValidatorOptions = SerialPortPool.Core.Services.Configuration.ConfigurationValidationOptions;
 using Xunit;
 
 namespace SerialPortPool.Core.Tests.Services;
@@ -18,6 +19,8 @@ namespace SerialPortPool.Core.Tests.Services;
 /// </summary>
 public class ConfigurationValidatorTests : IDisposable
 {
+    private readonly Mock<ILogger<Sprint11ConfigValidator>> _mockLogger;
+    private readonly Sprint11ConfigValidator _validator;
     private readonly Mock<ILogger<ConfigurationValidator>> _mockLogger;
     private readonly ConfigurationValidator _validator;
     private readonly string _testDirectory;
