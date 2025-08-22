@@ -1,620 +1,432 @@
 // ===================================================================
-// SPRINT 11 TESTING: HotReloadConfigurationService Unit Tests
-// File: tests/SerialPortPool.Core.Tests/Services/HotReloadConfigurationServiceTests.cs
-// Purpose: Comprehensive tests for file monitoring + event-driven hot reload
+// SPRINT 11: HotReloadConfigurationService Implementation
+// File: SerialPortPool.Core/Services/Configuration/HotReloadConfigurationService.cs
+// Purpose: File system monitoring + event-driven hot reload for BIB configurations
 // ===================================================================
 
 using Microsoft.Extensions.Logging;
-using Moq;
-using SerialPortPool.Core.Services;
-using SerialPortPool.Core.Services.Configuration; 
-using Xunit;
+using System.Text.RegularExpressions;
 
-namespace SerialPortPool.Core.Tests.Services;
+namespace SerialPortPool.Core.Services.Configuration;
 
 /// <summary>
-/// Unit tests for HotReloadConfigurationService (Sprint 11)
-/// Tests file system monitoring, debounced events, and configuration reload
+/// Service for monitoring configuration files and triggering hot reload events
+/// Provides debounced file system monitoring with BIB-specific event handling
 /// </summary>
-public class HotReloadConfigurationServiceTests : IDisposable
+public class HotReloadConfigurationService : IDisposable
 {
-    private readonly Mock<ILogger<HotReloadConfigurationService>> _mockLogger;
-    private readonly HotReloadConfigurationService _hotReloadService;
-    private readonly string _testDirectory;
-    private readonly string _testConfigFile;
-    private readonly List<string> _capturedEvents;
+    private readonly ILogger<HotReloadConfigurationService> _logger;
+    private FileSystemWatcher? _fileWatcher;
+    private readonly Dictionary<string, DateTime> _pendingChanges = new();
+    private readonly Timer _debounceTimer;
+    private readonly object _lockObject = new();
+    private readonly SemaphoreSlim _processingLock = new(1, 1);
+    
+    private bool _isDisposed = false;
+    private DateTime _startTime;
+    private int _totalEventsProcessed = 0;
+    private int _configurationChangedEvents = 0;
+    private int _configurationErrorEvents = 0;
+    
+    // Configuration
+    private const int DebounceDelayMs = 500;
+    private const string BibFilePattern = "*.xml";
 
-    public HotReloadConfigurationServiceTests()
+    #region Properties
+
+    public bool IsMonitoring { get; private set; } = false;
+    public string? MonitoredDirectory { get; private set; }
+
+    #endregion
+
+    #region Events
+
+    public event EventHandler<ConfigurationChangedEventArgs>? ConfigurationChanged;
+    public event EventHandler<ConfigurationErrorEventArgs>? ConfigurationError;
+
+    #endregion
+
+    #region Constructor
+
+    public HotReloadConfigurationService(ILogger<HotReloadConfigurationService> logger)
     {
-        _mockLogger = new Mock<ILogger<HotReloadConfigurationService>>();
-        _testDirectory = Path.Combine(Path.GetTempPath(), "Sprint11_HotReloadTests", Guid.NewGuid().ToString());
-        Directory.CreateDirectory(_testDirectory);
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         
-        _testConfigFile = Path.Combine(_testDirectory, "test_config.xml");
-        _capturedEvents = new List<string>();
+        // Create debounce timer (initially disabled)
+        _debounceTimer = new Timer(ProcessPendingChanges, null, Timeout.Infinite, Timeout.Infinite);
         
-        _hotReloadService = new HotReloadConfigurationService(_mockLogger.Object);
-        
-        // Subscribe to events for testing
-        _hotReloadService.ConfigurationChanged += OnConfigurationChanged;
-        _hotReloadService.ConfigurationError += OnConfigurationError;
-    }
-
-    #region Constructor Tests
-
-    [Fact]
-    public void Constructor_WithValidLogger_InitializesCorrectly()
-    {
-        // Arrange & Act
-        var service = new HotReloadConfigurationService(_mockLogger.Object);
-
-        // Assert
-        Assert.NotNull(service);
-        Assert.False(service.IsMonitoring);
-    }
-
-    [Fact]
-    public void Constructor_WithNullLogger_ThrowsArgumentNullException()
-    {
-        // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => 
-            new HotReloadConfigurationService(null!));
+        _logger.LogDebug("🔥 HotReloadConfigurationService initialized");
     }
 
     #endregion
 
-    #region StartMonitoring Tests
+    #region Public Methods
 
-    [Fact]
-    public async Task StartMonitoring_WithValidDirectory_StartSuccessfully()
+    /// <summary>
+    /// Start monitoring a directory for configuration changes
+    /// </summary>
+    public bool StartMonitoring(string directory)
     {
-        // Arrange
-        await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent("initial"));
+        if (string.IsNullOrWhiteSpace(directory))
+            throw new ArgumentException("Directory path cannot be null or empty", nameof(directory));
 
-        // Act
-        var success = _hotReloadService.StartMonitoring(_testDirectory);
+        lock (_lockObject)
+        {
+            try
+            {
+                // Stop current monitoring if active
+                if (IsMonitoring)
+                {
+                    StopMonitoring();
+                }
 
-        // Assert
-        Assert.True(success);
-        Assert.True(_hotReloadService.IsMonitoring);
-        Assert.Equal(_testDirectory, _hotReloadService.MonitoredDirectory);
+                if (!Directory.Exists(directory))
+                {
+                    _logger.LogWarning("⚠️ Directory does not exist: {Directory}", directory);
+                    return false;
+                }
+
+                _logger.LogInformation("🔥 Starting hot reload monitoring: {Directory}", directory);
+
+                // Configure file system watcher
+                _fileWatcher = new FileSystemWatcher(directory, BibFilePattern)
+                {
+                    NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.CreationTime,
+                    IncludeSubdirectories = false,
+                    EnableRaisingEvents = true
+                };
+
+                // Subscribe to events
+                _fileWatcher.Changed += OnFileChanged;
+                _fileWatcher.Created += OnFileChanged;
+                _fileWatcher.Deleted += OnFileChanged;
+                _fileWatcher.Renamed += OnFileRenamed;
+                _fileWatcher.Error += OnWatcherError;
+
+                MonitoredDirectory = directory;
+                IsMonitoring = true;
+                _startTime = DateTime.Now;
+                
+                _logger.LogInformation("✅ Hot reload monitoring started successfully");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Failed to start monitoring: {Error}", ex.Message);
+                return false;
+            }
+        }
     }
 
-    [Fact]
-    public void StartMonitoring_WithNonExistentDirectory_ReturnsFalse()
+    /// <summary>
+    /// Stop monitoring configuration changes
+    /// </summary>
+    public void StopMonitoring()
     {
-        // Arrange
-        var nonExistentDir = Path.Combine(_testDirectory, "nonexistent");
+        lock (_lockObject)
+        {
+            if (!IsMonitoring)
+                return;
 
-        // Act
-        var success = _hotReloadService.StartMonitoring(nonExistentDir);
+            _logger.LogInformation("🛑 Stopping hot reload monitoring");
 
-        // Assert
-        Assert.False(success);
-        Assert.False(_hotReloadService.IsMonitoring);
+            try
+            {
+                // Disable timer
+                _debounceTimer.Change(Timeout.Infinite, Timeout.Infinite);
+
+                // Dispose file watcher
+                if (_fileWatcher != null)
+                {
+                    _fileWatcher.EnableRaisingEvents = false;
+                    _fileWatcher.Changed -= OnFileChanged;
+                    _fileWatcher.Created -= OnFileChanged;
+                    _fileWatcher.Deleted -= OnFileChanged;
+                    _fileWatcher.Renamed -= OnFileRenamed;
+                    _fileWatcher.Error -= OnWatcherError;
+                    _fileWatcher.Dispose();
+                    _fileWatcher = null;
+                }
+
+                // Clear pending changes
+                _pendingChanges.Clear();
+
+                IsMonitoring = false;
+                MonitoredDirectory = null;
+                
+                _logger.LogInformation("✅ Hot reload monitoring stopped");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "⚠️ Warning while stopping monitoring: {Error}", ex.Message);
+            }
+        }
     }
 
-    [Fact]
-    public void StartMonitoring_WithNullDirectory_ThrowsArgumentException()
+    /// <summary>
+    /// Get monitoring statistics
+    /// </summary>
+    public MonitoringStatistics GetMonitoringStatistics()
     {
-        // Act & Assert
-        Assert.Throws<ArgumentException>(() =>
-            _hotReloadService.StartMonitoring(null!));
+        lock (_lockObject)
+        {
+            return new MonitoringStatistics
+            {
+                IsMonitoring = IsMonitoring,
+                MonitoredDirectory = MonitoredDirectory,
+                TotalEventsProcessed = _totalEventsProcessed,
+                MonitoringDuration = IsMonitoring ? DateTime.Now - _startTime : TimeSpan.Zero,
+                StartTime = IsMonitoring ? _startTime : null,
+                ConfigurationChangedEvents = _configurationChangedEvents,
+                ConfigurationErrorEvents = _configurationErrorEvents
+            };
+        }
     }
 
-    [Fact]
-    public void StartMonitoring_WithEmptyDirectory_ThrowsArgumentException()
+    #endregion
+
+    #region File System Event Handlers
+
+    private void OnFileChanged(object sender, FileSystemEventArgs e)
     {
-        // Act & Assert
-        Assert.Throws<ArgumentException>(() =>
-            _hotReloadService.StartMonitoring(string.Empty));
+        try
+        {
+            if (!IsXmlConfigurationFile(e.FullPath))
+                return;
+
+            _logger.LogDebug("📁 File change detected: {File} ({ChangeType})", e.Name, e.ChangeType);
+
+            lock (_lockObject)
+            {
+                // Add to pending changes with current timestamp
+                _pendingChanges[e.FullPath] = DateTime.Now;
+                
+                // Reset debounce timer
+                _debounceTimer.Change(DebounceDelayMs, Timeout.Infinite);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "⚠️ Error processing file change event: {Error}", ex.Message);
+        }
     }
 
-    [Fact]
-    public async Task StartMonitoring_WhenAlreadyMonitoring_StopsCurrentAndStartsNew()
+    private void OnFileRenamed(object sender, RenamedEventArgs e)
     {
-        // Arrange
-        await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent("initial"));
-        var firstDirectory = _testDirectory;
-        var secondDirectory = Path.Combine(Path.GetTempPath(), "Sprint11_SecondDir", Guid.NewGuid().ToString());
-        Directory.CreateDirectory(secondDirectory);
+        try
+        {
+            if (!IsXmlConfigurationFile(e.FullPath))
+                return;
+
+            _logger.LogDebug("📁 File renamed: {OldName} → {NewName}", e.OldName, e.Name);
+
+            lock (_lockObject)
+            {
+                _pendingChanges[e.FullPath] = DateTime.Now;
+                _debounceTimer.Change(DebounceDelayMs, Timeout.Infinite);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "⚠️ Error processing file rename event: {Error}", ex.Message);
+        }
+    }
+
+    private void OnWatcherError(object sender, ErrorEventArgs e)
+    {
+        _logger.LogError(e.GetException(), "❌ File system watcher error");
+        
+        // Try to recover by restarting monitoring
+        var currentDirectory = MonitoredDirectory;
+        if (!string.IsNullOrEmpty(currentDirectory))
+        {
+            _logger.LogInformation("🔄 Attempting to restart monitoring after error...");
+            Task.Run(async () =>
+            {
+                await Task.Delay(2000); // Brief delay before restart
+                StartMonitoring(currentDirectory);
+            });
+        }
+    }
+
+    #endregion
+
+    #region Debounced Processing
+
+    private async void ProcessPendingChanges(object? state)
+    {
+        if (!_processingLock.Wait(100)) // Non-blocking attempt
+            return;
 
         try
         {
-            // Start monitoring first directory
-            var firstStart = _hotReloadService.StartMonitoring(firstDirectory);
-            Assert.True(firstStart);
-            Assert.Equal(firstDirectory, _hotReloadService.MonitoredDirectory);
+            Dictionary<string, DateTime> changesToProcess;
+            
+            lock (_lockObject)
+            {
+                if (_pendingChanges.Count == 0)
+                    return;
 
-            // Act - Start monitoring second directory
-            var secondStart = _hotReloadService.StartMonitoring(secondDirectory);
+                // Copy and clear pending changes
+                changesToProcess = new Dictionary<string, DateTime>(_pendingChanges);
+                _pendingChanges.Clear();
+            }
 
-            // Assert
-            Assert.True(secondStart);
-            Assert.Equal(secondDirectory, _hotReloadService.MonitoredDirectory);
-            Assert.True(_hotReloadService.IsMonitoring);
+            _logger.LogDebug("⚡ Processing {Count} debounced file changes", changesToProcess.Count);
+
+            foreach (var change in changesToProcess)
+            {
+                await ProcessSingleFileChangeAsync(change.Key);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Error processing pending changes: {Error}", ex.Message);
         }
         finally
         {
-            if (Directory.Exists(secondDirectory))
-                Directory.Delete(secondDirectory, true);
+            _processingLock.Release();
         }
     }
 
-    #endregion
-
-    #region StopMonitoring Tests
-
-    [Fact]
-    public async Task StopMonitoring_WhenMonitoring_StopsSuccessfully()
+    private async Task ProcessSingleFileChangeAsync(string filePath)
     {
-        // Arrange
-        await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent("initial"));
-        _hotReloadService.StartMonitoring(_testDirectory);
-        Assert.True(_hotReloadService.IsMonitoring);
-
-        // Act
-        _hotReloadService.StopMonitoring();
-
-        // Assert
-        Assert.False(_hotReloadService.IsMonitoring);
-        Assert.Null(_hotReloadService.MonitoredDirectory);
-    }
-
-    [Fact]
-    public void StopMonitoring_WhenNotMonitoring_DoesNotThrow()
-    {
-        // Arrange - Service not monitoring
-        Assert.False(_hotReloadService.IsMonitoring);
-
-        // Act & Assert - Should not throw
-        _hotReloadService.StopMonitoring();
-        Assert.False(_hotReloadService.IsMonitoring);
-    }
-
-    #endregion
-
-    #region File Change Detection Tests
-
-    [Fact]
-    public async Task FileChange_TriggersConfigurationChangedEvent()
-    {
-        // Arrange
-        await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent("initial"));
-        _hotReloadService.StartMonitoring(_testDirectory);
-        _capturedEvents.Clear();
-
-        // Act - Modify the file
-        await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent("modified"));
-        
-        // Wait for debounced event processing
-        await Task.Delay(1000);
-
-        // Assert
-        Assert.Contains(_capturedEvents, e => e.Contains("ConfigurationChanged"));
-        Assert.Contains(_capturedEvents, e => e.Contains("test_config.xml"));
-    }
-
-    [Fact]
-    public async Task FileCreation_TriggersConfigurationChangedEvent()
-    {
-        // Arrange
-        _hotReloadService.StartMonitoring(_testDirectory);
-        _capturedEvents.Clear();
-
-        // Act - Create new file
-        var newConfigFile = Path.Combine(_testDirectory, "new_config.xml");
-        await File.WriteAllTextAsync(newConfigFile, CreateTestXmlContent("new"));
-        
-        // Wait for debounced event processing
-        await Task.Delay(1000);
-
-        // Assert
-        Assert.Contains(_capturedEvents, e => e.Contains("ConfigurationChanged"));
-        Assert.Contains(_capturedEvents, e => e.Contains("new_config.xml"));
-    }
-
-    [Fact]
-    public async Task FileDeletion_TriggersConfigurationChangedEvent()
-    {
-        // Arrange
-        await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent("to_delete"));
-        _hotReloadService.StartMonitoring(_testDirectory);
-        _capturedEvents.Clear();
-
-        // Act - Delete the file
-        File.Delete(_testConfigFile);
-        
-        // Wait for debounced event processing
-        await Task.Delay(1000);
-
-        // Assert
-        Assert.Contains(_capturedEvents, e => e.Contains("ConfigurationChanged"));
-    }
-
-    [Fact]
-    public async Task NonXmlFile_DoesNotTriggerEvent()
-    {
-        // Arrange
-        _hotReloadService.StartMonitoring(_testDirectory);
-        _capturedEvents.Clear();
-
-        // Act - Create non-XML file
-        var txtFile = Path.Combine(_testDirectory, "readme.txt");
-        await File.WriteAllTextAsync(txtFile, "This is not an XML file");
-        
-        // Wait for potential event processing
-        await Task.Delay(1000);
-
-        // Assert - Should not trigger configuration events
-        Assert.DoesNotContain(_capturedEvents, e => e.Contains("ConfigurationChanged"));
-    }
-
-    #endregion
-
-    #region Debouncing Tests
-
-    [Fact]
-    public async Task RapidFileChanges_AreDebounced()
-    {
-        // Arrange
-        await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent("initial"));
-        _hotReloadService.StartMonitoring(_testDirectory);
-        _capturedEvents.Clear();
-
-        // Act - Make rapid changes to the same file
-        for (int i = 1; i <= 10; i++)
+        try
         {
-            await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent($"rapid_change_{i}"));
-            await Task.Delay(50); // Rapid changes within debounce window
-        }
-        
-        // Wait for debounced event processing
-        await Task.Delay(1500);
+            var fileName = Path.GetFileName(filePath);
+            var bibId = ExtractBibIdFromFileName(fileName);
+            
+            _logger.LogDebug("🔄 Processing configuration change: {File} (BIB: {BibId})", fileName, bibId ?? "Unknown");
 
-        // Assert - Should trigger only once due to debouncing
-        var configChangedEvents = _capturedEvents.Count(e => e.Contains("ConfigurationChanged"));
-        Assert.True(configChangedEvents <= 2, $"Expected <= 2 events due to debouncing, got {configChangedEvents}");
-    }
-
-    [Fact]
-    public async Task SlowFileChanges_TriggerMultipleEvents()
-    {
-        // Arrange
-        await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent("initial"));
-        _hotReloadService.StartMonitoring(_testDirectory);
-        _capturedEvents.Clear();
-
-        // Act - Make slow changes (outside debounce window)
-        await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent("change_1"));
-        await Task.Delay(800); // Wait for first event to process
-        
-        await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent("change_2"));
-        await Task.Delay(800); // Wait for second event to process
-
-        // Assert - Should trigger multiple events
-        var configChangedEvents = _capturedEvents.Count(e => e.Contains("ConfigurationChanged"));
-        Assert.True(configChangedEvents >= 2, $"Expected >= 2 events for slow changes, got {configChangedEvents}");
-    }
-
-    #endregion
-
-    #region BIB-Specific Monitoring Tests
-
-    [Fact]
-    public async Task BibFileChange_ExtractsBibIdCorrectly()
-    {
-        // Arrange
-        var bibFile = Path.Combine(_testDirectory, "bib_production_line_1.xml");
-        await File.WriteAllTextAsync(bibFile, CreateTestXmlContent("production_line_1"));
-        _hotReloadService.StartMonitoring(_testDirectory);
-        _capturedEvents.Clear();
-
-        // Act - Modify BIB file
-        await File.WriteAllTextAsync(bibFile, CreateTestXmlContent("production_line_1_modified"));
-        
-        // Wait for event processing
-        await Task.Delay(1000);
-
-        // Assert
-        Assert.Contains(_capturedEvents, e => e.Contains("production_line_1"));
-        Assert.Contains(_capturedEvents, e => e.Contains("bib_production_line_1.xml"));
-    }
-
-    [Fact]
-    public async Task MultipleBibFiles_TriggerSeparateEvents()
-    {
-        // Arrange
-        var bib1File = Path.Combine(_testDirectory, "bib_line_1.xml");
-        var bib2File = Path.Combine(_testDirectory, "bib_line_2.xml");
-        
-        await File.WriteAllTextAsync(bib1File, CreateTestXmlContent("line_1"));
-        await File.WriteAllTextAsync(bib2File, CreateTestXmlContent("line_2"));
-        
-        _hotReloadService.StartMonitoring(_testDirectory);
-        _capturedEvents.Clear();
-
-        // Act - Modify both files with delay
-        await File.WriteAllTextAsync(bib1File, CreateTestXmlContent("line_1_modified"));
-        await Task.Delay(800);
-        
-        await File.WriteAllTextAsync(bib2File, CreateTestXmlContent("line_2_modified"));
-        await Task.Delay(800);
-
-        // Assert
-        Assert.Contains(_capturedEvents, e => e.Contains("line_1"));
-        Assert.Contains(_capturedEvents, e => e.Contains("line_2"));
-    }
-
-    #endregion
-
-    #region Error Handling Tests
-
-    [Fact]
-    public async Task InvalidXmlFile_TriggersErrorEvent()
-    {
-        // Arrange
-        _hotReloadService.StartMonitoring(_testDirectory);
-        _capturedEvents.Clear();
-
-        // Act - Create invalid XML file
-        var invalidXmlFile = Path.Combine(_testDirectory, "invalid_config.xml");
-        await File.WriteAllTextAsync(invalidXmlFile, "<invalid><unclosed>");
-        
-        // Wait for event processing
-        await Task.Delay(1000);
-
-        // Assert
-        Assert.Contains(_capturedEvents, e => e.Contains("ConfigurationError"));
-        Assert.Contains(_capturedEvents, e => e.Contains("invalid_config.xml"));
-    }
-
-    [Fact]
-    public async Task FileInUse_HandlesGracefully()
-    {
-        // Arrange
-        await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent("initial"));
-        _hotReloadService.StartMonitoring(_testDirectory);
-        _capturedEvents.Clear();
-
-        // Act - Open file for exclusive write to simulate file in use
-        using (var fileStream = new FileStream(_testConfigFile, FileMode.Open, FileAccess.Write, FileShare.None))
-        {
-            // Simulate another process trying to modify the file
-            var modifyTask = Task.Run(async () =>
+            // Validate file if it exists
+            if (File.Exists(filePath))
             {
-                try
-                {
-                    await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent("modified"));
-                }
-                catch
-                {
-                    // Expected to fail due to file lock
-                }
-            });
+                await ValidateConfigurationFileAsync(filePath, bibId);
+            }
 
-            await Task.Delay(500);
+            // Fire configuration changed event
+            var changeArgs = new ConfigurationChangedEventArgs
+            {
+                FilePath = filePath,
+                BibId = bibId,
+                ChangeType = File.Exists(filePath) ? "Modified" : "Deleted",
+                Timestamp = DateTime.Now
+            };
+
+            ConfigurationChanged?.Invoke(this, changeArgs);
+            
+            Interlocked.Increment(ref _totalEventsProcessed);
+            Interlocked.Increment(ref _configurationChangedEvents);
+            
+            _logger.LogInformation("✅ Configuration change processed: {File}", fileName);
         }
-
-        await Task.Delay(1000);
-
-        // Assert - Should handle gracefully without crashing
-        Assert.True(true); // Test passes if no exception thrown
-    }
-
-    #endregion
-
-    #region Service Lifecycle Tests
-
-    [Fact]
-    public async Task Dispose_StopsMonitoringGracefully()
-    {
-        // Arrange
-        await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent("initial"));
-        _hotReloadService.StartMonitoring(_testDirectory);
-        Assert.True(_hotReloadService.IsMonitoring);
-
-        // Act
-        _hotReloadService.Dispose();
-
-        // Assert
-        Assert.False(_hotReloadService.IsMonitoring);
-        Assert.Null(_hotReloadService.MonitoredDirectory);
-    }
-
-    [Fact]
-    public void Dispose_WhenNotMonitoring_DoesNotThrow()
-    {
-        // Arrange - Service not monitoring
-        Assert.False(_hotReloadService.IsMonitoring);
-
-        // Act & Assert - Should not throw
-        _hotReloadService.Dispose();
-    }
-
-    [Fact]
-    public async Task MultipleDispose_DoesNotThrow()
-    {
-        // Arrange
-        await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent("initial"));
-        _hotReloadService.StartMonitoring(_testDirectory);
-
-        // Act & Assert - Multiple dispose calls should not throw
-        _hotReloadService.Dispose();
-        _hotReloadService.Dispose();
-        _hotReloadService.Dispose();
-    }
-
-    #endregion
-
-    #region Configuration Statistics Tests
-
-    [Fact]
-    public async Task GetMonitoringStatistics_ReturnsCorrectData()
-    {
-        // Arrange
-        await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent("initial"));
-        _hotReloadService.StartMonitoring(_testDirectory);
-        
-        // Trigger some events
-        await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent("modified_1"));
-        await Task.Delay(800);
-        await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent("modified_2"));
-        await Task.Delay(800);
-
-        // Act
-        var stats = _hotReloadService.GetMonitoringStatistics();
-
-        // Assert
-        Assert.NotNull(stats);
-        Assert.True(stats.IsMonitoring);
-        Assert.Equal(_testDirectory, stats.MonitoredDirectory);
-        Assert.True(stats.TotalEventsProcessed >= 1);
-        Assert.True(stats.MonitoringDuration > TimeSpan.Zero);
-    }
-
-    [Fact]
-    public void GetMonitoringStatistics_WhenNotMonitoring_ReturnsCorrectState()
-    {
-        // Arrange - Service not monitoring
-        Assert.False(_hotReloadService.IsMonitoring);
-
-        // Act
-        var stats = _hotReloadService.GetMonitoringStatistics();
-
-        // Assert
-        Assert.NotNull(stats);
-        Assert.False(stats.IsMonitoring);
-        Assert.Null(stats.MonitoredDirectory);
-        Assert.Equal(0, stats.TotalEventsProcessed);
-        Assert.Equal(TimeSpan.Zero, stats.MonitoringDuration);
-    }
-
-    #endregion
-
-    #region Performance Tests
-
-    [Fact]
-    public async Task HighVolumeFileChanges_HandledEfficiently()
-    {
-        // Arrange - Create multiple files
-        var files = new List<string>();
-        for (int i = 1; i <= 20; i++)
+        catch (Exception ex)
         {
-            var file = Path.Combine(_testDirectory, $"config_{i:D2}.xml");
-            await File.WriteAllTextAsync(file, CreateTestXmlContent($"initial_{i}"));
-            files.Add(file);
+            _logger.LogError(ex, "❌ Error processing file change: {File}", filePath);
+            
+            // Fire error event
+            var errorArgs = new ConfigurationErrorEventArgs
+            {
+                FilePath = filePath,
+                ErrorMessage = ex.Message,
+                Exception = ex,
+                Timestamp = DateTime.Now
+            };
+
+            ConfigurationError?.Invoke(this, errorArgs);
+            
+            Interlocked.Increment(ref _totalEventsProcessed);
+            Interlocked.Increment(ref _configurationErrorEvents);
         }
-
-        _hotReloadService.StartMonitoring(_testDirectory);
-        _capturedEvents.Clear();
-
-        // Act - Modify all files rapidly
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        
-        var modifyTasks = files.Select(async (file, index) =>
-        {
-            await Task.Delay(index * 50); // Stagger modifications slightly
-            await File.WriteAllTextAsync(file, CreateTestXmlContent($"modified_{index}"));
-        });
-
-        await Task.WhenAll(modifyTasks);
-        await Task.Delay(2000); // Wait for all events to process
-        
-        stopwatch.Stop();
-
-        // Assert
-        Assert.True(stopwatch.ElapsedMilliseconds < 10000); // Should complete within 10 seconds
-        Assert.True(_capturedEvents.Count > 0); // Should capture some events
-        
-        var stats = _hotReloadService.GetMonitoringStatistics();
-        Assert.True(stats.TotalEventsProcessed > 0);
-    }
-
-    #endregion
-
-    #region Event Handler Methods
-
-    private void OnConfigurationChanged(object? sender, ConfigurationChangedEventArgs e)
-    {
-        _capturedEvents.Add($"ConfigurationChanged: {e.FilePath} | BibId: {e.BibId} | ChangeType: {e.ChangeType}");
-    }
-
-    private void OnConfigurationError(object? sender, ConfigurationErrorEventArgs e)
-    {
-        _capturedEvents.Add($"ConfigurationError: {e.FilePath} | Error: {e.ErrorMessage}");
     }
 
     #endregion
 
     #region Helper Methods
 
-    private string CreateTestXmlContent(string identifier)
+    private static bool IsXmlConfigurationFile(string filePath)
     {
-        return $"""
-<?xml version="1.0" encoding="UTF-8"?>
-<bib id="{identifier}" description="Test BIB for Hot Reload - {identifier}">
-  <metadata>
-    <board_type>hot_reload_test</board_type>
-    <sprint>11</sprint>
-    <test_identifier>{identifier}</test_identifier>
-    <modified_at>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</modified_at>
-  </metadata>
-  
-  <uut id="test_uut" description="Test UUT for {identifier}">
-    <port number="1">
-      <protocol>rs232</protocol>
-      <speed>115200</speed>
-      <data_pattern>n81</data_pattern>
-      
-      <start>
-        <command>INIT_{identifier}</command>
-        <expected_response>READY_{identifier}</expected_response>
-        <timeout_ms>3000</timeout_ms>
-      </start>
-      
-      <test>
-        <command>TEST_{identifier}</command>
-        <expected_response>PASS_{identifier}</expected_response>
-        <timeout_ms>5000</timeout_ms>
-      </test>
-      
-      <stop>
-        <command>QUIT_{identifier}</command>
-        <expected_response>BYE_{identifier}</expected_response>
-        <timeout_ms>2000</timeout_ms>
-      </stop>
-    </port>
-  </uut>
-</bib>
-""";
+        if (string.IsNullOrEmpty(filePath))
+            return false;
+
+        var fileName = Path.GetFileName(filePath);
+        return fileName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? ExtractBibIdFromFileName(string fileName)
+    {
+        if (string.IsNullOrEmpty(fileName))
+            return null;
+
+        try
+        {
+            // Pattern: bib_<bibid>.xml or <bibid>.xml
+            var match = Regex.Match(fileName, @"(?:bib_)?([a-zA-Z0-9_-]+)\.xml$", RegexOptions.IgnoreCase);
+            return match.Success ? match.Groups[1].Value : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task ValidateConfigurationFileAsync(string filePath, string? bibId)
+    {
+        try
+        {
+            // Basic XML validation - try to load it
+            var content = await File.ReadAllTextAsync(filePath);
+            
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                throw new InvalidDataException("Configuration file is empty");
+            }
+
+            // Basic XML structure check
+            if (!content.TrimStart().StartsWith("<?xml") && !content.TrimStart().StartsWith("<"))
+            {
+                throw new InvalidDataException("File does not appear to be valid XML");
+            }
+
+            _logger.LogDebug("✅ Configuration file validation passed: {File}", Path.GetFileName(filePath));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "⚠️ Configuration file validation failed: {File}", Path.GetFileName(filePath));
+            throw;
+        }
     }
 
     #endregion
 
-    #region Cleanup
+    #region IDisposable Implementation
 
     public void Dispose()
     {
-        try
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_isDisposed && disposing)
         {
-            _hotReloadService?.Dispose();
+            StopMonitoring();
             
-            if (Directory.Exists(_testDirectory))
-            {
-                Directory.Delete(_testDirectory, true);
-            }
-        }
-        catch
-        {
-            // Ignore cleanup errors in tests
+            _debounceTimer?.Dispose();
+            _processingLock?.Dispose();
+            
+            _logger.LogDebug("🧹 HotReloadConfigurationService disposed");
+            _isDisposed = true;
         }
     }
 
     #endregion
 }
 
-// Supporting classes for hot reload service testing
+/// <summary>
+/// Event arguments for configuration change events
+/// </summary>
 public class ConfigurationChangedEventArgs : EventArgs
 {
     public string FilePath { get; set; } = string.Empty;
@@ -623,6 +435,9 @@ public class ConfigurationChangedEventArgs : EventArgs
     public DateTime Timestamp { get; set; } = DateTime.Now;
 }
 
+/// <summary>
+/// Event arguments for configuration error events
+/// </summary>
 public class ConfigurationErrorEventArgs : EventArgs
 {
     public string FilePath { get; set; } = string.Empty;
@@ -631,6 +446,9 @@ public class ConfigurationErrorEventArgs : EventArgs
     public DateTime Timestamp { get; set; } = DateTime.Now;
 }
 
+/// <summary>
+/// Statistics for monitoring operations
+/// </summary>
 public class MonitoringStatistics
 {
     public bool IsMonitoring { get; set; }

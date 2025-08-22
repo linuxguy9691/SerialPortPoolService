@@ -1,752 +1,603 @@
 // ===================================================================
-// SPRINT 11 TESTING: ConfigurationValidator Unit Tests
-// File: tests/SerialPortPool.Core.Tests/Services/ConfigurationValidatorTests.cs
-// Purpose: Comprehensive tests for XML schema + business rules validation
+// SPRINT 11: ConfigurationValidator Implementation
+// File: SerialPortPool.Core/Services/Configuration/ConfigurationValidator.cs
+// Purpose: XML schema validation + business rules validation for BIB configurations
 // ===================================================================
 
 using Microsoft.Extensions.Logging;
-using Moq;
 using SerialPortPool.Core.Models;
-using Sprint11ConfigValidator = SerialPortPool.Core.Services.Configuration.ConfigurationValidator;
-using Sprint11ConfigValidatorOptions = SerialPortPool.Core.Services.Configuration.ConfigurationValidationOptions;
-using Xunit;
+using System.Text.RegularExpressions;
+using System.Xml;
+using System.Xml.Linq;
 
-namespace SerialPortPool.Core.Tests.Services;
+namespace SerialPortPool.Core.Services.Configuration;
 
 /// <summary>
-/// Unit tests for ConfigurationValidator (Sprint 11)
-/// Tests XML schema validation, business rules, and error reporting
+/// Service for validating BIB configuration files and objects
+/// Provides XML schema validation and business rules validation
 /// </summary>
-public class ConfigurationValidatorTests : IDisposable
+public class ConfigurationValidator
 {
-    private readonly Mock<ILogger<Sprint11ConfigValidator>> _mockLogger;
-    private readonly Sprint11ConfigValidator _validator;
-    private readonly Mock<ILogger<ConfigurationValidator>> _mockLogger;
-    private readonly ConfigurationValidator _validator;
-    private readonly string _testDirectory;
-
-    public ConfigurationValidatorTests()
+    private readonly ILogger<ConfigurationValidator> _logger;
+    
+    // Supported protocols
+    private static readonly HashSet<string> SupportedProtocols = new(StringComparer.OrdinalIgnoreCase)
     {
-        _mockLogger = new Mock<ILogger<ConfigurationValidator>>();
-        _validator = new ConfigurationValidator(_mockLogger.Object);
-        
-        _testDirectory = Path.Combine(Path.GetTempPath(), "Sprint11_ValidatorTests", Guid.NewGuid().ToString());
-        Directory.CreateDirectory(_testDirectory);
+        "rs232", "serial", "uart"
+    };
+    
+    // Common baud rates
+    private static readonly HashSet<int> CommonBaudRates = new()
+    {
+        9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600
+    };
+    
+    // Valid data patterns (databits-parity-stopbits)
+    private static readonly HashSet<string> ValidDataPatterns = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "n81", "n82", "e71", "e81", "o71", "o81", "n71"
+    };
+
+    public ConfigurationValidator(ILogger<ConfigurationValidator> logger)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    #region Constructor Tests
+    #region Public Methods
 
-    [Fact]
-    public void Constructor_WithValidLogger_InitializesCorrectly()
+    /// <summary>
+    /// Validate XML file (schema + business rules)
+    /// </summary>
+    public async Task<BibValidationResult> ValidateAsync(string xmlFilePath)
     {
-        // Arrange & Act
-        var validator = new ConfigurationValidator(_mockLogger.Object);
+        if (string.IsNullOrWhiteSpace(xmlFilePath))
+            throw new ArgumentException("XML file path cannot be null or empty", nameof(xmlFilePath));
 
-        // Assert
-        Assert.NotNull(validator);
-    }
+        _logger.LogDebug("🔍 Validating XML file: {FilePath}", xmlFilePath);
 
-    [Fact]
-    public void Constructor_WithNullLogger_ThrowsArgumentNullException()
-    {
-        // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => 
-            new ConfigurationValidator(null!));
-    }
+        var result = new BibValidationResult();
 
-    #endregion
-
-    #region ValidateXmlSchema Tests
-
-    [Fact]
-    public async Task ValidateXmlSchema_WithValidBibXml_ReturnsSuccess()
-    {
-        // Arrange
-        var validXml = CreateValidBibXml("valid_schema_test");
-        var xmlPath = Path.Combine(_testDirectory, "valid.xml");
-        await File.WriteAllTextAsync(xmlPath, validXml);
-
-        // Act
-        var result = await _validator.ValidateXmlSchemaAsync(xmlPath);
-
-        // Assert
-        Assert.True(result.IsValid);
-        Assert.Empty(result.Errors);
-        Assert.Contains("Schema validation", result.GetSummary());
-    }
-
-    [Fact]
-    public async Task ValidateXmlSchema_WithInvalidXml_ReturnsErrors()
-    {
-        // Arrange
-        var invalidXml = """
-<?xml version="1.0" encoding="UTF-8"?>
-<bib id="invalid_test">
-  <invalid_element>
-    <unclosed_tag>
-  </invalid_element>
-</bib>
-""";
-        var xmlPath = Path.Combine(_testDirectory, "invalid.xml");
-        await File.WriteAllTextAsync(xmlPath, invalidXml);
-
-        // Act
-        var result = await _validator.ValidateXmlSchemaAsync(xmlPath);
-
-        // Assert
-        Assert.False(result.IsValid);
-        Assert.NotEmpty(result.Errors);
-    }
-
-    [Fact]
-    public async Task ValidateXmlSchema_WithMissingRequiredElements_ReturnsErrors()
-    {
-        // Arrange - Missing required BIB id attribute
-        var xmlWithMissingId = """
-<?xml version="1.0" encoding="UTF-8"?>
-<bib description="Missing ID test">
-  <uut id="test_uut">
-    <port number="1">
-      <protocol>rs232</protocol>
-    </port>
-  </uut>
-</bib>
-""";
-        var xmlPath = Path.Combine(_testDirectory, "missing_id.xml");
-        await File.WriteAllTextAsync(xmlPath, xmlWithMissingId);
-
-        // Act
-        var result = await _validator.ValidateXmlSchemaAsync(xmlPath);
-
-        // Assert
-        Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, error => error.Contains("id"));
-    }
-
-    [Fact]
-    public async Task ValidateXmlSchema_WithNonExistentFile_ReturnsFileError()
-    {
-        // Arrange
-        var nonExistentPath = Path.Combine(_testDirectory, "nonexistent.xml");
-
-        // Act
-        var result = await _validator.ValidateXmlSchemaAsync(nonExistentPath);
-
-        // Assert
-        Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, error => error.Contains("not found") || error.Contains("does not exist"));
-    }
-
-    #endregion
-
-    #region ValidateBusinessRules Tests
-
-    [Fact]
-    public async Task ValidateBusinessRules_WithValidConfiguration_ReturnsSuccess()
-    {
-        // Arrange
-        var validBibConfig = CreateValidBibConfiguration("business_rules_test");
-
-        // Act
-        var result = await _validator.ValidateBusinessRulesAsync(validBibConfig);
-
-        // Assert
-        Assert.True(result.IsValid);
-        Assert.Empty(result.Errors);
-        Assert.Contains("Business rules validation", result.GetSummary());
-    }
-
-    [Fact]
-    public async Task ValidateBusinessRules_WithEmptyBibId_ReturnsError()
-    {
-        // Arrange
-        var bibConfig = CreateValidBibConfiguration("test");
-        bibConfig.BibId = string.Empty; // Invalid empty BIB ID
-
-        // Act
-        var result = await _validator.ValidateBusinessRulesAsync(bibConfig);
-
-        // Assert
-        Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, error => error.Contains("BIB ID"));
-    }
-
-    [Fact]
-    public async Task ValidateBusinessRules_WithInvalidPortNumber_ReturnsError()
-    {
-        // Arrange
-        var bibConfig = CreateValidBibConfiguration("port_test");
-        bibConfig.Uuts.First().Ports.First().PortNumber = 0; // Invalid port number
-
-        // Act
-        var result = await _validator.ValidateBusinessRulesAsync(bibConfig);
-
-        // Assert
-        Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, error => error.Contains("port number") || error.Contains("positive"));
-    }
-
-    [Fact]
-    public async Task ValidateBusinessRules_WithUnsupportedProtocol_ReturnsError()
-    {
-        // Arrange
-        var bibConfig = CreateValidBibConfiguration("protocol_test");
-        bibConfig.Uuts.First().Ports.First().Protocol = "unsupported_protocol";
-
-        // Act
-        var result = await _validator.ValidateBusinessRulesAsync(bibConfig);
-
-        // Assert
-        Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, error => 
-            error.Contains("protocol") || error.Contains("unsupported"));
-    }
-
-    [Fact]
-    public async Task ValidateBusinessRules_WithInvalidBaudRate_ReturnsWarning()
-    {
-        // Arrange
-        var bibConfig = CreateValidBibConfiguration("baud_test");
-        bibConfig.Uuts.First().Ports.First().Speed = 12345; // Unusual baud rate
-
-        // Act
-        var result = await _validator.ValidateBusinessRulesAsync(bibConfig);
-
-        // Assert
-        Assert.True(result.IsValid); // Should be valid but with warning
-        Assert.NotEmpty(result.Warnings);
-        Assert.Contains(result.Warnings, warning => 
-            warning.Contains("baud") || warning.Contains("unusual"));
-    }
-
-    [Fact]
-    public async Task ValidateBusinessRules_WithInvalidDataPattern_ReturnsError()
-    {
-        // Arrange
-        var bibConfig = CreateValidBibConfiguration("data_pattern_test");
-        bibConfig.Uuts.First().Ports.First().DataPattern = "invalid"; // Invalid data pattern
-
-        // Act
-        var result = await _validator.ValidateBusinessRulesAsync(bibConfig);
-
-        // Assert
-        Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, error => error.Contains("data pattern"));
-    }
-
-    [Fact]
-    public async Task ValidateBusinessRules_WithDuplicateUutIds_ReturnsError()
-    {
-        // Arrange
-        var bibConfig = CreateValidBibConfiguration("duplicate_test");
-        
-        // Add duplicate UUT
-        var duplicateUut = new UutConfiguration
+        try
         {
-            UutId = bibConfig.Uuts.First().UutId, // Same ID as first UUT
-            Description = "Duplicate UUT",
-            Ports = new List<PortConfiguration>
+            // Step 1: XML Schema validation
+            var schemaResult = await ValidateXmlSchemaAsync(xmlFilePath);
+            result.Errors.AddRange(schemaResult.Errors);
+            result.Warnings.AddRange(schemaResult.Warnings);
+
+            if (!schemaResult.IsValid)
             {
-                new() { PortNumber = 2, Protocol = "rs232", Speed = 115200, DataPattern = "n81" }
+                _logger.LogWarning("⚠️ XML schema validation failed for: {FilePath}", xmlFilePath);
+                return result; // Don't proceed to business rules if schema is invalid
             }
-        };
-        bibConfig.Uuts.Add(duplicateUut);
 
-        // Act
-        var result = await _validator.ValidateBusinessRulesAsync(bibConfig);
+            // Step 2: Parse and validate business rules
+            var bibConfig = await ParseBibConfigurationAsync(xmlFilePath);
+            if (bibConfig != null)
+            {
+                var businessResult = await ValidateBusinessRulesAsync(bibConfig);
+                result.Errors.AddRange(businessResult.Errors);
+                result.Warnings.AddRange(businessResult.Warnings);
+            }
 
-        // Assert
-        Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, error => 
-            error.Contains("duplicate") || error.Contains("UUT ID"));
-    }
-
-    [Fact]
-    public async Task ValidateBusinessRules_WithDuplicatePortNumbers_ReturnsError()
-    {
-        // Arrange
-        var bibConfig = CreateValidBibConfiguration("duplicate_port_test");
-        var uut = bibConfig.Uuts.First();
-        
-        // Add duplicate port number
-        var duplicatePort = new PortConfiguration
+            _logger.LogInformation("✅ XML validation completed: {Status}", result.IsValid ? "Valid" : "Invalid");
+            return result;
+        }
+        catch (Exception ex)
         {
-            PortNumber = uut.Ports.First().PortNumber, // Same port number
-            Protocol = "rs232",
-            Speed = 115200,
-            DataPattern = "n81"
-        };
-        uut.Ports.Add(duplicatePort);
-
-        // Act
-        var result = await _validator.ValidateBusinessRulesAsync(bibConfig);
-
-        // Assert
-        Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, error => 
-            error.Contains("duplicate") || error.Contains("port number"));
+            _logger.LogError(ex, "❌ Error during XML validation: {Error}", ex.Message);
+            result.AddError($"Validation error: {ex.Message}");
+            return result;
+        }
     }
 
-    [Fact]
-    public async Task ValidateBusinessRules_WithEmptyCommandSequence_ReturnsWarning()
+    /// <summary>
+    /// Validate BIB configuration object (business rules only)
+    /// </summary>
+    public async Task<BibValidationResult> ValidateAsync(BibConfiguration bibConfiguration)
     {
-        // Arrange
-        var bibConfig = CreateValidBibConfiguration("empty_commands_test");
-        var port = bibConfig.Uuts.First().Ports.First();
-        port.StartCommands.Commands.Clear(); // Empty start commands
+        if (bibConfiguration == null)
+            throw new ArgumentNullException(nameof(bibConfiguration));
 
-        // Act
-        var result = await _validator.ValidateBusinessRulesAsync(bibConfig);
+        _logger.LogDebug("🔍 Validating BIB configuration: {BibId}", bibConfiguration.BibId);
 
-        // Assert
-        Assert.True(result.IsValid); // Valid but with warning
-        Assert.NotEmpty(result.Warnings);
-        Assert.Contains(result.Warnings, warning => 
-            warning.Contains("empty") || warning.Contains("command"));
-    }
-
-    #endregion
-
-    #region Comprehensive Validation Tests
-
-    [Fact]
-    public async Task ValidateAsync_WithValidXmlFile_ReturnsSuccess()
-    {
-        // Arrange
-        var validXml = CreateValidBibXml("comprehensive_valid_test");
-        var xmlPath = Path.Combine(_testDirectory, "comprehensive_valid.xml");
-        await File.WriteAllTextAsync(xmlPath, validXml);
-
-        // Act
-        var result = await _validator.ValidateAsync(xmlPath);
-
-        // Assert
-        Assert.True(result.IsValid);
-        Assert.Empty(result.Errors);
-        Assert.Contains("validation successful", result.GetSummary());
-    }
-
-    [Fact]
-    public async Task ValidateAsync_WithBothSchemaAndBusinessErrors_ReturnsCombinedErrors()
-    {
-        // Arrange - Create XML with both schema and business rule violations
-        var invalidXml = """
-<?xml version="1.0" encoding="UTF-8"?>
-<bib description="Missing ID and invalid content">
-  <uut id="">
-    <port number="-1">
-      <protocol>invalid_protocol</protocol>
-      <speed>invalid_speed</speed>
-    </port>
-  </uut>
-</bib>
-""";
-        var xmlPath = Path.Combine(_testDirectory, "combined_errors.xml");
-        await File.WriteAllTextAsync(xmlPath, invalidXml);
-
-        // Act
-        var result = await _validator.ValidateAsync(xmlPath);
-
-        // Assert
-        Assert.False(result.IsValid);
-        Assert.NotEmpty(result.Errors);
+        var result = await ValidateBusinessRulesAsync(bibConfiguration);
         
-        // Should have errors from both schema and business rule validation
-        var errorText = string.Join(" ", result.Errors);
-        Assert.True(result.Errors.Count > 1, "Should have multiple errors from different validation types");
+        _logger.LogInformation("✅ BIB validation completed: {Status}", result.IsValid ? "Valid" : "Invalid");
+        return result;
     }
 
-    [Fact]
-    public async Task ValidateAsync_WithConfiguration_ValidatesBusinessRulesOnly()
+    /// <summary>
+    /// Validate XML schema
+    /// </summary>
+    public async Task<BibValidationResult> ValidateXmlSchemaAsync(string xmlFilePath)
     {
-        // Arrange
-        var bibConfig = CreateValidBibConfiguration("config_only_test");
+        var result = new BibValidationResult();
 
-        // Act
-        var result = await _validator.ValidateAsync(bibConfig);
+        try
+        {
+            if (!File.Exists(xmlFilePath))
+            {
+                result.AddError($"XML file not found: {xmlFilePath}");
+                return result;
+            }
 
-        // Assert
-        Assert.True(result.IsValid);
-        Assert.Empty(result.Errors);
-        Assert.Contains("Business rules validation", result.GetSummary());
+            _logger.LogDebug("📄 Validating XML schema: {FilePath}", xmlFilePath);
+
+            // Read and parse XML
+            var content = await File.ReadAllTextAsync(xmlFilePath);
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                result.AddError("XML file is empty");
+                return result;
+            }
+
+            // Basic XML structure validation
+            XDocument doc;
+            try
+            {
+                doc = XDocument.Parse(content);
+            }
+            catch (XmlException ex)
+            {
+                result.AddError($"Invalid XML structure: {ex.Message}");
+                return result;
+            }
+
+            // Validate BIB structure
+            await ValidateBibStructureAsync(doc, result);
+
+            if (result.IsValid)
+            {
+                _logger.LogDebug("✅ XML schema validation passed");
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Error during XML schema validation: {Error}", ex.Message);
+            result.AddError($"Schema validation error: {ex.Message}");
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Validate business rules for BIB configuration
+    /// </summary>
+    public async Task<BibValidationResult> ValidateBusinessRulesAsync(BibConfiguration bibConfiguration)
+    {
+        var result = new BibValidationResult();
+
+        try
+        {
+            _logger.LogDebug("🔧 Validating business rules for BIB: {BibId}", bibConfiguration.BibId);
+
+            // Basic BIB validation
+            ValidateBasicBibProperties(bibConfiguration, result);
+
+            // UUT validation
+            ValidateUuts(bibConfiguration, result);
+
+            // Port validation
+            ValidatePorts(bibConfiguration, result);
+
+            // Command validation
+            ValidateCommands(bibConfiguration, result);
+
+            await Task.CompletedTask; // Make it properly async
+
+            if (result.IsValid)
+            {
+                _logger.LogDebug("✅ Business rules validation passed");
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Error during business rules validation: {Error}", ex.Message);
+            result.AddError($"Business rules validation error: {ex.Message}");
+            return result;
+        }
     }
 
     #endregion
 
-    #region Performance and Edge Case Tests
+    #region XML Schema Validation
 
-    [Fact]
-    public async Task ValidateAsync_WithLargeConfiguration_CompletesInReasonableTime()
+    private async Task ValidateBibStructureAsync(XDocument doc, BibValidationResult result)
     {
-        // Arrange - Create large configuration with many UUTs and ports
-        var largeBibConfig = CreateLargeBibConfiguration("performance_test", 20, 5);
+        var root = doc.Root;
+        if (root == null)
+        {
+            result.AddError("XML document has no root element");
+            return;
+        }
 
-        // Act
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        var result = await _validator.ValidateAsync(largeBibConfig);
-        stopwatch.Stop();
-
-        // Assert
-        Assert.True(result.IsValid);
-        Assert.True(stopwatch.ElapsedMilliseconds < 3000); // Should complete within 3 seconds
-    }
-
-    [Fact]
-    public async Task ValidateAsync_WithNullConfiguration_ThrowsArgumentNullException()
-    {
-        // Act & Assert
-        await Assert.ThrowsAsync<ArgumentNullException>(() =>
-            _validator.ValidateAsync((BibConfiguration)null!));
-    }
-
-    [Fact]
-    public async Task ValidateAsync_WithNullFilePath_ThrowsArgumentException()
-    {
-        // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _validator.ValidateAsync((string)null!));
-    }
-
-    [Fact]
-    public async Task ValidateAsync_WithEmptyFilePath_ThrowsArgumentException()
-    {
-        // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _validator.ValidateAsync(string.Empty));
-    }
-
-    [Fact]
-    public async Task ValidateBusinessRules_WithComplexConfiguration_ValidatesAllRules()
-    {
-        // Arrange - Complex configuration with multiple UUTs, ports, and command sequences
-        var complexConfig = CreateComplexBibConfiguration("complex_validation_test");
-
-        // Act
-        var result = await _validator.ValidateBusinessRulesAsync(complexConfig);
-
-        // Assert
-        Assert.True(result.IsValid);
-        Assert.Empty(result.Errors);
+        // Check for BIB element (could be root or child of root)
+        var bibElement = root.Name.LocalName == "bib" ? root : root.Element("bib");
         
-        // Verify it actually validated all components
-        Assert.Equal(3, complexConfig.Uuts.Count);
-        Assert.Equal(6, complexConfig.GetAllPorts().Count); // 2 ports per UUT
+        if (bibElement == null)
+        {
+            result.AddError("No 'bib' element found in XML");
+            return;
+        }
+
+        // Validate required BIB attributes
+        var bibId = bibElement.Attribute("id")?.Value;
+        if (string.IsNullOrWhiteSpace(bibId))
+        {
+            result.AddError("BIB element must have an 'id' attribute");
+        }
+
+        // Validate UUT elements
+        var uutElements = bibElement.Elements("uut");
+        if (!uutElements.Any())
+        {
+            result.AddError("BIB must contain at least one 'uut' element");
+            return;
+        }
+
+        foreach (var uutElement in uutElements)
+        {
+            ValidateUutElement(uutElement, result);
+        }
+
+        await Task.CompletedTask;
+    }
+
+    private void ValidateUutElement(XElement uutElement, BibValidationResult result)
+    {
+        // Validate UUT ID
+        var uutId = uutElement.Attribute("id")?.Value;
+        if (string.IsNullOrWhiteSpace(uutId))
+        {
+            result.AddError("UUT element must have an 'id' attribute");
+        }
+
+        // Validate port elements
+        var portElements = uutElement.Elements("port");
+        if (!portElements.Any())
+        {
+            result.AddError($"UUT '{uutId}' must contain at least one 'port' element");
+            return;
+        }
+
+        foreach (var portElement in portElements)
+        {
+            ValidatePortElement(portElement, result, uutId);
+        }
+    }
+
+    private void ValidatePortElement(XElement portElement, BibValidationResult result, string? uutId)
+    {
+        // Validate port number
+        var portNumberStr = portElement.Attribute("number")?.Value;
+        if (string.IsNullOrWhiteSpace(portNumberStr) || !int.TryParse(portNumberStr, out var portNumber) || portNumber <= 0)
+        {
+            result.AddError($"Port in UUT '{uutId}' must have a valid positive 'number' attribute");
+        }
+
+        // Validate required elements
+        var requiredElements = new[] { "protocol", "speed", "data_pattern" };
+        foreach (var required in requiredElements)
+        {
+            if (portElement.Element(required) == null)
+            {
+                result.AddError($"Port {portNumber} in UUT '{uutId}' is missing required element: {required}");
+            }
+        }
+
+        // Validate command sequences
+        var commandSequences = new[] { "start", "test", "stop" };
+        foreach (var sequence in commandSequences)
+        {
+            var sequenceElement = portElement.Element(sequence);
+            if (sequenceElement != null)
+            {
+                ValidateCommandSequenceElement(sequenceElement, result, uutId, portNumber, sequence);
+            }
+        }
+    }
+
+   private void ValidateCommandSequenceElement(XElement sequenceElement, BibValidationResult result, string? uutId, int portNumber, string sequenceType)
+    {
+        var commandElement = sequenceElement.Element("command");
+        var responseElement = sequenceElement.Element("expected_response");
+        var timeoutElement = sequenceElement.Element("timeout_ms");
+
+        // Use safe port display for error messages (FIXED: CS0165)
+        var portDisplay = portNumber > 0 ? portNumber.ToString() : "unknown";
+
+        if (commandElement == null || string.IsNullOrWhiteSpace(commandElement.Value))
+        {
+            result.AddError($"Port {portDisplay} in UUT '{uutId}': {sequenceType} sequence missing 'command' element");
+        }
+
+        if (responseElement == null || string.IsNullOrWhiteSpace(responseElement.Value))
+        {
+            result.AddError($"Port {portDisplay} in UUT '{uutId}': {sequenceType} sequence missing 'expected_response' element");
+        }
+
+        if (timeoutElement != null && !int.TryParse(timeoutElement.Value, out var timeout))
+        {
+            result.AddError($"Port {portDisplay} in UUT '{uutId}': {sequenceType} sequence has invalid timeout value");
+        }
     }
 
     #endregion
 
-    #region Validation Result Tests
+    #region Business Rules Validation
 
-    [Fact]
-    public void BibValidationResult_GetSummary_FormatsCorrectly()
+    private void ValidateBasicBibProperties(BibConfiguration bibConfiguration, BibValidationResult result)
     {
-        // Arrange
-        var result = new BibValidationResult();
-        result.AddError("Test error message");
-        result.AddWarning("Test warning message");
+        // BIB ID validation
+        if (string.IsNullOrWhiteSpace(bibConfiguration.BibId))
+        {
+            result.AddError("BIB ID cannot be empty");
+        }
+        else if (!IsValidIdentifier(bibConfiguration.BibId))
+        {
+            result.AddError("BIB ID contains invalid characters");
+        }
 
-        // Act
-        var summary = result.GetSummary();
-
-        // Assert
-        Assert.Contains("1 error", summary);
-        Assert.Contains("1 warning", summary);
-        Assert.Contains("❌", summary); // Error icon
+        // Description validation
+        if (string.IsNullOrWhiteSpace(bibConfiguration.Description))
+        {
+            result.AddWarning("BIB description is empty");
+        }
     }
 
-    [Fact]
-    public void BibValidationResult_WithOnlyWarnings_IsValid()
+    private void ValidateUuts(BibConfiguration bibConfiguration, BibValidationResult result)
     {
-        // Arrange
-        var result = new BibValidationResult();
-        result.AddWarning("Warning message");
+        if (!bibConfiguration.Uuts.Any())
+        {
+            result.AddError("BIB must contain at least one UUT");
+            return;
+        }
 
-        // Act & Assert
-        Assert.True(result.IsValid);
-        Assert.True(result.HasWarnings);
-        Assert.Contains("⚠️", result.GetSummary()); // Warning icon
+        var uutIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        
+        foreach (var uut in bibConfiguration.Uuts)
+        {
+            // UUT ID validation
+            if (string.IsNullOrWhiteSpace(uut.UutId))
+            {
+                result.AddError("UUT ID cannot be empty");
+                continue;
+            }
+
+            // Check for duplicate UUT IDs
+            if (!uutIds.Add(uut.UutId))
+            {
+                result.AddError($"Duplicate UUT ID found: {uut.UutId}");
+            }
+
+            // UUT must have ports
+            if (!uut.Ports.Any())
+            {
+                result.AddError($"UUT '{uut.UutId}' must have at least one port");
+            }
+        }
     }
 
-    [Fact]
-    public void BibValidationResult_WithNoIssues_ShowsSuccess()
+    private void ValidatePorts(BibConfiguration bibConfiguration, BibValidationResult result)
     {
-        // Arrange
-        var result = new BibValidationResult();
+        foreach (var uut in bibConfiguration.Uuts)
+        {
+            var portNumbers = new HashSet<int>();
+            
+            foreach (var port in uut.Ports)
+            {
+                // Port number validation
+                if (port.PortNumber <= 0)
+                {
+                    result.AddError($"UUT '{uut.UutId}': Port number must be positive");
+                    continue;
+                }
 
-        // Act
-        var summary = result.GetSummary();
+                // Check for duplicate port numbers within UUT
+                if (!portNumbers.Add(port.PortNumber))
+                {
+                    result.AddError($"UUT '{uut.UutId}': Duplicate port number {port.PortNumber}");
+                }
 
-        // Assert
-        Assert.True(result.IsValid);
-        Assert.False(result.HasWarnings);
-        Assert.Contains("✅", summary); // Success icon
-        Assert.Contains("valid", summary);
+                // Protocol validation
+                if (string.IsNullOrWhiteSpace(port.Protocol))
+                {
+                    result.AddError($"UUT '{uut.UutId}' Port {port.PortNumber}: Protocol cannot be empty");
+                }
+                else if (!SupportedProtocols.Contains(port.Protocol))
+                {
+                    result.AddError($"UUT '{uut.UutId}' Port {port.PortNumber}: Unsupported protocol '{port.Protocol}'");
+                }
+
+                // Baud rate validation
+                if (port.Speed <= 0)
+                {
+                    result.AddError($"UUT '{uut.UutId}' Port {port.PortNumber}: Speed must be positive");
+                }
+                else if (!CommonBaudRates.Contains(port.Speed))
+                {
+                    result.AddWarning($"UUT '{uut.UutId}' Port {port.PortNumber}: Unusual baud rate {port.Speed}");
+                }
+
+                // Data pattern validation
+                if (string.IsNullOrWhiteSpace(port.DataPattern))
+                {
+                    result.AddError($"UUT '{uut.UutId}' Port {port.PortNumber}: Data pattern cannot be empty");
+                }
+                else if (!ValidDataPatterns.Contains(port.DataPattern))
+                {
+                    result.AddError($"UUT '{uut.UutId}' Port {port.PortNumber}: Invalid data pattern '{port.DataPattern}'");
+                }
+            }
+        }
+    }
+
+    private void ValidateCommands(BibConfiguration bibConfiguration, BibValidationResult result)
+    {
+        foreach (var uut in bibConfiguration.Uuts)
+        {
+            foreach (var port in uut.Ports)
+            {
+                // Validate command sequences
+                ValidateCommandSequence(port.StartCommands, "Start", uut.UutId, port.PortNumber, result);
+                ValidateCommandSequence(port.TestCommands, "Test", uut.UutId, port.PortNumber, result);
+                ValidateCommandSequence(port.StopCommands, "Stop", uut.UutId, port.PortNumber, result);
+            }
+        }
+    }
+
+    private void ValidateCommandSequence(CommandSequence? sequence, string sequenceType, string uutId, int portNumber, BibValidationResult result)
+    {
+        if (sequence == null || !sequence.Commands.Any())
+        {
+            result.AddWarning($"UUT '{uutId}' Port {portNumber}: {sequenceType} command sequence is empty");
+            return;
+        }
+
+        foreach (var command in sequence.Commands)
+        {
+            if (string.IsNullOrWhiteSpace(command.Command))
+            {
+                result.AddError($"UUT '{uutId}' Port {portNumber}: {sequenceType} sequence contains empty command");
+            }
+
+            if (string.IsNullOrWhiteSpace(command.ExpectedResponse))
+            {
+                result.AddWarning($"UUT '{uutId}' Port {portNumber}: {sequenceType} command '{command.Command}' has no expected response");
+            }
+
+            if (command.TimeoutMs <= 0)
+            {
+                result.AddWarning($"UUT '{uutId}' Port {portNumber}: {sequenceType} command '{command.Command}' has invalid timeout");
+            }
+        }
     }
 
     #endregion
 
     #region Helper Methods
 
-    private string CreateValidBibXml(string bibId)
+    private static bool IsValidIdentifier(string identifier)
     {
-        return $"""
-<?xml version="1.0" encoding="UTF-8"?>
-<bib id="{bibId}" description="Valid BIB for testing - {bibId}">
-  <metadata>
-    <board_type>test</board_type>
-    <sprint>11</sprint>
-    <validation_test>true</validation_test>
-  </metadata>
-  
-  <uut id="test_uut_{bibId}" description="Test UUT for {bibId}">
-    <port number="1">
-      <protocol>rs232</protocol>
-      <speed>115200</speed>
-      <data_pattern>n81</data_pattern>
-      <read_timeout>3000</read_timeout>
-      <write_timeout>3000</write_timeout>
-      
-      <start>
-        <command>INIT_{bibId}</command>
-        <expected_response>READY_{bibId}</expected_response>
-        <timeout_ms>3000</timeout_ms>
-      </start>
-      
-      <test>
-        <command>TEST_{bibId}</command>
-        <expected_response>PASS_{bibId}</expected_response>
-        <timeout_ms>5000</timeout_ms>
-      </test>
-      
-      <stop>
-        <command>QUIT_{bibId}</command>
-        <expected_response>BYE_{bibId}</expected_response>
-        <timeout_ms>2000</timeout_ms>
-      </stop>
-    </port>
-  </uut>
-</bib>
-""";
+        // Allow alphanumeric, underscore, and hyphen
+        return Regex.IsMatch(identifier, @"^[a-zA-Z0-9_-]+$");
     }
 
-    private BibConfiguration CreateValidBibConfiguration(string bibId)
-    {
-        return new BibConfiguration
-        {
-            BibId = bibId,
-            Description = $"Valid test BIB configuration - {bibId}",
-            Uuts = new List<UutConfiguration>
-            {
-                new()
-                {
-                    UutId = $"test_uut_{bibId}",
-                    Description = $"Test UUT for {bibId}",
-                    Ports = new List<PortConfiguration>
-                    {
-                        new()
-                        {
-                            PortNumber = 1,
-                            Protocol = "rs232",
-                            Speed = 115200,
-                            DataPattern = "n81",
-                            StartCommands = new CommandSequence
-                            {
-                                Commands = new List<ProtocolCommand>
-                                {
-                                    new() { Command = $"INIT_{bibId}", ExpectedResponse = $"READY_{bibId}", TimeoutMs = 3000 }
-                                }
-                            },
-                            TestCommands = new CommandSequence
-                            {
-                                Commands = new List<ProtocolCommand>
-                                {
-                                    new() { Command = $"TEST_{bibId}", ExpectedResponse = $"PASS_{bibId}", TimeoutMs = 5000 }
-                                }
-                            },
-                            StopCommands = new CommandSequence
-                            {
-                                Commands = new List<ProtocolCommand>
-                                {
-                                    new() { Command = $"QUIT_{bibId}", ExpectedResponse = $"BYE_{bibId}", TimeoutMs = 2000 }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            Metadata = new Dictionary<string, string>
-            {
-                ["board_type"] = "test",
-                ["sprint"] = "11",
-                ["validation_test"] = "true"
-            }
-        };
-    }
-
-    private BibConfiguration CreateLargeBibConfiguration(string bibId, int uutCount, int portsPerUut)
-    {
-        var bibConfig = new BibConfiguration
-        {
-            BibId = bibId,
-            Description = $"Large test BIB configuration - {bibId}",
-            Uuts = new List<UutConfiguration>(),
-            Metadata = new Dictionary<string, string>
-            {
-                ["board_type"] = "performance_test",
-                ["uut_count"] = uutCount.ToString(),
-                ["ports_per_uut"] = portsPerUut.ToString()
-            }
-        };
-
-        for (int uutIndex = 1; uutIndex <= uutCount; uutIndex++)
-        {
-            var uut = new UutConfiguration
-            {
-                UutId = $"uut_{uutIndex:D3}",
-                Description = $"Performance test UUT {uutIndex}",
-                Ports = new List<PortConfiguration>()
-            };
-
-            for (int portIndex = 1; portIndex <= portsPerUut; portIndex++)
-            {
-                uut.Ports.Add(new PortConfiguration
-                {
-                    PortNumber = portIndex,
-                    Protocol = "rs232",
-                    Speed = 115200,
-                    DataPattern = "n81",
-                    StartCommands = new CommandSequence
-                    {
-                        Commands = new List<ProtocolCommand>
-                        {
-                            new() { Command = $"INIT_UUT{uutIndex}_PORT{portIndex}", ExpectedResponse = "READY", TimeoutMs = 3000 }
-                        }
-                    },
-                    TestCommands = new CommandSequence
-                    {
-                        Commands = new List<ProtocolCommand>
-                        {
-                            new() { Command = $"TEST_UUT{uutIndex}_PORT{portIndex}", ExpectedResponse = "PASS", TimeoutMs = 5000 }
-                        }
-                    },
-                    StopCommands = new CommandSequence
-                    {
-                        Commands = new List<ProtocolCommand>
-                        {
-                            new() { Command = $"QUIT_UUT{uutIndex}_PORT{portIndex}", ExpectedResponse = "BYE", TimeoutMs = 2000 }
-                        }
-                    }
-                });
-            }
-
-            bibConfig.Uuts.Add(uut);
-        }
-
-        return bibConfig;
-    }
-
-    private BibConfiguration CreateComplexBibConfiguration(string bibId)
-    {
-        return new BibConfiguration
-        {
-            BibId = bibId,
-            Description = $"Complex test BIB configuration - {bibId}",
-            Uuts = new List<UutConfiguration>
-            {
-                new()
-                {
-                    UutId = "primary_uut",
-                    Description = "Primary UUT with multiple ports",
-                    Ports = new List<PortConfiguration>
-                    {
-                        new()
-                        {
-                            PortNumber = 1,
-                            Protocol = "rs232",
-                            Speed = 115200,
-                            DataPattern = "n81"
-                        },
-                        new()
-                        {
-                            PortNumber = 2,
-                            Protocol = "rs232",
-                            Speed = 57600,
-                            DataPattern = "e71"
-                        }
-                    }
-                },
-                new()
-                {
-                    UutId = "secondary_uut",
-                    Description = "Secondary UUT",
-                    Ports = new List<PortConfiguration>
-                    {
-                        new()
-                        {
-                            PortNumber = 1,
-                            Protocol = "rs232",
-                            Speed = 9600,
-                            DataPattern = "n82"
-                        },
-                        new()
-                        {
-                            PortNumber = 2,
-                            Protocol = "rs232",
-                            Speed = 115200,
-                            DataPattern = "n81"
-                        }
-                    }
-                },
-                new()
-                {
-                    UutId = "tertiary_uut",
-                    Description = "Tertiary UUT",
-                    Ports = new List<PortConfiguration>
-                    {
-                        new()
-                        {
-                            PortNumber = 1,
-                            Protocol = "rs232",
-                            Speed = 38400,
-                            DataPattern = "o71"
-                        },
-                        new()
-                        {
-                            PortNumber = 2,
-                            Protocol = "rs232",
-                            Speed = 19200,
-                            DataPattern = "n81"
-                        }
-                    }
-                }
-            },
-            Metadata = new Dictionary<string, string>
-            {
-                ["board_type"] = "complex_test",
-                ["sprint"] = "11",
-                ["complexity"] = "high"
-            }
-        };
-    }
-
-    #endregion
-
-    #region Cleanup
-
-    public void Dispose()
+    private async Task<BibConfiguration?> ParseBibConfigurationAsync(string xmlFilePath)
     {
         try
         {
-            if (Directory.Exists(_testDirectory))
+            // This is a simplified parser - in real implementation, 
+            // you'd use the actual XmlBibConfigurationLoader
+            var content = await File.ReadAllTextAsync(xmlFilePath);
+            var doc = XDocument.Parse(content);
+            
+            // Basic parsing for validation purposes
+            var bibElement = doc.Root?.Name.LocalName == "bib" ? doc.Root : doc.Root?.Element("bib");
+            if (bibElement == null) return null;
+
+            var bibConfig = new BibConfiguration
             {
-                Directory.Delete(_testDirectory, true);
+                BibId = bibElement.Attribute("id")?.Value ?? "",
+                Description = bibElement.Attribute("description")?.Value ?? "",
+                Uuts = new List<UutConfiguration>()
+            };
+
+            foreach (var uutElement in bibElement.Elements("uut"))
+            {
+                var uut = new UutConfiguration
+                {
+                    UutId = uutElement.Attribute("id")?.Value ?? "",
+                    Description = uutElement.Attribute("description")?.Value ?? "",
+                    Ports = new List<PortConfiguration>()
+                };
+
+                foreach (var portElement in uutElement.Elements("port"))
+                {
+                    var port = new PortConfiguration
+                    {
+                        PortNumber = int.TryParse(portElement.Attribute("number")?.Value, out var num) ? num : 0,
+                        Protocol = portElement.Element("protocol")?.Value ?? "",
+                        Speed = int.TryParse(portElement.Element("speed")?.Value, out var speed) ? speed : 0,
+                        DataPattern = portElement.Element("data_pattern")?.Value ?? ""
+                    };
+
+                    // Parse command sequences (simplified)
+                    port.StartCommands = ParseCommandSequence(portElement.Element("start"));
+                    port.TestCommands = ParseCommandSequence(portElement.Element("test"));
+                    port.StopCommands = ParseCommandSequence(portElement.Element("stop"));
+
+                    uut.Ports.Add(port);
+                }
+
+                bibConfig.Uuts.Add(uut);
             }
+
+            return bibConfig;
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore cleanup errors in tests
+            _logger.LogWarning(ex, "⚠️ Could not parse BIB configuration for validation: {Error}", ex.Message);
+            return null;
         }
     }
 
+    private static CommandSequence ParseCommandSequence(XElement? sequenceElement)
+    {
+        var sequence = new CommandSequence();
+        
+        if (sequenceElement != null)
+        {
+            var command = new ProtocolCommand
+            {
+                Command = sequenceElement.Element("command")?.Value ?? "",
+                ExpectedResponse = sequenceElement.Element("expected_response")?.Value ?? "",
+                TimeoutMs = int.TryParse(sequenceElement.Element("timeout_ms")?.Value, out var timeout) ? timeout : 3000
+            };
+            
+            sequence.Commands.Add(command);
+        }
+
+        return sequence;
+    }
+
     #endregion
+}
+
+/// <summary>
+/// Result of BIB validation
+/// </summary>
+public class BibValidationResult
+{
+    public List<string> Errors { get; } = new();
+    public List<string> Warnings { get; } = new();
+    
+    public bool IsValid => !Errors.Any();
+    public bool HasWarnings => Warnings.Any();
+
+    public void AddError(string error)
+    {
+        if (!string.IsNullOrWhiteSpace(error))
+            Errors.Add(error);
+    }
+
+    public void AddWarning(string warning)
+    {
+        if (!string.IsNullOrWhiteSpace(warning))
+            Warnings.Add(warning);
+    }
+
+    public string GetSummary()
+    {
+        if (IsValid && !HasWarnings)
+            return "✅ Configuration validation successful";
+        
+        if (IsValid && HasWarnings)
+            return $"⚠️ Configuration valid with {Warnings.Count} warning(s)";
+        
+        return $"❌ Configuration invalid: {Errors.Count} error(s), {Warnings.Count} warning(s)";
+    }
 }

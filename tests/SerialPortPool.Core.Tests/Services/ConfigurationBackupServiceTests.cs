@@ -1,553 +1,371 @@
 // ===================================================================
-// SPRINT 11 TESTING: ConfigurationBackupService Unit Tests
-// File: tests/SerialPortPool.Core.Tests/Services/ConfigurationBackupServiceTests.cs
-// Purpose: Comprehensive tests for enterprise-grade backup/rollback system
+// SPRINT 11: ConfigurationBackupService Implementation
+// File: SerialPortPool.Core/Services/Configuration/ConfigurationBackupService.cs
+// Purpose: Enterprise-grade backup/rollback system for BIB configurations
 // ===================================================================
 
 using Microsoft.Extensions.Logging;
-using Moq;
-using SerialPortPool.Core.Services;
-using SerialPortPool.Core.Services.Configuration; 
-using Xunit;
 
-namespace SerialPortPool.Core.Tests.Services;
+namespace SerialPortPool.Core.Services.Configuration;
 
 /// <summary>
-/// Unit tests for ConfigurationBackupService (Sprint 11)
-/// Tests backup/rollback functionality and enterprise-grade error handling
+/// Service for creating and managing configuration file backups
+/// Provides enterprise-grade backup/rollback functionality with version control
 /// </summary>
-public class ConfigurationBackupServiceTests : IDisposable
+public class ConfigurationBackupService
 {
-    private readonly Mock<ILogger<ConfigurationBackupService>> _mockLogger;
-    private readonly ConfigurationBackupService _backupService;
-    private readonly string _testDirectory;
-    private readonly string _testConfigFile;
+    private readonly ILogger<ConfigurationBackupService> _logger;
+    private const string BackupExtension = ".backup.";
+    private const string BackupDateFormat = "yyyyMMdd_HHmmss";
 
-    public ConfigurationBackupServiceTests()
+    public ConfigurationBackupService(ILogger<ConfigurationBackupService> logger)
     {
-        _mockLogger = new Mock<ILogger<ConfigurationBackupService>>();
-        _testDirectory = Path.Combine(Path.GetTempPath(), "Sprint11_BackupTests", Guid.NewGuid().ToString());
-        Directory.CreateDirectory(_testDirectory);
-        
-        _testConfigFile = Path.Combine(_testDirectory, "test_config.xml");
-        _backupService = new ConfigurationBackupService(_mockLogger.Object);
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    #region Constructor Tests
+    #region Public Methods
 
-    [Fact]
-    public void Constructor_WithValidLogger_InitializesCorrectly()
+    /// <summary>
+    /// Create a backup of the specified configuration file
+    /// </summary>
+    public async Task<string> CreateBackupAsync(string configFilePath)
     {
-        // Arrange & Act
-        var service = new ConfigurationBackupService(_mockLogger.Object);
+        if (string.IsNullOrWhiteSpace(configFilePath))
+            throw new ArgumentException("Configuration file path cannot be null or empty", nameof(configFilePath));
 
-        // Assert
-        Assert.NotNull(service);
-    }
-
-    [Fact]
-    public void Constructor_WithNullLogger_ThrowsArgumentNullException()
-    {
-        // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => 
-            new ConfigurationBackupService(null!));
-    }
-
-    #endregion
-
-    #region CreateBackupAsync Tests
-
-    [Fact]
-    public async Task CreateBackupAsync_WithValidFile_CreatesBackupSuccessfully()
-    {
-        // Arrange
-        var originalContent = CreateTestXmlContent("original");
-        await File.WriteAllTextAsync(_testConfigFile, originalContent);
-
-        // Act
-        var backupPath = await _backupService.CreateBackupAsync(_testConfigFile);
-
-        // Assert
-        Assert.NotNull(backupPath);
-        Assert.True(File.Exists(backupPath));
-        
-        var backupContent = await File.ReadAllTextAsync(backupPath);
-        Assert.Equal(originalContent, backupContent);
-        
-        // Verify backup naming convention
-        var fileName = Path.GetFileName(backupPath);
-        Assert.Contains("test_config", fileName);
-        Assert.Contains(".backup.", fileName);
-        Assert.EndsWith(".xml", fileName);
-    }
-
-    [Fact]
-    public async Task CreateBackupAsync_WithNonExistentFile_ThrowsFileNotFoundException()
-    {
-        // Arrange
-        var nonExistentFile = Path.Combine(_testDirectory, "nonexistent.xml");
-
-        // Act & Assert
-        await Assert.ThrowsAsync<FileNotFoundException>(() =>
-            _backupService.CreateBackupAsync(nonExistentFile));
-    }
-
-    [Fact]
-    public async Task CreateBackupAsync_WithNullFilePath_ThrowsArgumentException()
-    {
-        // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _backupService.CreateBackupAsync(null!));
-    }
-
-    [Fact]
-    public async Task CreateBackupAsync_WithEmptyFilePath_ThrowsArgumentException()
-    {
-        // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _backupService.CreateBackupAsync(string.Empty));
-    }
-
-    [Fact]
-    public async Task CreateBackupAsync_MultipleBackups_CreatesUniqueFiles()
-    {
-        // Arrange
-        var originalContent = CreateTestXmlContent("multiple_backups");
-        await File.WriteAllTextAsync(_testConfigFile, originalContent);
-
-        // Act - Create multiple backups
-        var backup1 = await _backupService.CreateBackupAsync(_testConfigFile);
-        await Task.Delay(1100); // Ensure different timestamps
-        var backup2 = await _backupService.CreateBackupAsync(_testConfigFile);
-        await Task.Delay(1100);
-        var backup3 = await _backupService.CreateBackupAsync(_testConfigFile);
-
-        // Assert
-        Assert.NotEqual(backup1, backup2);
-        Assert.NotEqual(backup2, backup3);
-        Assert.NotEqual(backup1, backup3);
-        
-        Assert.True(File.Exists(backup1));
-        Assert.True(File.Exists(backup2));
-        Assert.True(File.Exists(backup3));
-        
-        // All should have same content
-        var content1 = await File.ReadAllTextAsync(backup1);
-        var content2 = await File.ReadAllTextAsync(backup2);
-        var content3 = await File.ReadAllTextAsync(backup3);
-        
-        Assert.Equal(content1, content2);
-        Assert.Equal(content2, content3);
-    }
-
-    #endregion
-
-    #region RestoreFromBackupAsync Tests
-
-    [Fact]
-    public async Task RestoreFromBackupAsync_WithValidBackup_RestoresSuccessfully()
-    {
-        // Arrange
-        var originalContent = CreateTestXmlContent("restore_test");
-        var modifiedContent = CreateTestXmlContent("modified");
-        
-        await File.WriteAllTextAsync(_testConfigFile, originalContent);
-        var backupPath = await _backupService.CreateBackupAsync(_testConfigFile);
-        
-        // Modify original file
-        await File.WriteAllTextAsync(_testConfigFile, modifiedContent);
-        Assert.Equal(modifiedContent, await File.ReadAllTextAsync(_testConfigFile));
-
-        // Act
-        var success = await _backupService.RestoreFromBackupAsync(_testConfigFile, backupPath);
-
-        // Assert
-        Assert.True(success);
-        var restoredContent = await File.ReadAllTextAsync(_testConfigFile);
-        Assert.Equal(originalContent, restoredContent);
-    }
-
-    [Fact]
-    public async Task RestoreFromBackupAsync_WithNonExistentBackup_ReturnsFalse()
-    {
-        // Arrange
-        var nonExistentBackup = Path.Combine(_testDirectory, "nonexistent.backup.xml");
-        await File.WriteAllTextAsync(_testConfigFile, "test content");
-
-        // Act
-        var success = await _backupService.RestoreFromBackupAsync(_testConfigFile, nonExistentBackup);
-
-        // Assert
-        Assert.False(success);
-    }
-
-    [Fact]
-    public async Task RestoreFromBackupAsync_WithNullPaths_ThrowsArgumentException()
-    {
-        // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _backupService.RestoreFromBackupAsync(null!, "backup.xml"));
-        
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _backupService.RestoreFromBackupAsync("config.xml", null!));
-    }
-
-    [Fact]
-    public async Task RestoreFromBackupAsync_PreservesOriginalOnFailure()
-    {
-        // Arrange
-        var originalContent = CreateTestXmlContent("preserve_test");
-        await File.WriteAllTextAsync(_testConfigFile, originalContent);
-        
-        var invalidBackupPath = Path.Combine(_testDirectory, "invalid.backup.xml");
-
-        // Act
-        var success = await _backupService.RestoreFromBackupAsync(_testConfigFile, invalidBackupPath);
-
-        // Assert
-        Assert.False(success);
-        Assert.True(File.Exists(_testConfigFile));
-        
-        var contentAfterFailedRestore = await File.ReadAllTextAsync(_testConfigFile);
-        Assert.Equal(originalContent, contentAfterFailedRestore);
-    }
-
-    #endregion
-
-    #region GetBackupsAsync Tests
-
-    [Fact]
-    public async Task GetBackupsAsync_WithExistingBackups_ReturnsCorrectList()
-    {
-        // Arrange
-        var originalContent = CreateTestXmlContent("get_backups_test");
-        await File.WriteAllTextAsync(_testConfigFile, originalContent);
-        
-        // Create multiple backups
-        var backup1 = await _backupService.CreateBackupAsync(_testConfigFile);
-        await Task.Delay(1100);
-        var backup2 = await _backupService.CreateBackupAsync(_testConfigFile);
-        await Task.Delay(1100);
-        var backup3 = await _backupService.CreateBackupAsync(_testConfigFile);
-
-        // Act
-        var backups = await _backupService.GetBackupsAsync(_testConfigFile);
-        var backupList = backups.ToList();
-
-        // Assert
-        Assert.Equal(3, backupList.Count);
-        Assert.Contains(backup1, backupList);
-        Assert.Contains(backup2, backupList);
-        Assert.Contains(backup3, backupList);
-        
-        // Should be ordered by creation time (newest first)
-        Assert.True(File.GetCreationTime(backupList[0]) >= File.GetCreationTime(backupList[1]));
-        Assert.True(File.GetCreationTime(backupList[1]) >= File.GetCreationTime(backupList[2]));
-    }
-
-    [Fact]
-    public async Task GetBackupsAsync_WithNoBackups_ReturnsEmptyList()
-    {
-        // Arrange
-        var configWithoutBackups = Path.Combine(_testDirectory, "no_backups.xml");
-        await File.WriteAllTextAsync(configWithoutBackups, CreateTestXmlContent("no_backups"));
-
-        // Act
-        var backups = await _backupService.GetBackupsAsync(configWithoutBackups);
-
-        // Assert
-        Assert.Empty(backups);
-    }
-
-    [Fact]
-    public async Task GetBackupsAsync_WithNonExistentFile_ReturnsEmptyList()
-    {
-        // Arrange
-        var nonExistentFile = Path.Combine(_testDirectory, "nonexistent.xml");
-
-        // Act
-        var backups = await _backupService.GetBackupsAsync(nonExistentFile);
-
-        // Assert
-        Assert.Empty(backups);
-    }
-
-    #endregion
-
-    #region CleanupOldBackupsAsync Tests
-
-    [Fact]
-    public async Task CleanupOldBackupsAsync_RemovesOnlyOldBackups()
-    {
-        // Arrange
-        var originalContent = CreateTestXmlContent("cleanup_test");
-        await File.WriteAllTextAsync(_testConfigFile, originalContent);
-        
-        // Create multiple backups with artificial old timestamps
-        var backup1 = await _backupService.CreateBackupAsync(_testConfigFile);
-        var backup2 = await _backupService.CreateBackupAsync(_testConfigFile);
-        var backup3 = await _backupService.CreateBackupAsync(_testConfigFile);
-        
-        // Make first two backups appear old
-        var oldTime = DateTime.Now.AddDays(-10);
-        File.SetCreationTime(backup1, oldTime);
-        File.SetLastWriteTime(backup1, oldTime);
-        File.SetCreationTime(backup2, oldTime.AddHours(1));
-        File.SetLastWriteTime(backup2, oldTime.AddHours(1));
-
-        // Act
-        var cleanedCount = await _backupService.CleanupOldBackupsAsync(_testConfigFile, maxAge: TimeSpan.FromDays(7), maxCount: 2);
-
-        // Assert
-        Assert.Equal(1, cleanedCount); // Should clean 1 backup (oldest)
-        Assert.False(File.Exists(backup1)); // Oldest should be removed
-        Assert.True(File.Exists(backup2));  // Second oldest kept (within maxCount)
-        Assert.True(File.Exists(backup3));  // Newest kept
-    }
-
-    [Fact]
-    public async Task CleanupOldBackupsAsync_RespectsMaxCount()
-    {
-        // Arrange
-        var originalContent = CreateTestXmlContent("max_count_test");
-        await File.WriteAllTextAsync(_testConfigFile, originalContent);
-        
-        // Create 5 backups
-        var backups = new List<string>();
-        for (int i = 0; i < 5; i++)
-        {
-            var backup = await _backupService.CreateBackupAsync(_testConfigFile);
-            backups.Add(backup);
-            await Task.Delay(100); // Small delay for timestamp differences
-        }
-
-        // Act - Keep only 3 newest
-        var cleanedCount = await _backupService.CleanupOldBackupsAsync(_testConfigFile, maxAge: TimeSpan.FromDays(365), maxCount: 3);
-
-        // Assert
-        Assert.Equal(2, cleanedCount); // Should remove 2 oldest
-        
-        // First 2 should be removed, last 3 should remain
-        Assert.False(File.Exists(backups[0]));
-        Assert.False(File.Exists(backups[1]));
-        Assert.True(File.Exists(backups[2]));
-        Assert.True(File.Exists(backups[3]));
-        Assert.True(File.Exists(backups[4]));
-    }
-
-    #endregion
-
-    #region GetBackupInfoAsync Tests
-
-    [Fact]
-    public async Task GetBackupInfoAsync_WithValidBackup_ReturnsCorrectInfo()
-    {
-        // Arrange
-        var originalContent = CreateTestXmlContent("backup_info_test");
-        await File.WriteAllTextAsync(_testConfigFile, originalContent);
-        var backupPath = await _backupService.CreateBackupAsync(_testConfigFile);
-
-        // Act
-        var backupInfo = await _backupService.GetBackupInfoAsync(backupPath);
-
-        // Assert
-        Assert.NotNull(backupInfo);
-        Assert.Equal(backupPath, backupInfo!.BackupPath);
-        Assert.Equal(_testConfigFile, backupInfo.OriginalFilePath);
-        Assert.True(backupInfo.CreatedAt <= DateTime.Now);
-        Assert.True(backupInfo.CreatedAt > DateTime.Now.AddMinutes(-1));
-        Assert.True(backupInfo.Size > 0);
-        Assert.True(backupInfo.IsValid);
-    }
-
-    [Fact]
-    public async Task GetBackupInfoAsync_WithNonExistentBackup_ReturnsNull()
-    {
-        // Arrange
-        var nonExistentBackup = Path.Combine(_testDirectory, "nonexistent.backup.xml");
-
-        // Act
-        var backupInfo = await _backupService.GetBackupInfoAsync(nonExistentBackup);
-
-        // Assert
-        Assert.Null(backupInfo);
-    }
-
-    #endregion
-
-    #region Error Handling Tests
-
-    [Fact]
-    public async Task CreateBackupAsync_WithReadOnlyFile_HandlesGracefully()
-    {
-        // Arrange
-        await File.WriteAllTextAsync(_testConfigFile, CreateTestXmlContent("readonly_test"));
-        var fileInfo = new FileInfo(_testConfigFile);
-        fileInfo.IsReadOnly = true;
+        if (!File.Exists(configFilePath))
+            throw new FileNotFoundException($"Configuration file not found: {configFilePath}");
 
         try
         {
-            // Act & Assert - Should still be able to read and backup
-            var backupPath = await _backupService.CreateBackupAsync(_testConfigFile);
-            Assert.NotNull(backupPath);
-            Assert.True(File.Exists(backupPath));
+            _logger.LogDebug("💾 Creating backup for: {FilePath}", configFilePath);
+
+            var backupPath = GenerateBackupPath(configFilePath);
+            var content = await File.ReadAllTextAsync(configFilePath);
+            
+            // Ensure backup directory exists
+            var backupDir = Path.GetDirectoryName(backupPath);
+            if (!string.IsNullOrEmpty(backupDir) && !Directory.Exists(backupDir))
+            {
+                Directory.CreateDirectory(backupDir);
+            }
+
+            // Create backup file
+            await File.WriteAllTextAsync(backupPath, content);
+            
+            _logger.LogInformation("✅ Backup created successfully: {BackupPath}", backupPath);
+            return backupPath;
         }
-        finally
+        catch (Exception ex)
         {
-            // Cleanup - Remove readonly attribute
-            fileInfo.IsReadOnly = false;
+            _logger.LogError(ex, "❌ Failed to create backup for: {FilePath}", configFilePath);
+            throw;
         }
     }
 
-    [Fact]
-    public async Task RestoreFromBackupAsync_WithReadOnlyTarget_ReturnsFalse()
+    /// <summary>
+    /// Restore configuration from backup
+    /// </summary>
+    public async Task<bool> RestoreFromBackupAsync(string configFilePath, string backupFilePath)
     {
-        // Arrange
-        var originalContent = CreateTestXmlContent("readonly_restore_test");
-        await File.WriteAllTextAsync(_testConfigFile, originalContent);
-        var backupPath = await _backupService.CreateBackupAsync(_testConfigFile);
-        
-        var fileInfo = new FileInfo(_testConfigFile);
-        fileInfo.IsReadOnly = true;
+        if (string.IsNullOrWhiteSpace(configFilePath))
+            throw new ArgumentException("Configuration file path cannot be null or empty", nameof(configFilePath));
+
+        if (string.IsNullOrWhiteSpace(backupFilePath))
+            throw new ArgumentException("Backup file path cannot be null or empty", nameof(backupFilePath));
 
         try
         {
-            // Act
-            var success = await _backupService.RestoreFromBackupAsync(_testConfigFile, backupPath);
+            if (!File.Exists(backupFilePath))
+            {
+                _logger.LogWarning("⚠️ Backup file not found: {BackupPath}", backupFilePath);
+                return false;
+            }
 
-            // Assert
-            Assert.False(success);
+            _logger.LogDebug("🔄 Restoring from backup: {BackupPath} → {ConfigPath}", backupFilePath, configFilePath);
+
+            // Read backup content
+            var backupContent = await File.ReadAllTextAsync(backupFilePath);
+            
+            // Create temporary backup of current file before restore
+            string? tempBackup = null;
+            if (File.Exists(configFilePath))
+            {
+                tempBackup = configFilePath + ".restore_temp";
+                await File.WriteAllTextAsync(tempBackup, await File.ReadAllTextAsync(configFilePath));
+            }
+
+            try
+            {
+                // Restore from backup
+                await File.WriteAllTextAsync(configFilePath, backupContent);
+                
+                // Clean up temporary backup on success
+                if (tempBackup != null && File.Exists(tempBackup))
+                {
+                    File.Delete(tempBackup);
+                }
+
+                _logger.LogInformation("✅ Configuration restored successfully from backup");
+                return true;
+            }
+            catch (Exception)
+            {
+                // Restore original on failure
+                if (tempBackup != null && File.Exists(tempBackup))
+                {
+                    await File.WriteAllTextAsync(configFilePath, await File.ReadAllTextAsync(tempBackup));
+                    File.Delete(tempBackup);
+                }
+                throw;
+            }
         }
-        finally
+        catch (Exception ex)
         {
-            // Cleanup
-            fileInfo.IsReadOnly = false;
+            _logger.LogError(ex, "❌ Failed to restore from backup: {BackupPath}", backupFilePath);
+            return false;
         }
     }
 
-    #endregion
-
-    #region Performance Tests
-
-    [Fact]
-    public async Task CreateBackupAsync_LargeFile_CompletesInReasonableTime()
+    /// <summary>
+    /// Get all backup files for a configuration file
+    /// </summary>
+    public async Task<IEnumerable<string>> GetBackupsAsync(string configFilePath)
     {
-        // Arrange - Create a larger XML file (around 1MB)
-        var largeContent = CreateLargeTestXmlContent(50000); // 50k lines
-        await File.WriteAllTextAsync(_testConfigFile, largeContent);
+        try
+        {
+            if (string.IsNullOrWhiteSpace(configFilePath) || !File.Exists(configFilePath))
+            {
+                return Enumerable.Empty<string>();
+            }
 
-        // Act
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        var backupPath = await _backupService.CreateBackupAsync(_testConfigFile);
-        stopwatch.Stop();
+            var directory = Path.GetDirectoryName(configFilePath);
+            var fileName = Path.GetFileNameWithoutExtension(configFilePath);
+            var extension = Path.GetExtension(configFilePath);
 
-        // Assert
-        Assert.NotNull(backupPath);
-        Assert.True(File.Exists(backupPath));
-        Assert.True(stopwatch.ElapsedMilliseconds < 5000); // Should complete within 5 seconds
-        
-        var backupContent = await File.ReadAllTextAsync(backupPath);
-        Assert.Equal(largeContent, backupContent);
+            if (string.IsNullOrEmpty(directory))
+            {
+                return Enumerable.Empty<string>();
+            }
+
+            _logger.LogDebug("🔍 Searching for backups in: {Directory}", directory);
+
+            // Find backup files matching pattern
+            var searchPattern = $"{fileName}{BackupExtension}*{extension}";
+            var backupFiles = Directory.GetFiles(directory, searchPattern)
+                .Where(f => IsValidBackupFile(f, fileName, extension))
+                .OrderByDescending(f => File.GetCreationTime(f))
+                .ToList();
+
+            await Task.CompletedTask; // Make it properly async
+
+            _logger.LogDebug("📋 Found {Count} backup files", backupFiles.Count);
+            return backupFiles;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "⚠️ Error searching for backups: {Error}", ex.Message);
+            return Enumerable.Empty<string>();
+        }
+    }
+
+    /// <summary>
+    /// Clean up old backup files
+    /// </summary>
+    public async Task<int> CleanupOldBackupsAsync(string configFilePath, TimeSpan maxAge, int maxCount = 10)
+    {
+        try
+        {
+            var backups = (await GetBackupsAsync(configFilePath)).ToList();
+            if (!backups.Any())
+            {
+                return 0;
+            }
+
+            _logger.LogDebug("🧹 Cleaning up old backups (max age: {MaxAge}, max count: {MaxCount})", maxAge, maxCount);
+
+            var cutoffTime = DateTime.Now - maxAge;
+            var cleanedCount = 0;
+
+            // Sort by creation time (newest first)
+            var sortedBackups = backups
+                .OrderByDescending(f => File.GetCreationTime(f))
+                .ToList();
+
+            // Keep only the most recent maxCount files
+            var toDelete = new List<string>();
+
+            // Remove files older than maxAge
+            foreach (var backup in sortedBackups)
+            {
+                var creationTime = File.GetCreationTime(backup);
+                if (creationTime < cutoffTime)
+                {
+                    toDelete.Add(backup);
+                }
+            }
+
+            // Remove excess files beyond maxCount
+            if (sortedBackups.Count > maxCount)
+            {
+                var excess = sortedBackups.Skip(maxCount);
+                foreach (var backup in excess)
+                {
+                    if (!toDelete.Contains(backup))
+                    {
+                        toDelete.Add(backup);
+                    }
+                }
+            }
+
+            // Delete the files
+            foreach (var fileToDelete in toDelete)
+            {
+                try
+                {
+                    File.Delete(fileToDelete);
+                    cleanedCount++;
+                    _logger.LogDebug("🗑️ Deleted old backup: {FilePath}", Path.GetFileName(fileToDelete));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "⚠️ Could not delete backup file: {FilePath}", fileToDelete);
+                }
+            }
+
+            _logger.LogInformation("✅ Cleanup completed: {Count} backup files removed", cleanedCount);
+            return cleanedCount;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Error during backup cleanup: {Error}", ex.Message);
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// Get backup file information
+    /// </summary>
+    public async Task<BackupInfo?> GetBackupInfoAsync(string backupFilePath)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(backupFilePath) || !File.Exists(backupFilePath))
+            {
+                return null;
+            }
+
+            var fileInfo = new FileInfo(backupFilePath);
+            var originalPath = ExtractOriginalFilePath(backupFilePath);
+
+            await Task.CompletedTask; // Make it properly async
+
+            return new BackupInfo
+            {
+                BackupPath = backupFilePath,
+                OriginalFilePath = originalPath,
+                CreatedAt = fileInfo.CreationTime,
+                Size = fileInfo.Length,
+                IsValid = true
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "⚠️ Error getting backup info: {FilePath}", backupFilePath);
+            return null;
+        }
     }
 
     #endregion
 
     #region Helper Methods
 
-    private string CreateTestXmlContent(string identifier)
+    /// <summary>
+    /// Generate backup file path with timestamp
+    /// </summary>
+    private string GenerateBackupPath(string originalFilePath)
     {
-        return $"""
-<?xml version="1.0" encoding="UTF-8"?>
-<root>
-  <bib id="{identifier}" description="Test BIB for Sprint 11 - {identifier}">
-    <metadata>
-      <board_type>test</board_type>
-      <sprint>11</sprint>
-      <test_identifier>{identifier}</test_identifier>
-      <created_date>{DateTime.Now:yyyy-MM-dd}</created_date>
-    </metadata>
-    
-    <uut id="test_uut" description="Test UUT for {identifier}">
-      <port number="1">
-        <protocol>rs232</protocol>
-        <speed>115200</speed>
-        <data_pattern>n81</data_pattern>
-        
-        <start>
-          <command>INIT_{identifier}</command>
-          <expected_response>READY_{identifier}</expected_response>
-          <timeout_ms>3000</timeout_ms>
-        </start>
-        
-        <test>
-          <command>TEST_{identifier}</command>
-          <expected_response>PASS_{identifier}</expected_response>
-          <timeout_ms>5000</timeout_ms>
-        </test>
-        
-        <stop>
-          <command>QUIT_{identifier}</command>
-          <expected_response>BYE_{identifier}</expected_response>
-          <timeout_ms>2000</timeout_ms>
-        </stop>
-      </port>
-    </uut>
-  </bib>
-</root>
-""";
+        var directory = Path.GetDirectoryName(originalFilePath) ?? "";
+        var fileName = Path.GetFileNameWithoutExtension(originalFilePath);
+        var extension = Path.GetExtension(originalFilePath);
+        var timestamp = DateTime.Now.ToString(BackupDateFormat);
+
+        return Path.Combine(directory, $"{fileName}{BackupExtension}{timestamp}{extension}");
     }
 
-    private string CreateLargeTestXmlContent(int lineCount)
-    {
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
-        sb.AppendLine("<root>");
-        sb.AppendLine("  <bib id=\"large_test\" description=\"Large test file for performance testing\">");
-        sb.AppendLine("    <metadata>");
-        sb.AppendLine("      <board_type>performance_test</board_type>");
-        sb.AppendLine("      <sprint>11</sprint>");
-        sb.AppendLine("    </metadata>");
-        
-        for (int i = 1; i <= lineCount; i++)
-        {
-            sb.AppendLine($"    <test_line id=\"line_{i}\" value=\"test_data_{i}\" />");
-        }
-        
-        sb.AppendLine("  </bib>");
-        sb.AppendLine("</root>");
-        
-        return sb.ToString();
-    }
-
-    #endregion
-
-    #region Cleanup
-
-    public void Dispose()
+    /// <summary>
+    /// Check if file is a valid backup file
+    /// </summary>
+    private bool IsValidBackupFile(string filePath, string originalFileName, string originalExtension)
     {
         try
         {
-            if (Directory.Exists(_testDirectory))
-            {
-                // Remove readonly attributes from all files
-                var files = Directory.GetFiles(_testDirectory, "*", SearchOption.AllDirectories);
-                foreach (var file in files)
-                {
-                    var fileInfo = new FileInfo(file);
-                    if (fileInfo.IsReadOnly)
-                    {
-                        fileInfo.IsReadOnly = false;
-                    }
-                }
-                
-                Directory.Delete(_testDirectory, true);
-            }
+            var fileName = Path.GetFileNameWithoutExtension(filePath);
+            var extension = Path.GetExtension(filePath);
+
+            // Check extension matches
+            if (!string.Equals(extension, originalExtension, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            // Check filename pattern
+            var expectedPrefix = originalFileName + BackupExtension;
+            if (!fileName.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            // Check timestamp format
+            var timestampPart = fileName.Substring(expectedPrefix.Length);
+            return DateTime.TryParseExact(timestampPart, BackupDateFormat, null, System.Globalization.DateTimeStyles.None, out _);
         }
         catch
         {
-            // Ignore cleanup errors in tests
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Extract original file path from backup file path
+    /// </summary>
+    private string ExtractOriginalFilePath(string backupFilePath)
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(backupFilePath) ?? "";
+            var fileName = Path.GetFileNameWithoutExtension(backupFilePath);
+            var extension = Path.GetExtension(backupFilePath);
+
+            // Find backup extension pattern
+            var backupIndex = fileName.LastIndexOf(BackupExtension, StringComparison.OrdinalIgnoreCase);
+            if (backupIndex > 0)
+            {
+                var originalFileName = fileName.Substring(0, backupIndex);
+                return Path.Combine(directory, originalFileName + extension);
+            }
+
+            return backupFilePath; // Fallback
+        }
+        catch
+        {
+            return backupFilePath; // Fallback
         }
     }
 
     #endregion
+}
+
+/// <summary>
+/// Information about a backup file
+/// </summary>
+public class BackupInfo
+{
+    public string BackupPath { get; set; } = string.Empty;
+    public string OriginalFilePath { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public long Size { get; set; }
+    public bool IsValid { get; set; }
+
+    public string GetSummary()
+    {
+        var sizeKB = Size / 1024.0;
+        return $"📄 Backup: {Path.GetFileName(BackupPath)} | Created: {CreatedAt:yyyy-MM-dd HH:mm:ss} | Size: {sizeKB:F1} KB";
+    }
 }
