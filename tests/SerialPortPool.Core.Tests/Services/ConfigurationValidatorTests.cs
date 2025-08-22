@@ -271,11 +271,14 @@ public class ConfigurationValidator
 
     private void ValidatePortElement(XElement portElement, BibValidationResult result, string? uutId)
     {
-        // Validate port number
+        // Validate port number - FIXED: Declare portNumber at method scope
         var portNumberStr = portElement.Attribute("number")?.Value;
-        if (string.IsNullOrWhiteSpace(portNumberStr) || !int.TryParse(portNumberStr, out var portNumber) || portNumber <= 0)
+        var portNumber = 0; // Default value
+        
+        if (string.IsNullOrWhiteSpace(portNumberStr) || !int.TryParse(portNumberStr, out portNumber) || portNumber <= 0)
         {
             result.AddError($"Port in UUT '{uutId}' must have a valid positive 'number' attribute");
+            portNumber = 0; // Reset to safe value for error messages
         }
 
         // Validate required elements
@@ -284,7 +287,8 @@ public class ConfigurationValidator
         {
             if (portElement.Element(required) == null)
             {
-                result.AddError($"Port {portNumber} in UUT '{uutId}' is missing required element: {required}");
+                var portDisplay = portNumber > 0 ? portNumber.ToString() : "unknown";
+                result.AddError($"Port {portDisplay} in UUT '{uutId}' is missing required element: {required}");
             }
         }
 
@@ -300,28 +304,25 @@ public class ConfigurationValidator
         }
     }
 
-   private void ValidateCommandSequenceElement(XElement sequenceElement, BibValidationResult result, string? uutId, int portNumber, string sequenceType)
+    private void ValidateCommandSequenceElement(XElement sequenceElement, BibValidationResult result, string? uutId, int portNumber, string sequenceType)
     {
         var commandElement = sequenceElement.Element("command");
         var responseElement = sequenceElement.Element("expected_response");
         var timeoutElement = sequenceElement.Element("timeout_ms");
 
-        // Use safe port display for error messages (FIXED: CS0165)
-        var portDisplay = portNumber > 0 ? portNumber.ToString() : "unknown";
-
         if (commandElement == null || string.IsNullOrWhiteSpace(commandElement.Value))
         {
-            result.AddError($"Port {portDisplay} in UUT '{uutId}': {sequenceType} sequence missing 'command' element");
+            result.AddError($"Port {portNumber} in UUT '{uutId}': {sequenceType} sequence missing 'command' element");
         }
 
         if (responseElement == null || string.IsNullOrWhiteSpace(responseElement.Value))
         {
-            result.AddError($"Port {portDisplay} in UUT '{uutId}': {sequenceType} sequence missing 'expected_response' element");
+            result.AddError($"Port {portNumber} in UUT '{uutId}': {sequenceType} sequence missing 'expected_response' element");
         }
 
         if (timeoutElement != null && !int.TryParse(timeoutElement.Value, out var timeout))
         {
-            result.AddError($"Port {portDisplay} in UUT '{uutId}': {sequenceType} sequence has invalid timeout value");
+            result.AddError($"Port {portNumber} in UUT '{uutId}': {sequenceType} sequence has invalid timeout value");
         }
     }
 
