@@ -3,11 +3,13 @@
 // File: SerialPortPool.Core/Services/BibWorkflowOrchestrator.cs
 // ENHANCEMENT: Uses DynamicPortMappingService instead of static mapping
 // SPRINT 10: Added Multi-BIB Implementation
+// SPRINT 12: Added Structured Logging (3 lines only)
 // ===================================================================
 
 using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
 using SerialPortPool.Core.Models;
+using SerialPortPool.Core.Services; // 🆕 SPRINT 12: For BibUutLogger extensions
 
 namespace SerialPortPool.Core.Services;
 
@@ -16,6 +18,7 @@ namespace SerialPortPool.Core.Services;
 /// ZERO TOUCH: Maintains existing interface, adds dynamic capabilities
 /// SMART: Automatically discovers and maps ports using EEPROM data
 /// SPRINT 10: Added Multi-BIB execution capabilities
+/// SPRINT 12: Added structured logging with minimal changes
 /// </summary>
 public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
 {
@@ -42,6 +45,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
     /// <summary>
     /// Execute complete BIB workflow: BIB.UUT.PORT → Protocol → 3-Phase Commands
     /// SPRINT 8 ENHANCED: Now uses dynamic port discovery
+    /// SPRINT 12 ENHANCED: Added structured logging
     /// </summary>
     public async Task<BibWorkflowResult> ExecuteBibWorkflowAsync(
         string bibId,
@@ -63,8 +67,14 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
         PortReservation? reservation = null;
         ProtocolSession? session = null;
 
+        // 🆕 SPRINT 12: Add structured logging (CHANGE 1/3)
+        var bibLogger = _logger.ForBibUut(bibId, uutId, portNumber);
+
         try
         {
+            // 🆕 SPRINT 12: Log workflow start (CHANGE 2/3)
+            bibLogger.LogBibExecution(LogLevel.Information, "🚀 WORKFLOW STARTING: {ClientId}", clientId);
+
             _logger.LogInformation($"🚀 SPRINT 8: Starting DYNAMIC BIB workflow: {bibId}.{uutId}.{portNumber} for client {clientId}");
 
             // Phase 1: Load BIB configuration from XML
@@ -112,6 +122,12 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
             workflowResult.Success = workflowResult.AllPhasesSuccessful();
             workflowResult.EndTime = DateTime.Now;
 
+            // 🆕 SPRINT 12: Log workflow completion with summary (CHANGE 3/3)
+            var totalCommands = portConfig.StartCommands.Commands.Count + 
+                               portConfig.TestCommands.Commands.Count + 
+                               portConfig.StopCommands.Commands.Count;
+            bibLogger.LogWorkflowSummary(workflowResult.Success, workflowResult.Duration, totalCommands);
+
             _logger.LogInformation($"✅ SPRINT 8: Dynamic BIB workflow completed: {workflowResult.BibId}.{workflowResult.UutId}.{workflowResult.PortNumber} " +
                                  $"(Success: {workflowResult.Success}, Port: {physicalPort}, Duration: {workflowResult.Duration.TotalSeconds:F1}s)");
 
@@ -121,6 +137,9 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
         {
             workflowResult.EndTime = DateTime.Now;
             var errorMessage = $"SPRINT 8: Dynamic BIB workflow failed: {ex.Message}";
+            
+            // 🆕 SPRINT 12: Enhanced error logging (BONUS CHANGE)
+            bibLogger.LogBibExecution(LogLevel.Critical, "💥 WORKFLOW EXCEPTION: {Error}", ex.Message);
             
             _logger.LogError(ex, $"❌ {errorMessage} (Workflow: {workflowResult.WorkflowId})");
             return workflowResult.WithError(errorMessage);
