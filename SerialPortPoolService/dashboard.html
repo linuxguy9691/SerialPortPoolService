@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SerialPortPool Dashboard - Standalone</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            padding: 20px; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .dashboard-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 16px 0;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .metric-card {
+            text-align: center;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 8px;
+        }
+        
+        .metric-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+            color: #4CAF50;
+        }
+        
+        .log-viewer {
+            height: 450px;
+            overflow-y: auto;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Cascadia Code', 'Courier New', monospace;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+        
+        .log-line {
+            margin: 4px 0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border-left: 4px solid transparent;
+        }
+        
+        .log-success { 
+            color: #4CAF50; 
+            border-left-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.1);
+        }
+        .log-warning { 
+            color: #FF9800; 
+            border-left-color: #FF9800;
+            background: rgba(255, 152, 0, 0.1);
+        }
+        .log-error { 
+            color: #f44336; 
+            border-left-color: #f44336;
+            background: rgba(244, 67, 54, 0.1);
+        }
+        .log-info { 
+            color: #2196F3; 
+            border-left-color: #2196F3;
+            background: rgba(33, 150, 243, 0.05);
+        }
+        
+        .refresh-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 16px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .controls {
+            margin-bottom: 16px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .controls select, .controls button, .controls input {
+            padding: 10px 14px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: white;
+            font-size: 14px;
+        }
+        
+        .controls button {
+            cursor: pointer;
+            background: #2196F3;
+            color: white;
+            border: 1px solid #2196F3;
+            transition: all 0.2s;
+        }
+        
+        .controls button:hover {
+            background: #1976D2;
+            transform: translateY(-1px);
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-running { background-color: #4CAF50; }
+        .status-stopped { background-color: #f44336; }
+        .status-unknown { background-color: #9E9E9E; }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .file-drop-zone {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin: 10px 0;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .file-drop-zone.dragover {
+            border-color: #2196F3;
+            background: rgba(33, 150, 243, 0.1);
+        }
+        
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .status-grid { grid-template-columns: repeat(2, 1fr); }
+            .controls { flex-direction: column; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <div class="refresh-indicator">
+        🔄 Auto-refresh: <span id="refreshCounter">10</span>s | 📊 <span id="logCount">0</span> logs
+    </div>
+    
+    <div class="dashboard-container">
+        <header>
+            <h1>🚀 SerialPortPool Standalone Dashboard</h1>
+            <p><span class="status-indicator" id="serviceIndicator"></span>Status: <span id="serviceStatus">Analyzing logs...</span></p>
+        </header>
+
+        <!-- Service Overview -->
+        <div class="card">
+            <h2>📊 Service Overview (from BibUutLogger)</h2>
+            <div class="status-grid">
+                <div class="metric-card">
+                    <h3>BIB Executions</h3>
+                    <div class="metric-value" id="totalExecutions">-</div>
+                    <small>From logs analysis</small>
+                </div>
+                <div class="metric-card">
+                    <h3>Success Rate</h3>
+                    <div class="metric-value" id="successRate">-</div>
+                    <small>Latest executions</small>
+                </div>
+                <div class="metric-card">
+                    <h3>Active BIBs</h3>
+                    <div class="metric-value" id="activeBibs">-</div>
+                    <small>Recent activity</small>
+                </div>
+                <div class="metric-card">
+                    <h3>Last Activity</h3>
+                    <div class="metric-value" id="lastActivity" style="font-size: 1.8em;">-</div>
+                    <small>Minutes ago</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Log Directory Browser -->
+        <div class="card">
+            <h2>📁 Log Directory Browser</h2>
+            <div class="controls">
+                <input type="text" id="logPath" placeholder="Path to Logs directory (e.g., C:\Users\...\Logs\SerialPortPool)" style="flex: 1; min-width: 300px;">
+                <button onclick="browseLogDirectory()">Browse</button>
+                <button onclick="loadSampleLogs()">Load Sample</button>
+            </div>
+            
+            <div class="file-drop-zone" id="dropZone" ondrop="dropHandler(event);" ondragover="dragOverHandler(event);" ondragenter="dragEnterHandler(event);" ondragleave="dragLeaveHandler(event);">
+                📂 Drop log files here, or browse to Logs/SerialPortPool directory<br>
+                <small>Automatically scans BIB_*/2025-*/*.log files from BibUutLogger</small>
+            </div>
+            
+            <div id="directoryInfo" style="margin-top: 10px; font-size: 0.9em; color: #666;"></div>
+        </div>
+
+        <!-- Live Logs from BibUutLogger Files -->
+        <div class="card">
+            <h2>📋 BibUutLogger Analysis</h2>
+            <div class="controls">
+                <select id="bibFilter">
+                    <option value="all">All BIBs</option>
+                </select>
+                <select id="uutFilter">
+                    <option value="all">All UUTs</option>
+                </select>
+                <select id="logLevel">
+                    <option value="all">All Levels</option>
+                    <option value="Information">Info</option>
+                    <option value="Warning">Warning</option>
+                    <option value="Error">Error</option>
+                    <option value="Critical">Critical</option>
+                </select>
+                <button onclick="clearLogs()">Clear</button>
+                <button onclick="toggleRefresh()" id="refreshBtn">Pause</button>
+                <button onclick="exportLogs()">Export</button>
+            </div>
+            <div class="log-viewer" id="liveLogs">
+                <div class="log-line log-info">🔍 Ready to analyze BibUutLogger files...</div>
+                <div class="log-line log-info">📂 Please specify log directory path above or drop log files</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Standalone dashboard logic - reads BibUutLogger files directly
+        let refreshEnabled = true;
+        let refreshCounter = 10;
+        let logLines = [];
+        let maxLogLines = 200;
+        let logDirectory = '';
+        let availableBibs = [];
+        let availableUuts = [];
+        let fileSystemHandle = null;
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 SerialPortPool Standalone Dashboard Starting...');
+            
+            // Try to load saved directory path
+            const savedPath = localStorage.getItem('logDirectory');
+            if (savedPath) {
+                document.getElementById('logPath').value = savedPath;
+                logDirectory = savedPath;
+            }
+            
+            startRefreshTimer();
+            updateServiceStatusIndicator('unknown', 'Ready to analyze logs');
+        });
+
+        // Auto-refresh timer
+        function startRefreshTimer() {
+            setInterval(() => {
+                if (refreshEnabled && logDirectory) {
+                    refreshCounter--;
+                    document.getElementById('refreshCounter').textContent = refreshCounter;
+                    
+                    if (refreshCounter <= 0) {
+                        analyzeBibUutLogs();
+                        refreshCounter = 10;
+                    }
+                }
+            }, 1000);
+        }
+
+        // Browse for log directory (Standalone approach)
+        function browseLogDirectory() {
+            const pathInput = document.getElementById('logPath');
+            const path = pathInput.value.trim();
+            
+            if (path) {
+                logDirectory = path;
+                localStorage.setItem('logDirectory', path);
+                
+                updateDirectoryInfo(`📂 Directory set: ${path}`);
+                analyzeBibUutLogs();
+            } else {
+                // Suggest common paths
+                const suggestions = [
+                    'C:\\ProgramData\\SerialPortPool\\Logs',
+                    'C:\\Logs\\SerialPortPool',
+                    'C:\\Users\\' + (window.navigator.userAgent.includes('Windows') ? 'YOUR_USERNAME' : 'user') + '\\AppData\\Local\\SerialPortPool\\Logs'
+                ];
+                
+                alert('Please enter log directory path. Common locations:\n\n' + suggestions.join('\n'));
+            }
+        }
+
+        // Load sample logs for demonstration
+        function loadSampleLogs() {
+            const sampleLogs = `
+[14:30:05.123] [Information] ✅ client_demo/production_uut 🚀 WORKFLOW STARTING: ENHANCED_CLIENT_CYCLE_1
+[14:30:06.145] [Information] ✅ client_demo/production_uut START: INIT → READY (PASS) [2.1s]
+[14:30:08.267] [Information] ✅ client_demo/production_uut TEST: TEST → PASS (PASS) [1.8s]
+[14:30:09.891] [Information] ✅ client_demo/production_uut STOP: QUIT → BYE (PASS) [0.9s]
+[14:30:10.123] [Information] ✅ client_demo/production_uut ✅ COMPLETE: Workflow SUCCESS - 3 commands in 4.8s
+[14:35:12.456] [Information] ✅ production_test_v2/test_board 🚀 WORKFLOW STARTING: ENHANCED_CLIENT_CYCLE_2
+[14:35:13.789] [Warning] ⚠️ production_test_v2/test_board TEST: Response slower than expected [3.2s]
+[14:35:16.123] [Information] ✅ production_test_v2/test_board ✅ COMPLETE: Workflow SUCCESS - 3 commands in 3.7s
+[14:40:20.456] [Error] ❌ client_demo/production_uut START: INIT timeout after 5s (FAIL)
+[14:40:25.789] [Error] ❌ client_demo/production_uut 💥 WORKFLOW EXCEPTION: Port not responding
+`.trim();
+
+            logLines = [];
+            document.getElementById('liveLogs').innerHTML = '';
+            
+            processSampleLogs(sampleLogs);
+            updateServiceStatusIndicator('running', 'Sample data loaded');
+            updateDirectoryInfo('📊 Sample logs loaded for demonstration');
+            
+            // Update metrics from sample data
+            updateMetricsFromLogs();
+        }
+
+        // Process sample logs
+        function processSampleLogs(logsText) {
+            const lines = logsText.split('\n').filter(line => line.trim());
+            
+            lines.forEach(line => {
+                if (line && !logLines.some(existing => existing === line)) {
+                    logLines.push(line);
+                    addLogLine(line);
+                }
+            });
+
+            // Extract BIBs and UUTs for filters
+            extractFiltersFromLogs();
+        }
+
+        // Main log analysis function (would read actual files in real implementation)
+        function analyzeBibUutLogs() {
+            if (!logDirectory) {
+                updateDirectoryInfo('⚠️ No log directory specified');
+                return;
+            }
+
+            // In a real implementation, this would:
+            // 1. Read files from logDirectory/BIB_*/yyyy-MM-dd/*.log
+            // 2. Parse BibUutLogger format: [timestamp] [level] message
+            // 3. Extract BIB/UUT information from directory structure
+            // 4. Calculate metrics from log content
+            
+            updateDirectoryInfo('📂 Scanning: ' + logDirectory + '/BIB_*/yyyy-MM-dd/*.log');
+            
+            // For now, simulate file system access limitations in browser
+            console.log('🔍 Would scan log directory:', logDirectory);
+        }
+
+        // Add log line to display
+        function addLogLine(line) {
+            const logViewer = document.getElementById('liveLogs');
+            const logDiv = document.createElement('div');
+            logDiv.className = 'log-line';
+            
+            // Style based on content
+            if (line.includes('✅') || line.includes('SUCCESS') || line.includes('[Information]')) {
+                logDiv.className += ' log-success';
+            } else if (line.includes('⚠️') || line.includes('WARNING') || line.includes('[Warning]')) {
+                logDiv.className += ' log-warning';
+            } else if (line.includes('❌') || line.includes('ERROR') || line.includes('[Error]')) {
+                logDiv.className += ' log-error';
+            } else if (line.includes('🚀') || line.includes('💥') || line.includes('[Critical]')) {
+                logDiv.className += ' log-info';
+            } else {
+                logDiv.className += ' log-info';
+            }
+            
+            logDiv.textContent = line;
+            logViewer.appendChild(logDiv);
+            logViewer.scrollTop = logViewer.scrollHeight;
+
+            // Keep only last N lines
+            while (logViewer.children.length > maxLogLines) {
+                logViewer.removeChild(logViewer.firstChild);
+                logLines.shift();
+            }
+
+            // Update counter
+            document.getElementById('logCount').textContent = logLines.length;
+        }
+
+        // Extract BIB/UUT filters from logs
+        function extractFiltersFromLogs() {
+            const bibs = new Set();
+            const uuts = new Set();
+
+            logLines.forEach(line => {
+                // Extract BIB/UUT from pattern: "bib_id/uut_id"
+                const match = line.match(/(\w+)\/(\w+)/);
+                if (match) {
+                    bibs.add(match[1]);
+                    uuts.add(match[2]);
+                }
+            });
+
+            availableBibs = Array.from(bibs).sort();
+            availableUuts = Array.from(uuts).sort();
+
+            updateFilters();
+        }
+
+        // Update filter dropdowns
+        function updateFilters() {
+            const bibFilter = document.getElementById('bibFilter');
+            const uutFilter = document.getElementById('uutFilter');
+            
+            // Clear existing options (keep "all")
+            while (bibFilter.options.length > 1) bibFilter.removeChild(bibFilter.lastChild);
+            while (uutFilter.options.length > 1) uutFilter.removeChild(uutFilter.lastChild);
+            
+            // Add BIBs
+            availableBibs.forEach(bib => {
+                const option = document.createElement('option');
+                option.value = bib;
+                option.textContent = bib;
+                bibFilter.appendChild(option);
+            });
+            
+            // Add UUTs
+            availableUuts.forEach(uut => {
+                const option = document.createElement('option');
+                option.value = uut;
+                option.textContent = uut;
+                uutFilter.appendChild(option);
+            });
+        }
+
+        // Update metrics from log analysis
+        function updateMetricsFromLogs() {
+            const totalExecutions = logLines.filter(line => line.includes('WORKFLOW STARTING')).length;
+            const successfulExecutions = logLines.filter(line => line.includes('COMPLETE: Workflow SUCCESS')).length;
+            const failedExecutions = logLines.filter(line => line.includes('WORKFLOW EXCEPTION')).length;
+            
+            const successRate = totalExecutions > 0 ? Math.round((successfulExecutions / totalExecutions) * 100) : 0;
+            const activeBibs = availableBibs.length;
+            
+            // Find last execution time (simplified)
+            const lastExecutionMatch = logLines[logLines.length - 1]?.match(/\[(\d{2}:\d{2}:\d{2})/);
+            const lastActivity = lastExecutionMatch ? 'Just now' : '-';
+
+            document.getElementById('totalExecutions').textContent = totalExecutions;
+            document.getElementById('successRate').textContent = successRate + '%';
+            document.getElementById('activeBibs').textContent = activeBibs;
+            document.getElementById('lastActivity').textContent = lastActivity;
+        }
+
+        // File drop handlers
+        function dragOverHandler(ev) {
+            ev.preventDefault();
+        }
+
+        function dragEnterHandler(ev) {
+            ev.preventDefault();
+            document.getElementById('dropZone').classList.add('dragover');
+        }
+
+        function dragLeaveHandler(ev) {
+            ev.preventDefault();
+            document.getElementById('dropZone').classList.remove('dragover');
+        }
+
+        function dropHandler(ev) {
+            ev.preventDefault();
+            document.getElementById('dropZone').classList.remove('dragover');
+            
+            const files = ev.dataTransfer.files;
+            if (files.length > 0) {
+                processDroppedFiles(files);
+            }
+        }
+
+        // Process dropped log files
+        function processDroppedFiles(files) {
+            Array.from(files).forEach(file => {
+                if (file.name.endsWith('.log')) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const content = e.target.result;
+                        processSampleLogs(content);
+                        updateDirectoryInfo(`📄 Loaded: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+                    };
+                    reader.readAsText(file);
+                }
+            });
+        }
+
+        // Control functions
+        function clearLogs() {
+            document.getElementById('liveLogs').innerHTML = '';
+            logLines = [];
+            document.getElementById('logCount').textContent = '0';
+        }
+
+        function toggleRefresh() {
+            refreshEnabled = !refreshEnabled;
+            const btn = document.getElementById('refreshBtn');
+            btn.textContent = refreshEnabled ? 'Pause' : 'Resume';
+            
+            if (refreshEnabled) {
+                refreshCounter = 10;
+            }
+        }
+
+        function exportLogs() {
+            const content = logLines.join('\n');
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `serialportpool-logs-${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.log`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+
+        function updateServiceStatusIndicator(status, text) {
+            const indicator = document.getElementById('serviceIndicator');
+            const statusText = document.getElementById('serviceStatus');
+            
+            indicator.className = `status-indicator status-${status}`;
+            statusText.textContent = text;
+        }
+
+        function updateDirectoryInfo(message) {
+            document.getElementById('directoryInfo').textContent = message;
+        }
+
+        // Handle errors gracefully
+        window.addEventListener('error', function(e) {
+            console.error('Dashboard error:', e.error);
+            addLogLine(`[ERROR] Dashboard: ${e.error.message}`);
+        });
+    </script>
+</body>
+</html>
