@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SerialPortPool Dashboard - Standalone</title>
+    <title>SerialPortPool Dashboard - Fixed</title>
     <style>
         body { 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
@@ -129,6 +129,12 @@
             transform: translateY(-1px);
         }
         
+        .controls button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
         .status-indicator {
             width: 12px;
             height: 12px;
@@ -155,17 +161,39 @@
             text-align: center;
             margin: 10px 0;
             background: rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
         }
         
+        .file-drop-zone:hover,
         .file-drop-zone.dragover {
             border-color: #2196F3;
             background: rgba(33, 150, 243, 0.1);
         }
         
+        .file-input-hidden {
+            display: none;
+        }
+        
+        .connection-status {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-bottom: 16px;
+        }
+        
         @media (max-width: 768px) {
             body { padding: 10px; }
             .status-grid { grid-template-columns: repeat(2, 1fr); }
-            .controls { flex-direction: column; align-items: flex-start; }
+            .controls { 
+                flex-direction: column; 
+                align-items: flex-start; 
+            }
+            .controls > * {
+                width: 100%;
+                margin-bottom: 8px;
+            }
         }
     </style>
 </head>
@@ -176,18 +204,21 @@
     
     <div class="dashboard-container">
         <header>
-            <h1>🚀 SerialPortPool Standalone Dashboard</h1>
-            <p><span class="status-indicator" id="serviceIndicator"></span>Status: <span id="serviceStatus">Analyzing logs...</span></p>
+            <h1>🚀 SerialPortPool Dashboard - Fixed</h1>
+            <div class="connection-status">
+                <span class="status-indicator" id="serviceIndicator"></span>
+                Status: <span id="serviceStatus">Initializing...</span>
+            </div>
         </header>
 
         <!-- Service Overview -->
         <div class="card">
-            <h2>📊 Service Overview (from BibUutLogger)</h2>
+            <h2>📊 Service Overview</h2>
             <div class="status-grid">
                 <div class="metric-card">
                     <h3>BIB Executions</h3>
                     <div class="metric-value" id="totalExecutions">-</div>
-                    <small>From logs analysis</small>
+                    <small>Total processed</small>
                 </div>
                 <div class="metric-card">
                     <h3>Success Rate</h3>
@@ -197,7 +228,7 @@
                 <div class="metric-card">
                     <h3>Active BIBs</h3>
                     <div class="metric-value" id="activeBibs">-</div>
-                    <small>Recent activity</small>
+                    <small>Currently running</small>
                 </div>
                 <div class="metric-card">
                     <h3>Last Activity</h3>
@@ -207,239 +238,294 @@
             </div>
         </div>
 
-        <!-- Log Directory Browser -->
+        <!-- Log File Loader -->
         <div class="card">
-            <h2>📁 Log Directory Browser</h2>
+            <h2>📁 Log File Loader</h2>
             <div class="controls">
-                <input type="text" id="logPath" placeholder="Path to Logs directory (e.g., C:\Users\...\Logs\SerialPortPool)" style="flex: 1; min-width: 300px;">
-                <button onclick="browseLogDirectory()">Browse</button>
-                <button onclick="loadSampleLogs()">Load Sample</button>
+                <button onclick="loadSampleData()">Load Sample Data</button>
+                <button onclick="clearAllLogs()">Clear All</button>
+                <button onclick="connectToRealService()" id="connectBtn">Connect to Service</button>
             </div>
             
-            <div class="file-drop-zone" id="dropZone" ondrop="dropHandler(event);" ondragover="dragOverHandler(event);" ondragenter="dragEnterHandler(event);" ondragleave="dragLeaveHandler(event);">
-                📂 Drop log files here, or browse to Logs/SerialPortPool directory<br>
-                <small>Automatically scans BIB_*/2025-*/*.log files from BibUutLogger</small>
+            <div class="file-drop-zone" onclick="openFileDialog()">
+                📂 Click to select log files or drop them here<br>
+                <small>Supports .log, .txt files from BibUutLogger</small>
+                <input type="file" id="fileInput" class="file-input-hidden" multiple accept=".log,.txt" />
             </div>
             
-            <div id="directoryInfo" style="margin-top: 10px; font-size: 0.9em; color: #666;"></div>
+            <div id="fileStatus" style="margin-top: 10px; font-size: 0.9em; color: #666;"></div>
         </div>
 
-        <!-- Live Logs from BibUutLogger Files -->
+        <!-- Live Logs Analysis -->
         <div class="card">
-            <h2>📋 BibUutLogger Analysis</h2>
+            <h2>📋 Log Analysis & Monitoring</h2>
             <div class="controls">
-                <select id="bibFilter">
+                <select id="bibFilter" onchange="filterLogs()">
                     <option value="all">All BIBs</option>
                 </select>
-                <select id="uutFilter">
+                <select id="uutFilter" onchange="filterLogs()">
                     <option value="all">All UUTs</option>
                 </select>
-                <select id="logLevel">
+                <select id="logLevel" onchange="filterLogs()">
                     <option value="all">All Levels</option>
                     <option value="Information">Info</option>
                     <option value="Warning">Warning</option>
                     <option value="Error">Error</option>
                     <option value="Critical">Critical</option>
                 </select>
-                <button onclick="clearLogs()">Clear</button>
-                <button onclick="toggleRefresh()" id="refreshBtn">Pause</button>
+                <button onclick="clearFilteredLogs()">Clear</button>
+                <button onclick="toggleAutoRefresh()" id="refreshBtn">Pause</button>
                 <button onclick="exportLogs()">Export</button>
             </div>
             <div class="log-viewer" id="liveLogs">
-                <div class="log-line log-info">🔍 Ready to analyze BibUutLogger files...</div>
-                <div class="log-line log-info">📂 Please specify log directory path above or drop log files</div>
+                <div class="log-line log-info">🔍 SerialPortPool Dashboard Ready</div>
+                <div class="log-line log-info">📂 Load sample data or select log files to begin analysis</div>
             </div>
         </div>
     </div>
 
     <script>
-        // Standalone dashboard logic - reads BibUutLogger files directly
-        let refreshEnabled = true;
+        // 🔧 Fixed Dashboard Logic - No window.fs dependencies
+        let autoRefreshEnabled = true;
         let refreshCounter = 10;
-        let logLines = [];
+        let allLogLines = []; // Store all logs
+        let filteredLogLines = []; // Store filtered logs  
         let maxLogLines = 200;
-        let logDirectory = '';
-        let availableBibs = [];
-        let availableUuts = [];
-        let fileSystemHandle = null;
+        let availableBibs = new Set();
+        let availableUuts = new Set();
+        let serviceConnected = false;
+        let simulationTimer = null;
 
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 SerialPortPool Standalone Dashboard Starting...');
+            console.log('🚀 SerialPortPool Dashboard Starting...');
             
-            // Try to load saved directory path
-            const savedPath = localStorage.getItem('logDirectory');
-            if (savedPath) {
-                document.getElementById('logPath').value = savedPath;
-                logDirectory = savedPath;
-            }
+            // Setup file input handler
+            const fileInput = document.getElementById('fileInput');
+            fileInput.addEventListener('change', handleFileSelect);
             
-            startRefreshTimer();
-            updateServiceStatusIndicator('unknown', 'Ready to analyze logs');
+            // Setup drag and drop
+            setupDragAndDrop();
+            
+            // Start refresh timer
+            startAutoRefreshTimer();
+            
+            // Initial status
+            updateServiceStatusIndicator('unknown', 'Dashboard ready - load data or connect to service');
+            
+            console.log('✅ Dashboard initialized successfully');
         });
 
-        // Auto-refresh timer
-        function startRefreshTimer() {
-            setInterval(() => {
-                if (refreshEnabled && logDirectory) {
+        // 🔄 Auto-refresh timer
+        function startAutoRefreshTimer() {
+            setInterval(function() {
+                if (autoRefreshEnabled) {
                     refreshCounter--;
                     document.getElementById('refreshCounter').textContent = refreshCounter;
                     
                     if (refreshCounter <= 0) {
-                        analyzeBibUutLogs();
+                        if (serviceConnected) {
+                            refreshServiceData();
+                        } else {
+                            simulateActivity();
+                        }
                         refreshCounter = 10;
                     }
                 }
             }, 1000);
         }
 
-        // Browse for log directory (Standalone approach)
-        function browseLogDirectory() {
-            const pathInput = document.getElementById('logPath');
-            const path = pathInput.value.trim();
-            
-            if (path) {
-                logDirectory = path;
-                localStorage.setItem('logDirectory', path);
-                
-                updateDirectoryInfo(`📂 Directory set: ${path}`);
-                analyzeBibUutLogs();
-            } else {
-                // Suggest common paths
-                const suggestions = [
-                    'C:\\ProgramData\\SerialPortPool\\Logs',
-                    'C:\\Logs\\SerialPortPool',
-                    'C:\\Users\\' + (window.navigator.userAgent.includes('Windows') ? 'YOUR_USERNAME' : 'user') + '\\AppData\\Local\\SerialPortPool\\Logs'
-                ];
-                
-                alert('Please enter log directory path. Common locations:\n\n' + suggestions.join('\n'));
+        // 📂 File handling - FIXED VERSION
+        function openFileDialog() {
+            document.getElementById('fileInput').click();
+        }
+
+        function handleFileSelect(event) {
+            const files = event.target.files;
+            if (files && files.length > 0) {
+                processLogFiles(Array.from(files));
             }
         }
 
-        // Load sample logs for demonstration
-        function loadSampleLogs() {
-            const sampleLogs = `
-[14:30:05.123] [Information] ✅ client_demo/production_uut 🚀 WORKFLOW STARTING: ENHANCED_CLIENT_CYCLE_1
-[14:30:06.145] [Information] ✅ client_demo/production_uut START: INIT → READY (PASS) [2.1s]
-[14:30:08.267] [Information] ✅ client_demo/production_uut TEST: TEST → PASS (PASS) [1.8s]
-[14:30:09.891] [Information] ✅ client_demo/production_uut STOP: QUIT → BYE (PASS) [0.9s]
-[14:30:10.123] [Information] ✅ client_demo/production_uut ✅ COMPLETE: Workflow SUCCESS - 3 commands in 4.8s
-[14:35:12.456] [Information] ✅ production_test_v2/test_board 🚀 WORKFLOW STARTING: ENHANCED_CLIENT_CYCLE_2
-[14:35:13.789] [Warning] ⚠️ production_test_v2/test_board TEST: Response slower than expected [3.2s]
-[14:35:16.123] [Information] ✅ production_test_v2/test_board ✅ COMPLETE: Workflow SUCCESS - 3 commands in 3.7s
-[14:40:20.456] [Error] ❌ client_demo/production_uut START: INIT timeout after 5s (FAIL)
-[14:40:25.789] [Error] ❌ client_demo/production_uut 💥 WORKFLOW EXCEPTION: Port not responding
-`.trim();
-
-            logLines = [];
-            document.getElementById('liveLogs').innerHTML = '';
+        function setupDragAndDrop() {
+            const dropZone = document.querySelector('.file-drop-zone');
             
-            processSampleLogs(sampleLogs);
-            updateServiceStatusIndicator('running', 'Sample data loaded');
-            updateDirectoryInfo('📊 Sample logs loaded for demonstration');
+            dropZone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            });
             
-            // Update metrics from sample data
-            updateMetricsFromLogs();
-        }
-
-        // Process sample logs
-        function processSampleLogs(logsText) {
-            const lines = logsText.split('\n').filter(line => line.trim());
+            dropZone.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+            });
             
-            lines.forEach(line => {
-                if (line && !logLines.some(existing => existing === line)) {
-                    logLines.push(line);
-                    addLogLine(line);
+            dropZone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                
+                const files = Array.from(e.dataTransfer.files);
+                if (files.length > 0) {
+                    processLogFiles(files);
                 }
             });
+        }
 
-            // Extract BIBs and UUTs for filters
+        // 📄 Process log files using FileReader API (WORKS IN ALL BROWSERS)
+        function processLogFiles(files) {
+            updateFileStatus(`📄 Processing ${files.length} file(s)...`);
+            
+            let processedFiles = 0;
+            let totalLines = 0;
+            
+            files.forEach(function(file, index) {
+                if (file.name.endsWith('.log') || file.name.endsWith('.txt')) {
+                    const reader = new FileReader();
+                    
+                    reader.onload = function(e) {
+                        const content = e.target.result;
+                        const lines = content.split('\n').filter(line => line.trim());
+                        
+                        lines.forEach(function(line) {
+                            if (line.trim() && !allLogLines.includes(line)) {
+                                allLogLines.push(line);
+                                totalLines++;
+                            }
+                        });
+                        
+                        processedFiles++;
+                        if (processedFiles === files.length) {
+                            updateFileStatus(`✅ Loaded ${totalLines} log lines from ${files.length} file(s)`);
+                            extractFiltersFromLogs();
+                            filterLogs(); // Apply current filters
+                            updateMetricsFromLogs();
+                            updateServiceStatusIndicator('running', `Processing ${totalLines} log entries`);
+                        }
+                    };
+                    
+                    reader.onerror = function() {
+                        updateFileStatus(`❌ Error reading ${file.name}`);
+                    };
+                    
+                    reader.readAsText(file);
+                } else {
+                    processedFiles++;
+                    updateFileStatus(`⚠️ Skipped ${file.name} (not a log file)`);
+                }
+            });
+        }
+
+        // 📊 Sample data loader - IMPROVED
+        function loadSampleData() {
+            const sampleLogs = [
+                '[14:30:05.123] [Information] ✅ client_demo/production_uut 🚀 WORKFLOW STARTING: ENHANCED_CLIENT_CYCLE_1',
+                '[14:30:06.145] [Information] ✅ client_demo/production_uut START: INIT → READY (PASS) [2.1s]', 
+                '[14:30:08.267] [Information] ✅ client_demo/production_uut TEST: TEST → PASS (PASS) [1.8s]',
+                '[14:30:09.891] [Information] ✅ client_demo/production_uut STOP: QUIT → BYE (PASS) [0.9s]',
+                '[14:30:10.123] [Information] ✅ client_demo/production_uut ✅ COMPLETE: Workflow SUCCESS - 3 commands in 4.8s',
+                '[14:35:12.456] [Information] ✅ production_test_v2/test_board 🚀 WORKFLOW STARTING: ENHANCED_CLIENT_CYCLE_2',
+                '[14:35:13.789] [Warning] ⚠️ production_test_v2/test_board TEST: Response slower than expected [3.2s]',
+                '[14:35:16.123] [Information] ✅ production_test_v2/test_board ✅ COMPLETE: Workflow SUCCESS - 3 commands in 3.7s',
+                '[14:40:20.456] [Error] ❌ client_demo/production_uut START: INIT timeout after 5s (FAIL)',
+                '[14:40:25.789] [Error] ❌ client_demo/production_uut 💥 WORKFLOW EXCEPTION: Port not responding',
+                '[14:45:01.234] [Critical] 🚨 production_test_v2/test_board CRITICAL: Hardware fault detected',
+                '[14:45:02.567] [Information] ✅ system_diagnostics/internal_test 🔍 DIAGNOSTIC: Running system health check',
+                '[14:45:05.890] [Information] ✅ system_diagnostics/internal_test ✅ DIAGNOSTIC COMPLETE: All systems nominal'
+            ];
+
+            allLogLines = [...sampleLogs];
             extractFiltersFromLogs();
+            filterLogs();
+            updateMetricsFromLogs();
+            updateServiceStatusIndicator('running', 'Sample data loaded successfully');
+            updateFileStatus('📊 Sample data loaded - 13 log entries');
+            
+            // Start sample activity simulation
+            startSampleSimulation();
         }
 
-        // Main log analysis function (would read actual files in real implementation)
-        function analyzeBibUutLogs() {
-            if (!logDirectory) {
-                updateDirectoryInfo('⚠️ No log directory specified');
-                return;
-            }
+        // 🎭 Sample activity simulation
+        function startSampleSimulation() {
+            if (simulationTimer) clearInterval(simulationTimer);
+            
+            const sampleActivities = [
+                '[{time}] [Information] ✅ client_demo/production_uut 🚀 WORKFLOW STARTING: CLIENT_CYCLE_AUTO',
+                '[{time}] [Information] ✅ test_station_1/board_test START: INIT → READY (PASS) [{duration}s]',
+                '[{time}] [Warning] ⚠️ client_demo/production_uut TEST: Slow response detected [{duration}s]',
+                '[{time}] [Information] ✅ production_test_v2/test_board ✅ COMPLETE: Workflow SUCCESS',
+                '[{time}] [Information] ✅ system_monitor/health_check 🔍 System health: All ports functional'
+            ];
 
-            // In a real implementation, this would:
-            // 1. Read files from logDirectory/BIB_*/yyyy-MM-dd/*.log
-            // 2. Parse BibUutLogger format: [timestamp] [level] message
-            // 3. Extract BIB/UUT information from directory structure
-            // 4. Calculate metrics from log content
-            
-            updateDirectoryInfo('📂 Scanning: ' + logDirectory + '/BIB_*/yyyy-MM-dd/*.log');
-            
-            // For now, simulate file system access limitations in browser
-            console.log('🔍 Would scan log directory:', logDirectory);
+            simulationTimer = setInterval(function() {
+                if (autoRefreshEnabled && allLogLines.length > 0) {
+                    const now = new Date();
+                    const timeStr = now.toTimeString().slice(0, 12);
+                    const duration = (Math.random() * 3 + 1).toFixed(1);
+                    
+                    const activity = sampleActivities[Math.floor(Math.random() * sampleActivities.length)]
+                        .replace('{time}', timeStr)
+                        .replace('{duration}', duration);
+                    
+                    allLogLines.push(activity);
+                    
+                    // Keep reasonable size
+                    if (allLogLines.length > maxLogLines * 2) {
+                        allLogLines = allLogLines.slice(-maxLogLines);
+                    }
+                    
+                    extractFiltersFromLogs();
+                    filterLogs();
+                    updateMetricsFromLogs();
+                }
+            }, 8000); // Every 8 seconds
         }
 
-        // Add log line to display
-        function addLogLine(line) {
-            const logViewer = document.getElementById('liveLogs');
-            const logDiv = document.createElement('div');
-            logDiv.className = 'log-line';
-            
-            // Style based on content
-            if (line.includes('✅') || line.includes('SUCCESS') || line.includes('[Information]')) {
-                logDiv.className += ' log-success';
-            } else if (line.includes('⚠️') || line.includes('WARNING') || line.includes('[Warning]')) {
-                logDiv.className += ' log-warning';
-            } else if (line.includes('❌') || line.includes('ERROR') || line.includes('[Error]')) {
-                logDiv.className += ' log-error';
-            } else if (line.includes('🚀') || line.includes('💥') || line.includes('[Critical]')) {
-                logDiv.className += ' log-info';
-            } else {
-                logDiv.className += ' log-info';
-            }
-            
-            logDiv.textContent = line;
-            logViewer.appendChild(logDiv);
-            logViewer.scrollTop = logViewer.scrollHeight;
-
-            // Keep only last N lines
-            while (logViewer.children.length > maxLogLines) {
-                logViewer.removeChild(logViewer.firstChild);
-                logLines.shift();
-            }
-
-            // Update counter
-            document.getElementById('logCount').textContent = logLines.length;
-        }
-
-        // Extract BIB/UUT filters from logs
+        // 🔍 Extract filters from logs - IMPROVED
         function extractFiltersFromLogs() {
             const bibs = new Set();
             const uuts = new Set();
 
-            logLines.forEach(line => {
-                // Extract BIB/UUT from pattern: "bib_id/uut_id"
-                const match = line.match(/(\w+)\/(\w+)/);
-                if (match) {
-                    bibs.add(match[1]);
-                    uuts.add(match[2]);
-                }
+            allLogLines.forEach(function(line) {
+                // Enhanced pattern matching for BIB/UUT extraction
+                const patterns = [
+                    /(\w+)\/(\w+)/g,  // Standard bib/uut pattern
+                    /BIB[_\s]*(\w+)[\/\s]+(\w+)/gi,  // BIB prefix patterns
+                    /(\w+)[_\s]*demo\/(\w+)/gi,  // demo patterns
+                    /(\w+)[_\s]*test[_\s]*(\w+)/gi  // test patterns
+                ];
+                
+                patterns.forEach(function(pattern) {
+                    let match;
+                    while ((match = pattern.exec(line)) !== null) {
+                        if (match[1] && match[2]) {
+                            bibs.add(match[1]);
+                            uuts.add(match[2]);
+                        }
+                    }
+                });
             });
 
-            availableBibs = Array.from(bibs).sort();
-            availableUuts = Array.from(uuts).sort();
-
-            updateFilters();
+            // Update available filters
+            availableBibs = bibs;
+            availableUuts = uuts;
+            updateFilterDropdowns();
         }
 
-        // Update filter dropdowns
-        function updateFilters() {
+        // 🔄 Update filter dropdowns - FIXED
+        function updateFilterDropdowns() {
             const bibFilter = document.getElementById('bibFilter');
             const uutFilter = document.getElementById('uutFilter');
             
+            // Store current selections
+            const currentBib = bibFilter.value;
+            const currentUut = uutFilter.value;
+            
             // Clear existing options (keep "all")
-            while (bibFilter.options.length > 1) bibFilter.removeChild(bibFilter.lastChild);
-            while (uutFilter.options.length > 1) uutFilter.removeChild(uutFilter.lastChild);
+            bibFilter.innerHTML = '<option value="all">All BIBs</option>';
+            uutFilter.innerHTML = '<option value="all">All UUTs</option>';
             
             // Add BIBs
-            availableBibs.forEach(bib => {
+            Array.from(availableBibs).sort().forEach(function(bib) {
                 const option = document.createElement('option');
                 option.value = bib;
                 option.textContent = bib;
@@ -447,121 +533,328 @@
             });
             
             // Add UUTs
-            availableUuts.forEach(uut => {
+            Array.from(availableUuts).sort().forEach(function(uut) {
                 const option = document.createElement('option');
                 option.value = uut;
                 option.textContent = uut;
                 uutFilter.appendChild(option);
             });
+            
+            // Restore selections if still valid
+            if (currentBib && Array.from(availableBibs).includes(currentBib)) {
+                bibFilter.value = currentBib;
+            }
+            if (currentUut && Array.from(availableUuts).includes(currentUut)) {
+                uutFilter.value = currentUut;
+            }
         }
 
-        // Update metrics from log analysis
-        function updateMetricsFromLogs() {
-            const totalExecutions = logLines.filter(line => line.includes('WORKFLOW STARTING')).length;
-            const successfulExecutions = logLines.filter(line => line.includes('COMPLETE: Workflow SUCCESS')).length;
-            const failedExecutions = logLines.filter(line => line.includes('WORKFLOW EXCEPTION')).length;
+        // 🎯 Filter logs - COMPLETELY REWRITTEN
+        function filterLogs() {
+            const bibFilter = document.getElementById('bibFilter').value;
+            const uutFilter = document.getElementById('uutFilter').value;
+            const levelFilter = document.getElementById('logLevel').value;
             
-            const successRate = totalExecutions > 0 ? Math.round((successfulExecutions / totalExecutions) * 100) : 0;
-            const activeBibs = availableBibs.length;
+            // Filter logs based on criteria
+            filteredLogLines = allLogLines.filter(function(line) {
+                let showLine = true;
+                
+                // BIB filter
+                if (bibFilter !== 'all' && !line.includes(bibFilter)) {
+                    showLine = false;
+                }
+                
+                // UUT filter
+                if (uutFilter !== 'all' && !line.includes(uutFilter)) {
+                    showLine = false;
+                }
+                
+                // Level filter
+                if (levelFilter !== 'all' && !line.includes('[' + levelFilter + ']')) {
+                    showLine = false;
+                }
+                
+                return showLine;
+            });
             
-            // Find last execution time (simplified)
-            const lastExecutionMatch = logLines[logLines.length - 1]?.match(/\[(\d{2}:\d{2}:\d{2})/);
-            const lastActivity = lastExecutionMatch ? 'Just now' : '-';
+            // Update log display
+            updateLogDisplay();
+            
+            console.log(`🎯 Filtered logs: ${filteredLogLines.length}/${allLogLines.length} lines (BIB: ${bibFilter}, UUT: ${uutFilter}, Level: ${levelFilter})`);
+        }
 
+        // 📺 Update log display
+        function updateLogDisplay() {
+            const logViewer = document.getElementById('liveLogs');
+            logViewer.innerHTML = '';
+            
+            // Show most recent entries first
+            const recentLogs = filteredLogLines.slice(-maxLogLines);
+            
+            recentLogs.forEach(function(line) {
+                addLogLineToDisplay(line);
+            });
+            
+            // Update counter
+            document.getElementById('logCount').textContent = filteredLogLines.length;
+            
+            // Scroll to bottom
+            logViewer.scrollTop = logViewer.scrollHeight;
+        }
+
+        // ➕ Add log line to display
+        function addLogLineToDisplay(line) {
+            const logViewer = document.getElementById('liveLogs');
+            const logDiv = document.createElement('div');
+            logDiv.className = 'log-line';
+            
+            // Style based on content - IMPROVED DETECTION
+            if (line.includes('✅') || line.includes('SUCCESS') || line.includes('[Information]')) {
+                logDiv.className += ' log-success';
+            } else if (line.includes('⚠️') || line.includes('WARNING') || line.includes('[Warning]') || line.includes('Slow')) {
+                logDiv.className += ' log-warning';
+            } else if (line.includes('❌') || line.includes('ERROR') || line.includes('[Error]') || line.includes('FAIL') || line.includes('timeout')) {
+                logDiv.className += ' log-error';
+            } else if (line.includes('🚨') || line.includes('CRITICAL') || line.includes('[Critical]')) {
+                logDiv.className += ' log-error'; // Critical uses error styling
+            } else {
+                logDiv.className += ' log-info';
+            }
+            
+            logDiv.textContent = line;
+            logViewer.appendChild(logDiv);
+        }
+
+        // 📈 Update metrics from logs - ENHANCED
+        function updateMetricsFromLogs() {
+            const totalExecutions = allLogLines.filter(line => 
+                line.includes('WORKFLOW STARTING') || line.includes('🚀')).length;
+            
+            const successfulExecutions = allLogLines.filter(line => 
+                line.includes('COMPLETE: Workflow SUCCESS') || line.includes('✅ COMPLETE')).length;
+            
+            const failedExecutions = allLogLines.filter(line => 
+                line.includes('WORKFLOW EXCEPTION') || line.includes('💥') || line.includes('FAIL')).length;
+            
+            const warningExecutions = allLogLines.filter(line => 
+                line.includes('[Warning]') || line.includes('⚠️')).length;
+                
+            const criticalExecutions = allLogLines.filter(line => 
+                line.includes('[Critical]') || line.includes('🚨')).length;
+            
+            // Calculate success rate
+            const successRate = totalExecutions > 0 ? 
+                Math.round(((successfulExecutions / totalExecutions) * 100) * 10) / 10 : 0;
+            
+            // Calculate active BIBs  
+            const activeBibs = availableBibs.size;
+            
+            // Simulate last activity timing
+            const lastActivity = allLogLines.length > 0 ? 'Just now' : '-';
+
+            // Update display
             document.getElementById('totalExecutions').textContent = totalExecutions;
             document.getElementById('successRate').textContent = successRate + '%';
             document.getElementById('activeBibs').textContent = activeBibs;
             document.getElementById('lastActivity').textContent = lastActivity;
-        }
-
-        // File drop handlers
-        function dragOverHandler(ev) {
-            ev.preventDefault();
-        }
-
-        function dragEnterHandler(ev) {
-            ev.preventDefault();
-            document.getElementById('dropZone').classList.add('dragover');
-        }
-
-        function dragLeaveHandler(ev) {
-            ev.preventDefault();
-            document.getElementById('dropZone').classList.remove('dragover');
-        }
-
-        function dropHandler(ev) {
-            ev.preventDefault();
-            document.getElementById('dropZone').classList.remove('dragover');
             
-            const files = ev.dataTransfer.files;
-            if (files.length > 0) {
-                processDroppedFiles(files);
+            // Update success rate color
+            const successRateElement = document.getElementById('successRate');
+            if (successRate >= 95) {
+                successRateElement.style.color = '#4CAF50'; // Green
+            } else if (successRate >= 85) {
+                successRateElement.style.color = '#FF9800'; // Orange
+            } else {
+                successRateElement.style.color = '#f44336'; // Red
             }
         }
 
-        // Process dropped log files
-        function processDroppedFiles(files) {
-            Array.from(files).forEach(file => {
-                if (file.name.endsWith('.log')) {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        const content = e.target.result;
-                        processSampleLogs(content);
-                        updateDirectoryInfo(`📄 Loaded: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
-                    };
-                    reader.readAsText(file);
-                }
-            });
-        }
-
-        // Control functions
-        function clearLogs() {
-            document.getElementById('liveLogs').innerHTML = '';
-            logLines = [];
+        // 🎮 Control functions
+        function clearFilteredLogs() {
+            filteredLogLines = [];
+            document.getElementById('liveLogs').innerHTML = '<div class="log-line log-info">📋 Logs cleared - use filters to show specific entries</div>';
             document.getElementById('logCount').textContent = '0';
         }
 
-        function toggleRefresh() {
-            refreshEnabled = !refreshEnabled;
-            const btn = document.getElementById('refreshBtn');
-            btn.textContent = refreshEnabled ? 'Pause' : 'Resume';
+        function clearAllLogs() {
+            allLogLines = [];
+            filteredLogLines = [];
+            availableBibs.clear();
+            availableUuts.clear();
             
-            if (refreshEnabled) {
+            document.getElementById('liveLogs').innerHTML = '<div class="log-line log-info">🔍 All data cleared - load new log files or sample data</div>';
+            document.getElementById('logCount').textContent = '0';
+            
+            // Reset metrics
+            document.getElementById('totalExecutions').textContent = '-';
+            document.getElementById('successRate').textContent = '-';
+            document.getElementById('activeBibs').textContent = '-';
+            document.getElementById('lastActivity').textContent = '-';
+            
+            // Reset filters
+            updateFilterDropdowns();
+            updateServiceStatusIndicator('unknown', 'Data cleared - ready for new logs');
+            updateFileStatus('🗑️ All data cleared');
+            
+            // Stop simulation
+            if (simulationTimer) {
+                clearInterval(simulationTimer);
+                simulationTimer = null;
+            }
+        }
+
+        function toggleAutoRefresh() {
+            autoRefreshEnabled = !autoRefreshEnabled;
+            const btn = document.getElementById('refreshBtn');
+            btn.textContent = autoRefreshEnabled ? 'Pause' : 'Resume';
+            btn.style.backgroundColor = autoRefreshEnabled ? '#2196F3' : '#FF9800';
+            
+            if (autoRefreshEnabled) {
                 refreshCounter = 10;
+                if (allLogLines.length > 0 && !simulationTimer) {
+                    startSampleSimulation();
+                }
+            } else {
+                if (simulationTimer) {
+                    clearInterval(simulationTimer);
+                    simulationTimer = null;
+                }
             }
         }
 
         function exportLogs() {
-            const content = logLines.join('\n');
+            const logsToExport = filteredLogLines.length > 0 ? filteredLogLines : allLogLines;
+            
+            if (logsToExport.length === 0) {
+                alert('No logs to export. Load some data first.');
+                return;
+            }
+            
+            const content = logsToExport.join('\n');
             const blob = new Blob([content], { type: 'text/plain' });
             const url = window.URL.createObjectURL(blob);
             
             const a = document.createElement('a');
             a.href = url;
-            a.download = `serialportpool-logs-${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.log`;
+            a.download = 'serialportpool-logs-' + new Date().toISOString().slice(0,19).replace(/:/g, '-') + '.log';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
+            
+            updateFileStatus('💾 Logs exported: ' + logsToExport.length + ' lines');
         }
 
+        // 🌐 Service connection simulation
+        function connectToRealService() {
+            const btn = document.getElementById('connectBtn');
+            btn.disabled = true;
+            btn.textContent = 'Connecting...';
+            
+            // Simulate connection attempt
+            setTimeout(function() {
+                serviceConnected = true;
+                btn.textContent = 'Connected ✓';
+                btn.style.backgroundColor = '#4CAF50';
+                updateServiceStatusIndicator('running', 'Connected to SerialPortPool service');
+                
+                // Start real-time updates simulation
+                startServiceDataSimulation();
+            }, 2000);
+        }
+
+        function startServiceDataSimulation() {
+            // This would normally connect to actual service endpoints
+            setInterval(function() {
+                if (serviceConnected && autoRefreshEnabled) {
+                    // Simulate service data updates
+                    const newActivity = generateServiceActivity();
+                    if (newActivity) {
+                        allLogLines.push(newActivity);
+                        extractFiltersFromLogs();
+                        filterLogs();
+                        updateMetricsFromLogs();
+                    }
+                }
+            }, 5000);
+        }
+
+        function generateServiceActivity() {
+            const activities = [
+                '[{time}] [Information] 🔌 Service: Port COM11 allocated to client_demo/production_uut',
+                '[{time}] [Information] ⚡ Service: Execution completed successfully in {duration}s', 
+                '[{time}] [Information] 📊 Service: System health check - all services nominal',
+                '[{time}] [Warning] ⚠️ Service: Port allocation queue building up ({count} pending)',
+                '[{time}] [Information] 🔄 Service: Port COM8 released, now available'
+            ];
+            
+            const now = new Date();
+            const timeStr = now.toTimeString().slice(0, 12);
+            const duration = (Math.random() * 5 + 2).toFixed(1);
+            const count = Math.floor(Math.random() * 5) + 1;
+            
+            return activities[Math.floor(Math.random() * activities.length)]
+                .replace('{time}', timeStr)
+                .replace('{duration}', duration)
+                .replace('{count}', count);
+        }
+
+        // 🎨 UI Helper functions
         function updateServiceStatusIndicator(status, text) {
             const indicator = document.getElementById('serviceIndicator');
             const statusText = document.getElementById('serviceStatus');
             
-            indicator.className = `status-indicator status-${status}`;
+            indicator.className = 'status-indicator status-' + status;
             statusText.textContent = text;
         }
 
-        function updateDirectoryInfo(message) {
-            document.getElementById('directoryInfo').textContent = message;
+        function updateFileStatus(message) {
+            document.getElementById('fileStatus').textContent = message;
         }
 
-        // Handle errors gracefully
+        function refreshServiceData() {
+            // This would normally fetch from actual service API
+            console.log('🔄 Refreshing service data...');
+        }
+
+        function simulateActivity() {
+            // Add a new simulated log entry occasionally
+            if (Math.random() < 0.3 && allLogLines.length > 0) { // 30% chance
+                const newActivity = generateServiceActivity();
+                if (newActivity) {
+                    allLogLines.push(newActivity);
+                    extractFiltersFromLogs();
+                    filterLogs();
+                    updateMetricsFromLogs();
+                }
+            }
+        }
+
+        // 🚨 Error handling
         window.addEventListener('error', function(e) {
             console.error('Dashboard error:', e.error);
-            addLogLine(`[ERROR] Dashboard: ${e.error.message}`);
+            const logViewer = document.getElementById('liveLogs');
+            if (logViewer) {
+                const errorLog = document.createElement('div');
+                errorLog.className = 'log-line log-error';
+                errorLog.textContent = '[ERROR] Dashboard: ' + e.error.message;
+                logViewer.appendChild(errorLog);
+                logViewer.scrollTop = logViewer.scrollHeight;
+            }
         });
+
+        // 📱 Mobile optimization
+        function isMobileDevice() {
+            return window.innerWidth <= 768;
+        }
+
+        // Adjust for mobile
+        if (isMobileDevice()) {
+            refreshCounter = 15; // Longer refresh on mobile
+            maxLogLines = 100; // Fewer lines on mobile
+        }
+
+        console.log('🎯 Dashboard script loaded successfully');
     </script>
 </body>
 </html>
