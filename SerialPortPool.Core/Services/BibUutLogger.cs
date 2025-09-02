@@ -1,8 +1,8 @@
 // ===================================================================
-// SPRINT 12: BibUutLogger - Enhanced Structured Logging
+// SPRINT 12 FIX: BibUutLogger - Corrected Format String Issue
 // File: SerialPortPool.Core/Services/BibUutLogger.cs
-// Purpose: BIB/UUT specific logging with automatic file organization
-// STRATEGY: ADDITIVE - compose with existing loggers, zero touch
+// Purpose: Fix regression in string formatting that broke XML interpretation
+// ISSUE: Incompatible format strings between logging calls and string.Format
 // ===================================================================
 
 using Microsoft.Extensions.Logging;
@@ -10,9 +10,9 @@ using Microsoft.Extensions.Logging;
 namespace SerialPortPool.Core.Services;
 
 /// <summary>
-/// SPRINT 12: Enhanced logger providing BIB/UUT specific logging
+/// SPRINT 12 FIXED: Enhanced logger providing BIB/UUT specific logging
+/// REGRESSION FIX: Corrected string formatting compatibility issue
 /// ZERO TOUCH: Composes with existing ILogger without modification
-/// IMMEDIATE VALUE: Structured logs for better troubleshooting
 /// </summary>
 public class BibUutLogger
 {
@@ -34,18 +34,94 @@ public class BibUutLogger
 
     /// <summary>
     /// Log BIB execution event with structured output
+    /// FIXED: Corrected string formatting compatibility issue
     /// DUAL OUTPUT: Service log (existing) + BIB-specific log (new)
     /// </summary>
     public void LogBibExecution(LogLevel level, string message, params object[] args)
     {
-        var formattedMessage = args.Any() ? string.Format(message, args) : message;
+        string formattedMessage;
+        
+        try
+        {
+            // SPRINT 12 FIX: Handle both indexed ({0}) and named ({ClientId}) format strings
+            if (args.Any())
+            {
+                // Try Microsoft.Extensions.Logging format first (supports named placeholders)
+                // The service logger will handle the actual formatting properly
+                formattedMessage = message; // Keep original for service logger
+                
+                // For our local logging, create a safe version
+                // Replace named placeholders with indexed ones for string.Format compatibility
+                var safeMessage = ConvertToIndexedFormat(message, args.Length);
+                formattedMessage = string.Format(safeMessage, args);
+            }
+            else
+            {
+                formattedMessage = message;
+            }
+        }
+        catch (FormatException ex)
+        {
+            // DEFENSIVE: If formatting fails, log the error and use original message
+            _serviceLogger.LogError(ex, "Format error in BibUutLogger for {BibId}/{UutId}: {Message}", _bibId, _uutId, message);
+            formattedMessage = $"{message} [FORMAT_ERROR: {string.Join(", ", args)}]";
+        }
+        
         var timestamp = DateTime.Now;
         
-        // ✅ EXISTING: Continue using service logger (ZERO TOUCH)
-        _serviceLogger.Log(level, "[{BibId}/{UutId}] {Message}", _bibId, _uutId, formattedMessage);
+        // ✅ EXISTING: Continue using service logger (ZERO TOUCH) 
+        // Service logger handles named placeholders correctly
+        _serviceLogger.Log(level, "[{BibId}/{UutId}] " + message, _bibId, _uutId, args);
         
-        // 🆕 NEW: Add structured BIB-specific logging
+        // 🆕 NEW: Add structured BIB-specific logging with safe formatted message
         WriteStructuredBibLog(level, formattedMessage, timestamp);
+    }
+
+    /// <summary>
+    /// SPRINT 12 FIX: Convert named placeholders to indexed format for string.Format
+    /// Handles common patterns like {ClientId} -> {0}, {Error} -> {1}, etc.
+    /// </summary>
+    private string ConvertToIndexedFormat(string message, int argCount)
+    {
+        var result = message;
+        
+        // Common named placeholders to indexed conversion
+        var commonPatterns = new Dictionary<string, int>
+        {
+            {"{ClientId}", 0},
+            {"{Error}", 0},
+            {"{Message}", 0},
+            {"{Duration}", 0},
+            {"{Command}", 0},
+            {"{Response}", 0},
+            {"{Phase}", 0}
+        };
+        
+        var index = 0;
+        foreach (var pattern in commonPatterns.Keys)
+        {
+            if (result.Contains(pattern) && index < argCount)
+            {
+                result = result.Replace(pattern, $"{{{index}}}");
+                index++;
+                break; // Only replace the first pattern found
+            }
+        }
+        
+        // Fallback: If no known patterns, assume it's meant to be {0}
+        if (result.Contains("{") && !result.Contains("{0}") && argCount > 0)
+        {
+            // Find all {name} patterns and replace with {0}, {1}, etc.
+            var regex = new System.Text.RegularExpressions.Regex(@"\{[^}]+\}");
+            var matches = regex.Matches(result);
+            
+            for (int i = 0; i < matches.Count && i < argCount; i++)
+            {
+                result = result.Replace(matches[i].Value, $"{{{i}}}");
+            }
+        }
+        
+        return result;
     }
 
     /// <summary>
