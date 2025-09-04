@@ -1,439 +1,255 @@
-# 🚀 SPRINT 13 - Real Hardware BitBang GPIO Integration
+# 🚀 SPRINT 13 - Real Industrial Multi-BIB System with Hot-Add XML
 
 **Sprint Period:** September 8-22, 2025  
-**Phase:** Hardware-Triggered Workflow Control + GPIO Integration  
-**Status:** CLIENT PRIORITY - REAL HARDWARE CONTROL  
+**Phase:** Production-Ready Hot-Plug Multi-BIB System + XML-Driven Simulation  
+**Status:** CLIENT PRIORITY - THE REAL INDUSTRIAL THING  
 
 ---
 
-## 📋 Sprint 13 Overview - HARDWARE-FIRST APPROACH
+## 📋 Sprint 13 Overview - REAL INDUSTRIAL SYSTEM
 
-**Mission:** Real FT4232HA BitBang GPIO Integration with Hardware-Triggered Start/Stop Control
+**Mission:** Production-Ready Multi-BIB System with Hot-Add XML Configuration + Async Simulation
 
-**CLIENT NEW PRIORITY:** ✅ **HARDWARE CONTROL FOUNDATION**  
-- Real GPIO monitoring for workflow start/stop triggers
-- Command line simulation for testing without hardware  
-- XML-based critical condition configuration
-- Critical validation → Hardware GPIO signal output
-- Return to original service behavior patterns
+**CLIENT VISION:** ✅ **THE REAL INDUSTRIAL THING**  
+- Service starts with **ZERO XML** and runs idle
+- Hot-add XML files → Automatic BIB detection and activation
+- Multiple BIBs running **independently and asynchronously**  
+- XML-driven simulation with **per-BIB timing and patterns**
+- BitBang GPIO integration (real hardware or XML simulation)
+- **No service restart** - Everything dynamic and live
 
 **SPRINT 13 FOCUS:**
-- 🔌 **Real GPIO Input Monitoring** - Start/Stop triggered by hardware signals
-- 💻 **Command Line Simulation** - `-simStart`, `-simStop` for testing
-- 🚨 **Critical Validation → GPIO Output** - XML config + DD2 hardware signal
-- 📡 **FT4232HA Integration** - Real FTD2XX_NET implementation
-- 🔄 **Original Service Behavior** - Restore first commit patterns
+- 🔄 **Hot-Add XML Detection** - FileSystemWatcher for live XML addition
+- 🎭 **XML-Driven Simulation** - Per-BIB async simulation with custom timing
+- 🔌 **Multi-BIB GPIO Integration** - Independent BitBang per BIB (if hardware available)
+- 📊 **Zero-Restart Operations** - Add/remove BIBs without service disruption
+- 🏭 **Industrial-Grade Architecture** - Production-ready multi-equipment management
 
 **CORE PHILOSOPHY:** 
-- Hardware foundation first - establish real GPIO control before advanced features
-- Simulation capability for development and testing without physical hardware
-- Critical conditions must trigger actual hardware responses
-- Return to original service architecture and behavior
+- Start minimal, grow dynamically - Service boots with zero config
+- Hot-plug everything - XML files, BIB configurations, simulation scenarios
+- Asynchronous independence - Each BIB operates on its own schedule
+- Production-ready reliability - No crashes, graceful error handling
 
 ---
 
-## 🎯 Sprint 13 Core Objectives - HARDWARE INTEGRATION
+## 🎯 Sprint 13 Core Objectives - INDUSTRIAL SYSTEM
 
-### **🔌 OBJECTIVE 1: Real GPIO Input Monitoring (Priority 1)**
-**Priority:** ⭐ **HIGHEST** | **Effort:** 4-5 hours | **Status:** HARDWARE-TRIGGERED WORKFLOWS
+### **🔄 OBJECTIVE 1: Hot-Add XML Configuration System (Priority 1)**
+**Priority:** ⭐ **HIGHEST** | **Effort:** 4-5 hours | **Status:** ZERO-CONFIG STARTUP + LIVE DETECTION
 
-**FT4232HA Port D GPIO Implementation:**
+**Zero-XML Startup + Dynamic Loading:**
 ```csharp
-// ✅ Real FTD2XX_NET GPIO monitoring implementation
-public class RealFtdiBitBangProvider : IBitBangProtocolProvider
+// ✅ Service starts with zero XML files and runs idle
+public class DynamicBibConfigurationService
 {
-    private FTDI _ftdiDevice = new FTDI();
-    private const string FT4232H_SERIAL = "FT9A9OFO"; // Client hardware
-    private CancellationTokenSource _monitoringCancellation;
-    private Task _monitoringTask;
+    private readonly FileSystemWatcher _xmlWatcher;
+    private readonly ConcurrentDictionary<string, BibInstance> _activeBibs = new();
+    private readonly string _configurationPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Configuration");
     
-    // ✅ Port D Pin Mapping (from hardware spec)
-    private const int POWER_ON_READY_BIT = 0;    // DD0 (CN3-17) - START trigger
-    private const int POWER_DOWN_HEADS_UP_BIT = 1; // DD1 (CN3-16) - STOP trigger  
-    private const int CRITICAL_FAIL_BIT = 2;     // DD2 (CN3-15) - Critical output
-    private const int WORKFLOW_ACTIVE_BIT = 3;   // DD3 (CN3-14) - Status output
-    
-    public async Task InitializeAsync(BitBangConfiguration config)
+    public async Task StartAsync()
     {
-        _logger.LogInformation("🔌 Initializing FT4232HA Port D GPIO...");
+        _logger.LogInformation("🚀 Starting Dynamic BIB Configuration Service");
         
-        // ✅ Open Port D (interface index 3 for FT4232H)
-        var status = _ftdiDevice.OpenByIndex(3);
-        if (status != FTDI.FT_STATUS.FT_OK)
-            throw new FtdiException($"Failed to open Port D: {status}", config.SerialNumber);
+        // ✅ Create configuration directory if it doesn't exist
+        Directory.CreateDirectory(_configurationPath);
         
-        // ✅ Configure for async bit-bang mode
-        status = _ftdiDevice.SetBaudRate(62500); // 1MHz actual rate (62500 × 16)
-        status |= _ftdiDevice.SetBitMode(0x00, FTDI.FT_BIT_MODES.FT_BIT_MODE_RESET);
-        await Task.Delay(50); // Critical delay for mode reset
+        // ✅ Scan for existing XML files on startup
+        await ScanForExistingXmlFilesAsync();
         
-        // ✅ Direction mask: DD0,DD1 = inputs, DD2,DD3 = outputs
-        status |= _ftdiDevice.SetBitMode(0x0C, FTDI.FT_BIT_MODES.FT_BIT_MODE_ASYNC_BITBANG);
+        // ✅ Start FileSystemWatcher for hot-add detection
+        StartXmlFileMonitoring();
         
-        if (status != FTDI.FT_STATUS.FT_OK)
-            throw new FtdiException($"Failed to configure bit-bang mode: {status}");
-        
-        _logger.LogInformation("✅ FT4232HA Port D GPIO initialized successfully");
-        
-        // ✅ Start continuous input monitoring
-        StartInputMonitoring();
+        _logger.LogInformation("✅ Dynamic BIB Service ready - monitoring {Path} for XML files", _configurationPath);
     }
     
-    private void StartInputMonitoring()
+    private void StartXmlFileMonitoring()
     {
-        _monitoringCancellation = new CancellationTokenSource();
-        _monitoringTask = Task.Run(async () =>
+        _xmlWatcher = new FileSystemWatcher(_configurationPath, "*.xml")
         {
-            _logger.LogInformation("🔍 Starting GPIO input monitoring...");
-            
-            bool lastPowerOnReady = false;
-            bool lastPowerDownHeadsUp = false;
-            
-            while (!_monitoringCancellation.Token.IsCancellationRequested)
-            {
-                try
-                {
-                    var currentState = await ReadGpioInputsAsync();
-                    
-                    // ✅ Detect POWER ON READY rising edge (START trigger)
-                    if (currentState.PowerOnReady && !lastPowerOnReady)
-                    {
-                        _logger.LogInformation("🚀 GPIO TRIGGER: Power On Ready detected - triggering workflow START");
-                        await TriggerWorkflowStartAsync();
-                    }
-                    
-                    // ✅ Detect POWER DOWN HEADS-UP rising edge (STOP trigger)
-                    if (currentState.PowerDownHeadsUp && !lastPowerDownHeadsUp)
-                    {
-                        _logger.LogWarning("⚠️ GPIO TRIGGER: Power Down Heads-Up detected - triggering workflow STOP");
-                        await TriggerWorkflowStopAsync();
-                    }
-                    
-                    lastPowerOnReady = currentState.PowerOnReady;
-                    lastPowerDownHeadsUp = currentState.PowerDownHeadsUp;
-                    
-                    // ✅ Configurable polling interval (default 100ms from spec)
-                    await Task.Delay(100, _monitoringCancellation.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "❌ GPIO monitoring error - continuing...");
-                    await Task.Delay(1000); // Error recovery delay
-                }
-            }
-            
-            _logger.LogInformation("🔍 GPIO input monitoring stopped");
-        });
-    }
-    
-    private async Task<BitBangInputState> ReadGpioInputsAsync()
-    {
-        uint bytesRead = 0;
-        byte[] buffer = new byte[1];
-        
-        var status = _ftdiDevice.Read(buffer, 1, ref bytesRead);
-        if (status != FTDI.FT_STATUS.FT_OK || bytesRead == 0)
-            throw new FtdiException($"GPIO read failed: {status}");
-        
-        byte rawValue = buffer[0];
-        
-        return new BitBangInputState
-        {
-            PowerOnReady = (rawValue & (1 << POWER_ON_READY_BIT)) != 0,
-            PowerDownHeadsUp = (rawValue & (1 << POWER_DOWN_HEADS_UP_BIT)) != 0,
-            RawInputValue = rawValue,
-            Timestamp = DateTime.Now
+            NotifyFilter = NotifyFilters.CreationTime | NotifyFilters.LastWrite | NotifyFilters.FileName,
+            EnableRaisingEvents = true
         };
+        
+        // ✅ Hot-add XML file detection
+        _xmlWatcher.Created += async (s, e) => await OnXmlFileCreatedAsync(e.FullPath);
+        _xmlWatcher.Changed += async (s, e) => await OnXmlFileChangedAsync(e.FullPath);
+        _xmlWatcher.Deleted += async (s, e) => await OnXmlFileDeletedAsync(e.FullPath);
+        
+        _logger.LogInformation("🔍 Started XML file monitoring - ready for hot-add");
     }
     
-    // ✅ Critical fail signal output (CLIENT REQUIREMENT)
-    public async Task SetCriticalFailSignalAsync(bool state)
-    {
-        var currentOutput = await ReadCurrentOutputState();
-        byte newOutput = state 
-            ? (byte)(currentOutput | (1 << CRITICAL_FAIL_BIT))
-            : (byte)(currentOutput & ~(1 << CRITICAL_FAIL_BIT));
-        
-        uint bytesWritten = 0;
-        var status = _ftdiDevice.Write(new byte[] { newOutput }, 1, ref bytesWritten);
-        
-        if (status != FTDI.FT_STATUS.FT_OK)
-            throw new FtdiException($"Failed to set critical fail signal: {status}");
-        
-        _logger.LogCritical("🚨 CRITICAL FAIL SIGNAL: {State} via GPIO DD2", state ? "ACTIVE" : "CLEARED");
-        
-        // ✅ Auto-clear after configured time (default 2s from spec)
-        if (state)
-        {
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay(TimeSpan.FromSeconds(2));
-                await SetCriticalFailSignalAsync(false);
-            });
-        }
-    }
-    
-    // ✅ Workflow active signal for status indication
-    public async Task SetWorkflowActiveSignalAsync(bool state)
-    {
-        var currentOutput = await ReadCurrentOutputState();
-        byte newOutput = state 
-            ? (byte)(currentOutput | (1 << WORKFLOW_ACTIVE_BIT))
-            : (byte)(currentOutput & ~(1 << WORKFLOW_ACTIVE_BIT));
-        
-        uint bytesWritten = 0;
-        var status = _ftdiDevice.Write(new byte[] { newOutput }, 1, ref bytesWritten);
-        
-        if (status != FTDI.FT_STATUS.FT_OK)
-            throw new FtdiException($"Failed to set workflow active signal: {status}");
-        
-        _logger.LogInformation("📡 WORKFLOW ACTIVE SIGNAL: {State} via GPIO DD3", state ? "ACTIVE" : "CLEARED");
-    }
-}
-
-// ✅ Service integration with hardware triggers
-public class HardwareTriggeredWorkflowService
-{
-    private readonly IBitBangProtocolProvider _bitBangProvider;
-    private readonly IMultiBibWorkflowService _workflowService;
-    
-    private async Task TriggerWorkflowStartAsync()
+    private async Task OnXmlFileCreatedAsync(string xmlFilePath)
     {
         try
         {
-            _logger.LogInformation("🚀 HARDWARE TRIGGER: Starting workflow execution...");
+            // ✅ Brief delay to ensure file is fully written
+            await Task.Delay(500);
             
-            // ✅ Set workflow active signal
-            await _bitBangProvider.SetWorkflowActiveSignalAsync(true);
+            _logger.LogInformation("📄 NEW XML DETECTED: {FileName}", Path.GetFileName(xmlFilePath));
             
-            // ✅ Execute configured BIB workflow
-            var result = await _workflowService.ExecuteConfiguredBibAsync();
+            // ✅ Load and validate XML configuration
+            var bibConfig = await LoadBibConfigurationAsync(xmlFilePath);
+            if (bibConfig == null)
+            {
+                _logger.LogError("❌ Failed to load XML configuration: {FilePath}", xmlFilePath);
+                return;
+            }
             
-            _logger.LogInformation("✅ HARDWARE TRIGGERED WORKFLOW: {Result}", result.Success ? "SUCCESS" : "FAILED");
+            // ✅ Register new BIB without affecting existing ones
+            await RegisterNewBibAsync(bibConfig, xmlFilePath);
+            
+            _logger.LogInformation("✅ BIB {BibId} registered and activated from {FileName}", 
+                bibConfig.BibId, Path.GetFileName(xmlFilePath));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "❌ Hardware triggered workflow failed");
-        }
-        finally
-        {
-            // ✅ Clear workflow active signal
-            await _bitBangProvider.SetWorkflowActiveSignalAsync(false);
+            _logger.LogError(ex, "❌ Error processing new XML file: {FilePath}", xmlFilePath);
         }
     }
     
-    private async Task TriggerWorkflowStopAsync()
+    private async Task RegisterNewBibAsync(BibConfiguration bibConfig, string xmlFilePath)
     {
-        _logger.LogWarning("⚠️ HARDWARE TRIGGER: Stopping workflow execution...");
-        
-        // ✅ Request graceful stop
-        await _workflowService.RequestStopAsync();
-        
-        // ✅ Clear workflow active signal
-        await _bitBangProvider.SetWorkflowActiveSignalAsync(false);
-    }
-}
-```
-
-### **💻 OBJECTIVE 2: Command Line Simulation (Priority 1)**
-**Priority:** ⭐ **HIGHEST** | **Effort:** 2-3 hours | **Status:** TESTING WITHOUT HARDWARE
-
-**Simulation Commands for Development:**
-```csharp
-// ✅ Extended command line options for Sprint 13
-public class Sprint13CommandLineOptions
-{
-    // ✅ Existing options preserved
-    [Option("mode", Required = false, HelpText = "Execution mode")]
-    public string Mode { get; set; } = "single";
-    
-    [Option("bib-ids", Required = false, HelpText = "BIB identifiers")]  
-    public string BibIds { get; set; } = "client_demo";
-    
-    // ✅ NEW Sprint 13: GPIO simulation options
-    [Option("sim-start", Required = false, HelpText = "Simulate GPIO start trigger")]
-    public bool SimulateStart { get; set; } = false;
-    
-    [Option("sim-stop", Required = false, HelpText = "Simulate GPIO stop trigger")]
-    public bool SimulateStop { get; set; } = false;
-    
-    [Option("sim-critical", Required = false, HelpText = "Simulate critical condition")]
-    public bool SimulateCritical { get; set; } = false;
-    
-    [Option("gpio-mode", Required = false, HelpText = "GPIO mode: real, simulation, disabled")]
-    public string GpioMode { get; set; } = "real";
-    
-    [Option("gpio-polling", Required = false, HelpText = "GPIO polling interval in ms")]
-    public int GpioPollingMs { get; set; } = 100;
-}
-
-// ✅ Simulation provider for testing without hardware
-public class SimulatedBitBangProvider : IBitBangProtocolProvider
-{
-    private bool _simulatedPowerReady = false;
-    private bool _simulatedPowerDown = false;
-    private bool _simulatedCriticalSignal = false;
-    private bool _simulatedWorkflowActive = false;
-    
-    public async Task SimulateStartTriggerAsync()
-    {
-        _logger.LogInformation("🎭 SIMULATION: Triggering start signal...");
-        _simulatedPowerReady = true;
-        
-        // ✅ Trigger same events as real hardware
-        await TriggerWorkflowStartAsync();
-        
-        await Task.Delay(100);
-        _simulatedPowerReady = false;
-    }
-    
-    public async Task SimulateStopTriggerAsync()
-    {
-        _logger.LogWarning("🎭 SIMULATION: Triggering stop signal...");
-        _simulatedPowerDown = true;
-        
-        // ✅ Trigger same events as real hardware
-        await TriggerWorkflowStopAsync();
-        
-        await Task.Delay(100);
-        _simulatedPowerDown = false;
-    }
-    
-    public async Task SimulateCriticalConditionAsync()
-    {
-        _logger.LogCritical("🎭 SIMULATION: Triggering critical condition...");
-        
-        // ✅ Same behavior as real critical validation
-        await SetCriticalFailSignalAsync(true);
-    }
-    
-    public async Task SetCriticalFailSignalAsync(bool state)
-    {
-        _simulatedCriticalSignal = state;
-        _logger.LogCritical("🎭 SIMULATED CRITICAL SIGNAL: {State}", state ? "ACTIVE" : "CLEARED");
-        
-        // ✅ Auto-clear simulation after 2 seconds
-        if (state)
+        if (_activeBibs.ContainsKey(bibConfig.BibId))
         {
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay(2000);
-                _simulatedCriticalSignal = false;
-                _logger.LogInformation("🎭 SIMULATED CRITICAL SIGNAL: Auto-cleared");
-            });
+            _logger.LogWarning("⚠️ BIB {BibId} already active - updating configuration", bibConfig.BibId);
+            await UpdateExistingBibAsync(bibConfig);
+            return;
         }
-    }
-}
-
-// ✅ Program.cs integration with simulation
-public static async Task Main(string[] args)
-{
-    var options = Parser.Default.ParseArguments<Sprint13CommandLineOptions>(args);
-    
-    await options.WithParsedAsync(async opts =>
-    {
-        // ✅ Configure GPIO provider based on mode
-        IBitBangProtocolProvider bitBangProvider = opts.GpioMode.ToLower() switch
+        
+        // ✅ Create new BIB instance with independent lifecycle
+        var bibInstance = new BibInstance
         {
-            "real" => new RealFtdiBitBangProvider(),
-            "simulation" => new SimulatedBitBangProvider(), 
-            "disabled" => new DisabledBitBangProvider(),
-            _ => new RealFtdiBitBangProvider()
+            BibId = bibConfig.BibId,
+            Configuration = bibConfig,
+            XmlFilePath = xmlFilePath,
+            Status = BibStatus.Starting,
+            RegisteredAt = DateTime.Now
         };
         
-        var workflowService = ConfigureWorkflowService(bitBangProvider);
+        // ✅ Initialize simulation or real GPIO for this BIB
+        await InitializeBibHardwareAsync(bibInstance);
         
-        // ✅ Handle simulation commands
-        if (opts.SimulateStart && bitBangProvider is SimulatedBitBangProvider sim)
+        // ✅ Start BIB operations independently
+        await StartBibOperationsAsync(bibInstance);
+        
+        // ✅ Register in active collection
+        _activeBibs[bibConfig.BibId] = bibInstance;
+        
+        _logger.LogInformation("🚀 BIB {BibId} started independently - Total active BIBs: {Count}", 
+            bibConfig.BibId, _activeBibs.Count);
+    }
+    
+    private async Task InitializeBibHardwareAsync(BibInstance bibInstance)
+    {
+        var config = bibInstance.Configuration;
+        
+        // ✅ Check if hardware simulation is enabled in XML
+        if (config.HardwareSimulation?.Enabled == true)
         {
-            Console.WriteLine("🎭 Simulating GPIO START trigger...");
-            await sim.SimulateStartTriggerAsync();
+            _logger.LogInformation("🎭 Initializing XML simulation for BIB {BibId}", config.BibId);
+            bibInstance.HardwareProvider = new XmlDrivenHardwareSimulator(config);
+        }
+        else
+        {
+            _logger.LogInformation("🔌 Attempting real GPIO hardware for BIB {BibId}", config.BibId);
+            // ✅ Try to find real FT4232 for this BIB (fallback to simulation if not found)
+            bibInstance.HardwareProvider = await CreateHardwareProviderAsync(config);
         }
         
-        if (opts.SimulateStop && bitBangProvider is SimulatedBitBangProvider sim2)
+        await bibInstance.HardwareProvider.InitializeAsync();
+    }
+    
+    private async Task StartBibOperationsAsync(BibInstance bibInstance)
+    {
+        bibInstance.Status = BibStatus.Running;
+        
+        // ✅ Start BIB in independent background task
+        bibInstance.OperationTask = Task.Run(async () =>
         {
-            Console.WriteLine("🎭 Simulating GPIO STOP trigger...");
-            await sim2.SimulateStopTriggerAsync();
-        }
+            try
+            {
+                await RunBibOperationsAsync(bibInstance);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ BIB {BibId} operations failed", bibInstance.BibId);
+                bibInstance.Status = BibStatus.Error;
+            }
+        });
         
-        if (opts.SimulateCritical && bitBangProvider is SimulatedBitBangProvider sim3)
-        {
-            Console.WriteLine("🎭 Simulating CRITICAL condition...");
-            await sim3.SimulateCriticalConditionAsync();
-        }
-        
-        // ✅ Start hardware monitoring or simulation
-        await workflowService.StartAsync();
-        
-        Console.WriteLine("Press any key to stop...");
-        Console.ReadKey();
-        
-        await workflowService.StopAsync();
-    });
+        _logger.LogInformation("⚡ BIB {BibId} operations started independently", bibInstance.BibId);
+    }
+}
+
+// ✅ BIB instance state management
+public class BibInstance
+{
+    public string BibId { get; set; } = string.Empty;
+    public BibConfiguration Configuration { get; set; } = new();
+    public string XmlFilePath { get; set; } = string.Empty;
+    public IBitBangProtocolProvider HardwareProvider { get; set; }
+    public BibStatus Status { get; set; } = BibStatus.Idle;
+    public DateTime RegisteredAt { get; set; }
+    public Task OperationTask { get; set; }
+    public CancellationTokenSource CancellationTokenSource { get; set; } = new();
+    
+    // ✅ Per-BIB statistics
+    public int CycleCount { get; set; } = 0;
+    public DateTime LastActivity { get; set; } = DateTime.Now;
+    public List<string> UutStatuses { get; set; } = new();
+}
+
+public enum BibStatus
+{
+    Idle,
+    Starting, 
+    Running,
+    Stopping,
+    Error,
+    Removed
 }
 ```
 
-**Example Command Line Usage:**
-```bash
-# ✅ Real hardware monitoring
-.\SerialPortPoolService.exe --gpio-mode real --bib-ids client_demo
+### **🎭 OBJECTIVE 2: XML-Driven Async Simulation (Priority 1)**
+**Priority:** ⭐ **HIGHEST** | **Effort:** 4-5 hours | **Status:** PER-BIB INDEPENDENT SIMULATION
 
-# ✅ Simulation mode for testing
-.\SerialPortPoolService.exe --gpio-mode simulation --sim-start --bib-ids production_test
-
-# ✅ Test critical condition
-.\SerialPortPoolService.exe --gpio-mode simulation --sim-critical
-
-# ✅ Faster GPIO polling for testing
-.\SerialPortPoolService.exe --gpio-mode real --gpio-polling 50
-```
-
-### **🚨 OBJECTIVE 3: XML-Based Critical Configuration (Priority 1)**
-**Priority:** ⭐ **HIGHEST** | **Effort:** 2-3 hours | **Status:** CRITICAL → GPIO INTEGRATION
-
-**Enhanced XML Configuration with Critical Triggers:**
+**Enhanced XML Configuration with Async Simulation:**
 ```xml
-<!-- ✅ Enhanced BIB configuration with critical conditions -->
+<!-- ✅ client_demo.xml - First BIB with early start -->
 <BibConfiguration>
     <BibId>client_demo</BibId>
-    <Description>Client Demo with Critical Conditions</Description>
+    <Description>Client Demo - Early Starter</Description>
     
-    <!-- ✅ NEW: Critical condition configuration -->
-    <CriticalConditions>
-        <Condition>
-            <Name>HARDWARE_FAULT</Name>
-            <Pattern>FAULT|ERROR|FAIL</Pattern>
-            <IsRegex>true</IsRegex>
-            <TriggerHardwareSignal>true</TriggerHardwareSignal>
-            <HoldTimeSeconds>2</HoldTimeSeconds>
-            <Description>Hardware fault detection</Description>
-        </Condition>
-        <Condition>
-            <Name>OVERVOLTAGE</Name>
-            <Pattern>OVERVOLT|VOLTAGE.*HIGH</Pattern>
-            <IsRegex>true</IsRegex>
-            <TriggerHardwareSignal>true</TriggerHardwareSignal>
-            <HoldTimeSeconds>5</HoldTimeSeconds>
-            <Description>Overvoltage protection</Description>
-        </Condition>
-        <Condition>
-            <Name>EMERGENCY_STOP</Name>
-            <Pattern>EMERGENCY|ESTOP</Pattern>
-            <IsRegex>true</IsRegex>
-            <TriggerHardwareSignal>true</TriggerHardwareSignal>
-            <HoldTimeSeconds>10</HoldTimeSeconds>
-            <Description>Emergency stop condition</Description>
-        </Condition>
-    </CriticalConditions>
+    <!-- ✅ XML-driven simulation configuration -->
+    <HardwareSimulation>
+        <Enabled>true</Enabled>
+        
+        <!-- ✅ START simulation - Early and frequent -->
+        <StartTrigger>
+            <DelaySeconds>8</DelaySeconds>           <!-- Start 8s after XML detected -->
+            <RepeatInterval>25</RepeatInterval>      <!-- Repeat every 25 seconds -->
+            <RandomVariation>3</RandomVariation>     <!-- ±3s random variation -->
+        </StartTrigger>
+        
+        <!-- ✅ STOP simulation - Cycle-based -->
+        <StopTrigger>
+            <CycleCount>12</CycleCount>              <!-- Stop after 12 cycles -->
+            <RandomVariation>2</RandomVariation>     <!-- ±2 cycles variation -->
+        </StopTrigger>
+        
+        <!-- ✅ CRITICAL simulation - Low probability -->
+        <CriticalTrigger>
+            <CycleCount>20</CycleCount>              <!-- Eligible after 20 cycles -->
+            <Probability>0.08</Probability>          <!-- 8% chance per cycle -->
+            <Pattern>CLIENT_HARDWARE_FAULT</Pattern> <!-- Simulated critical pattern -->
+        </CriticalTrigger>
+    </HardwareSimulation>
     
     <Uuts>
         <Uut>
             <UutId>production_uut</UutId>
-            <Description>Production UUT with Critical Monitoring</Description>
+            <Description>Production UUT</Description>
             <Ports>
                 <Port>
                     <PortNumber>1</PortNumber>
@@ -441,19 +257,71 @@ public static async Task Main(string[] args)
                     <Speed>115200</Speed>
                     <DataPattern>n81</DataPattern>
                     
-                    <!-- ✅ Enhanced commands with critical validation -->
                     <TestCommands>
                         <Command>
                             <Command>TEST</Command>
                             <ExpectedResponse>OK</ExpectedResponse>
-                            <TimeoutMs>5000</TimeoutMs>
-                            <!-- ✅ Multi-level validation patterns -->
-                            <ValidationPatterns>
-                                <Pattern Level="PASS">OK|PASS</Pattern>
-                                <Pattern Level="WARN">SLOW|DELAY</Pattern>
-                                <Pattern Level="FAIL">FAIL|ERROR</Pattern>
-                                <Pattern Level="CRITICAL">FAULT|EMERGENCY|OVERVOLT</Pattern>
-                            </ValidationPatterns>
+                            <TimeoutMs>3000</TimeoutMs>
+                        </Command>
+                    </TestCommands>
+                </Port>
+            </Ports>
+        </Uut>
+    </Uuts>
+</BibConfiguration>
+
+<!-- ✅ production_test_v2.xml - Second BIB with different timing -->
+<BibConfiguration>
+    <BibId>production_test_v2</BibId>
+    <Description>Production Test V2 - Slower Starter</Description>
+    
+    <HardwareSimulation>
+        <Enabled>true</Enabled>
+        
+        <!-- ✅ Different timing pattern -->
+        <StartTrigger>
+            <DelaySeconds>15</DelaySeconds>          <!-- Start 15s after XML detected -->
+            <RepeatInterval>40</RepeatInterval>      <!-- Repeat every 40 seconds -->
+            <RandomVariation>8</RandomVariation>     <!-- ±8s random variation -->
+        </StartTrigger>
+        
+        <StopTrigger>
+            <CycleCount>18</CycleCount>              <!-- Longer cycles -->
+        </StopTrigger>
+        
+        <CriticalTrigger>
+            <CycleCount>30</CycleCount>              <!-- More stable before critical -->
+            <Probability>0.03</Probability>          <!-- 3% chance - more reliable -->
+            <Pattern>PROD_SYSTEM_FAULT</Pattern>
+        </CriticalTrigger>
+    </HardwareSimulation>
+    
+    <Uuts>
+        <Uut>
+            <UutId>test_board_alpha</UutId>
+            <Ports>
+                <Port>
+                    <PortNumber>1</PortNumber>
+                    <Protocol>rs232</Protocol>
+                    <TestCommands>
+                        <Command>
+                            <Command>STATUS</Command>
+                            <ExpectedResponse>READY</ExpectedResponse>
+                        </Command>
+                    </TestCommands>
+                </Port>
+            </Ports>
+        </Uut>
+        <Uut>
+            <UutId>test_board_beta</UutId>
+            <Ports>
+                <Port>
+                    <PortNumber>1</PortNumber>
+                    <Protocol>rs232</Protocol>
+                    <TestCommands>
+                        <Command>
+                            <Command>DIAG</Command>
+                            <ExpectedResponse>PASS</ExpectedResponse>
                         </Command>
                     </TestCommands>
                 </Port>
@@ -463,115 +331,295 @@ public static async Task Main(string[] args)
 </BibConfiguration>
 ```
 
-**Critical Condition Processing:**
+**XML-Driven Simulation Implementation:**
 ```csharp
-// ✅ XML critical condition loader
-public class CriticalConditionLoader
+// ✅ Per-BIB asynchronous simulation engine
+public class XmlDrivenHardwareSimulator : IBitBangProtocolProvider
 {
-    public List<CriticalCondition> LoadFromXml(string bibConfigPath)
+    private readonly BibConfiguration _bibConfig;
+    private readonly HardwareSimulationConfig _simConfig;
+    private BibSimulationState _state;
+    private CancellationTokenSource _cancellation;
+    
+    public XmlDrivenHardwareSimulator(BibConfiguration bibConfig)
     {
-        var doc = XDocument.Load(bibConfigPath);
-        var conditions = new List<CriticalCondition>();
+        _bibConfig = bibConfig;
+        _simConfig = bibConfig.HardwareSimulation;
+    }
+    
+    public async Task InitializeAsync()
+    {
+        _logger.LogInformation("🎭 Initializing XML simulation for BIB {BibId}", _bibConfig.BibId);
         
-        foreach (var conditionElement in doc.Descendants("Condition"))
+        _state = new BibSimulationState
         {
-            var condition = new CriticalCondition
-            {
-                Name = conditionElement.Element("Name")?.Value ?? "",
-                Pattern = conditionElement.Element("Pattern")?.Value ?? "",
-                IsRegex = bool.Parse(conditionElement.Element("IsRegex")?.Value ?? "false"),
-                TriggerHardwareSignal = bool.Parse(conditionElement.Element("TriggerHardwareSignal")?.Value ?? "false"),
-                HoldTimeSeconds = int.Parse(conditionElement.Element("HoldTimeSeconds")?.Value ?? "2"),
-                Description = conditionElement.Element("Description")?.Value ?? ""
-            };
-            
-            if (condition.IsRegex)
-            {
-                condition.CompiledPattern = new Regex(condition.Pattern, RegexOptions.IgnoreCase);
-            }
-            
-            conditions.Add(condition);
-        }
+            BibId = _bibConfig.BibId,
+            StartTime = DateTime.Now,
+            CycleCount = 0,
+            NextStartTrigger = CalculateInitialStartTime()
+        };
         
-        return conditions;
+        _cancellation = new CancellationTokenSource();
+        
+        // ✅ Start independent async simulation loop
+        _ = Task.Run(async () => await RunSimulationLoopAsync());
+        
+        _logger.LogInformation("✅ XML simulation started for BIB {BibId} - Start in {Delay}s", 
+            _bibConfig.BibId, _simConfig.StartTrigger.DelaySeconds);
+    }
+    
+    private async Task RunSimulationLoopAsync()
+    {
+        _logger.LogInformation("🎭 Starting independent simulation loop for BIB {BibId}", _bibConfig.BibId);
+        
+        while (!_cancellation.Token.IsCancellationRequested)
+        {
+            try
+            {
+                var now = DateTime.Now;
+                
+                // ✅ Check for START trigger (time-based with XML config)
+                if (now >= _state.NextStartTrigger)
+                {
+                    await ExecuteStartTriggerAsync();
+                    _state.NextStartTrigger = CalculateNextStartTime();
+                }
+                
+                // ✅ Check for STOP trigger (cycle-based with XML config)
+                if (ShouldTriggerStop())
+                {
+                    await ExecuteStopTriggerAsync();
+                    _state.CycleCount = 0; // Reset after stop
+                }
+                
+                // ✅ Check for CRITICAL trigger (probability + cycle with XML config)
+                if (ShouldTriggerCritical())
+                {
+                    await ExecuteCriticalTriggerAsync();
+                }
+                
+                // ✅ Update state and wait (1-second simulation tick)
+                _state.LastTick = now;
+                await Task.Delay(1000, _cancellation.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("🎭 Simulation loop stopped for BIB {BibId}", _bibConfig.BibId);
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Simulation error for BIB {BibId} - continuing...", _bibConfig.BibId);
+                await Task.Delay(5000); // Error recovery
+            }
+        }
+    }
+    
+    private DateTime CalculateInitialStartTime()
+    {
+        var baseDelay = TimeSpan.FromSeconds(_simConfig.StartTrigger.DelaySeconds);
+        var variation = GetRandomVariation(_simConfig.StartTrigger.RandomVariation);
+        return DateTime.Now.Add(baseDelay).Add(variation);
+    }
+    
+    private DateTime CalculateNextStartTime()
+    {
+        var interval = TimeSpan.FromSeconds(_simConfig.StartTrigger.RepeatInterval);
+        var variation = GetRandomVariation(_simConfig.StartTrigger.RandomVariation);
+        return DateTime.Now.Add(interval).Add(variation);
+    }
+    
+    private TimeSpan GetRandomVariation(int maxVariationSeconds)
+    {
+        if (maxVariationSeconds == 0) return TimeSpan.Zero;
+        
+        var variationSeconds = Random.Shared.Next(-maxVariationSeconds, maxVariationSeconds + 1);
+        return TimeSpan.FromSeconds(variationSeconds);
+    }
+    
+    private async Task ExecuteStartTriggerAsync()
+    {
+        _logger.LogInformation("🎭 XML SIMULATION [{BibId}]: START trigger fired", _bibConfig.BibId);
+        
+        // ✅ Simulate GPIO start signal
+        await TriggerWorkflowStartAsync(_bibConfig.BibId);
+        
+        // ✅ Update simulation state
+        _state.TotalStarts++;
+        _state.LastActivity = DateTime.Now;
+    }
+    
+    private async Task ExecuteStopTriggerAsync()
+    {
+        _logger.LogWarning("🎭 XML SIMULATION [{BibId}]: STOP trigger fired (cycle {Count})", 
+            _bibConfig.BibId, _state.CycleCount);
+        
+        // ✅ Simulate GPIO stop signal
+        await TriggerWorkflowStopAsync(_bibConfig.BibId);
+        
+        _state.TotalStops++;
+        _state.LastActivity = DateTime.Now;
+    }
+    
+    private async Task ExecuteCriticalTriggerAsync()
+    {
+        _logger.LogCritical("🎭 XML SIMULATION [{BibId}]: CRITICAL trigger fired - {Pattern}", 
+            _bibConfig.BibId, _simConfig.CriticalTrigger.Pattern);
+        
+        // ✅ Inject critical response into workflow
+        await InjectCriticalResponseAsync(_bibConfig.BibId, _simConfig.CriticalTrigger.Pattern);
+        
+        // ✅ Trigger hardware critical signal
+        await SetCriticalFailSignalAsync(true);
+        
+        _state.TotalCriticals++;
+        _state.LastActivity = DateTime.Now;
+    }
+    
+    private bool ShouldTriggerStop()
+    {
+        var stopConfig = _simConfig.StopTrigger;
+        var targetCycles = stopConfig.CycleCount + 
+            Random.Shared.Next(-stopConfig.RandomVariation, stopConfig.RandomVariation + 1);
+        
+        return _state.CycleCount >= Math.Max(1, targetCycles);
+    }
+    
+    private bool ShouldTriggerCritical()
+    {
+        var criticalConfig = _simConfig.CriticalTrigger;
+        
+        // ✅ Must reach minimum cycle count
+        if (_state.CycleCount < criticalConfig.CycleCount) return false;
+        
+        // ✅ Probability check
+        return Random.Shared.NextDouble() < criticalConfig.Probability;
     }
 }
 
-// ✅ Critical condition evaluation with hardware integration
-public class CriticalConditionEvaluator
+// ✅ Per-BIB simulation state tracking
+public class BibSimulationState
 {
-    private readonly List<CriticalCondition> _conditions;
-    private readonly IBitBangProtocolProvider _bitBangProvider;
-    
-    public async Task<EnhancedValidationResult> EvaluateResponseAsync(string response)
+    public string BibId { get; set; } = string.Empty;
+    public DateTime StartTime { get; set; }
+    public DateTime NextStartTrigger { get; set; }
+    public DateTime LastTick { get; set; }
+    public DateTime LastActivity { get; set; }
+    public int CycleCount { get; set; }
+    public int TotalStarts { get; set; }
+    public int TotalStops { get; set; }
+    public int TotalCriticals { get; set; }
+}
+```
+
+### **🔌 OBJECTIVE 3: Multi-BIB BitBang Integration (Priority 2)**
+**Priority:** 🎯 **HIGH** | **Effort:** 3-4 hours | **Status:** REAL GPIO PER BIB OR SIMULATION FALLBACK
+
+**Real Hardware Detection + Fallback Strategy:**
+```csharp
+// ✅ Smart hardware provider factory - Real GPIO or XML simulation
+public class HardwareProviderFactory
+{
+    public async Task<IBitBangProtocolProvider> CreateProviderAsync(BibConfiguration bibConfig)
     {
-        foreach (var condition in _conditions)
+        // ✅ Try to find real FT4232 hardware for this BIB first
+        var realHardware = await TryCreateRealHardwareProviderAsync(bibConfig);
+        if (realHardware != null)
         {
-            bool matches = condition.IsRegex 
-                ? condition.CompiledPattern.IsMatch(response)
-                : response.Contains(condition.Pattern, StringComparison.OrdinalIgnoreCase);
-            
-            if (matches)
+            _logger.LogInformation("🔌 Using REAL GPIO hardware for BIB {BibId}", bibConfig.BibId);
+            return realHardware;
+        }
+        
+        // ✅ Fallback to XML simulation
+        if (bibConfig.HardwareSimulation?.Enabled == true)
+        {
+            _logger.LogInformation("🎭 Using XML SIMULATION for BIB {BibId}", bibConfig.BibId);
+            return new XmlDrivenHardwareSimulator(bibConfig);
+        }
+        
+        // ✅ Final fallback to disabled provider
+        _logger.LogWarning("⚠️ No hardware or simulation for BIB {BibId} - using disabled provider", bibConfig.BibId);
+        return new DisabledBitBangProvider(bibConfig.BibId);
+    }
+    
+    private async Task<IBitBangProtocolProvider> TryCreateRealHardwareProviderAsync(BibConfiguration bibConfig)
+    {
+        try
+        {
+            // ✅ Look for FT4232 that matches this BIB (by EEPROM ProductDescription or serial)
+            var matchingDevice = await FindMatchingFtdiDeviceAsync(bibConfig.BibId);
+            if (matchingDevice != null)
             {
-                _logger.LogCritical("🚨 CRITICAL CONDITION DETECTED: {Name} - {Description}", 
-                    condition.Name, condition.Description);
-                
-                // ✅ Trigger hardware signal if configured
-                if (condition.TriggerHardwareSignal)
-                {
-                    _logger.LogCritical("🔌 TRIGGERING HARDWARE CRITICAL SIGNAL for condition: {Name}", condition.Name);
-                    await _bitBangProvider.SetCriticalFailSignalAsync(true);
-                    
-                    // ✅ Schedule auto-clear based on XML configuration
-                    _ = Task.Run(async () =>
-                    {
-                        await Task.Delay(TimeSpan.FromSeconds(condition.HoldTimeSeconds));
-                        await _bitBangProvider.SetCriticalFailSignalAsync(false);
-                        _logger.LogInformation("✅ Auto-cleared critical signal for condition: {Name}", condition.Name);
-                    });
-                }
-                
-                return EnhancedValidationResult.Critical(
-                    $"Critical condition '{condition.Name}': {condition.Description}",
-                    pattern: condition.Pattern, 
-                    triggerHardware: condition.TriggerHardwareSignal);
+                var realProvider = new RealFtdiBitBangProvider(matchingDevice);
+                await realProvider.InitializeAsync();
+                return realProvider;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "⚠️ Failed to initialize real hardware for BIB {BibId} - will use simulation", bibConfig.BibId);
+        }
+        
+        return null; // No real hardware available
+    }
+    
+    private async Task<FtdiDeviceInfo> FindMatchingFtdiDeviceAsync(string bibId)
+    {
+        // ✅ Enumerate all FT4232 devices on system
+        var ftdiDevices = await EnumerateFtdiDevicesAsync();
+        
+        foreach (var device in ftdiDevices.Where(d => d.Is4232H))
+        {
+            // ✅ Check EEPROM ProductDescription for BIB_ID match
+            var eepromData = await ReadEepromDataAsync(device);
+            if (eepromData?.ProductDescription?.Contains(bibId, StringComparison.OrdinalIgnoreCase) == true)
+            {
+                _logger.LogInformation("✅ Found matching FT4232 for BIB {BibId}: {Serial} - {Product}", 
+                    bibId, device.SerialNumber, eepromData.ProductDescription);
+                return device;
             }
         }
         
-        // ✅ No critical conditions matched
-        return EnhancedValidationResult.Pass("No critical conditions detected");
+        return null; // No matching hardware found
     }
 }
 ```
 
-### **🔄 OBJECTIVE 4: Original Service Behavior Restoration (Priority 2)**
-**Priority:** 🎯 **HIGH** | **Effort:** 2-3 hours | **Status:** RETURN TO FOUNDATIONS
+### **📊 OBJECTIVE 4: Zero-Restart BIB Management (Priority 2)**
+**Priority:** 🎯 **HIGH** | **Effort:** 2-3 hours | **Status:** PRODUCTION-READY LIFECYCLE
 
-**Service Architecture Aligned with First Commits:**
+**Service Integration with Hot-Add Demo:**
 ```csharp
-// ✅ Restore original service behavior patterns
+// ✅ Main service orchestrates all BIBs independently
 public class SerialPortPoolService : BackgroundService
 {
+    private readonly DynamicBibConfigurationService _bibConfigService;
+    private readonly IServiceProvider _serviceProvider;
+    
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("🚀 SerialPortPool Service Starting - Sprint 13 Hardware Integration");
+        _logger.LogInformation("🚀 SerialPortPool Service Starting - Industrial Multi-BIB System");
+        _logger.LogInformation("📊 Starting with ZERO XML configurations - ready for hot-add");
         
-        // ✅ Initialize hardware GPIO monitoring
-        await InitializeHardwareMonitoringAsync();
+        // ✅ Start dynamic BIB configuration service
+        await _bibConfigService.StartAsync();
         
-        // ✅ Wait for hardware triggers (original pattern)
+        // ✅ Service runs continuously, BIBs are added/removed dynamically
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                // ✅ Hardware monitoring handles start/stop triggers
-                // Service remains responsive but waits for GPIO signals
-                await Task.Delay(1000, stoppingToken);
+                // ✅ Service heartbeat and status monitoring
+                await Task.Delay(10000, stoppingToken); // 10-second heartbeat
                 
-                // ✅ Optional: heartbeat logging
-                if (DateTime.Now.Second == 0) // Once per minute
+                var activeBibs = _bibConfigService.GetActiveBibCount();
+                if (activeBibs > 0)
                 {
-                    _logger.LogInformation("💓 Service heartbeat - GPIO monitoring active");
+                    _logger.LogInformation("💓 Service heartbeat - {Count} active BIBs", activeBibs);
+                }
+                else
+                {
+                    _logger.LogInformation("💓 Service heartbeat - No BIBs active (ready for XML hot-add)");
                 }
             }
             catch (OperationCanceledException)
@@ -581,36 +629,22 @@ public class SerialPortPoolService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Service error - continuing operation");
+                _logger.LogError(ex, "❌ Service heartbeat error - continuing operation");
             }
         }
         
-        // ✅ Cleanup hardware monitoring
-        await CleanupHardwareMonitoringAsync();
+        // ✅ Graceful shutdown of all BIBs
+        await _bibConfigService.StopAllBibsAsync();
         
         _logger.LogInformation("✅ SerialPortPool Service Stopped");
     }
-    
-    private async Task InitializeHardwareMonitoringAsync()
-    {
-        _logger.LogInformation("🔌 Initializing hardware GPIO monitoring...");
-        
-        // ✅ Load configuration from XML (original pattern)
-        var config = await LoadBitBangConfigurationAsync();
-        
-        // ✅ Initialize GPIO provider (real or simulated)
-        await _bitBangProvider.InitializeAsync(config);
-        
-        _logger.LogInformation("✅ Hardware GPIO monitoring initialized");
-    }
 }
 
-// ✅ Original startup pattern with hardware integration
+// ✅ Program startup - Zero configuration required
 public class Program
 {
     public static async Task Main(string[] args)
     {
-        // ✅ Original logging configuration
         Log.Logger = new LoggerConfiguration()
             .WriteTo.Console()
             .WriteTo.File("C:\\Logs\\SerialPortPool\\service-.log", rollingInterval: RollingInterval.Day)
@@ -618,269 +652,275 @@ public class Program
         
         try
         {
-            _logger.LogInformation("🚀 SerialPortPool Service Starting - Sprint 13");
+            _logger.LogInformation("🚀 SerialPortPool Industrial System Starting");
+            _logger.LogInformation("📂 Monitoring Configuration\\ folder for XML hot-add");
             
-            // ✅ Parse command line (original + new GPIO options)
-            var options = ParseCommandLine(args);
+            // ✅ Create host with zero initial configuration
+            var host = CreateHostBuilder(args).Build();
             
-            // ✅ Build service with hardware integration
-            var host = CreateHostBuilder(args, options).Build();
+            // ✅ Display startup banner
+            DisplayStartupBanner();
             
-            // ✅ Start service (original async pattern)
+            // ✅ Start service (will monitor for XML files)
             await host.RunAsync();
         }
         catch (Exception ex)
         {
-            _logger.LogFatal(ex, "💥 Service failed to start");
+            _logger.LogFatal(ex, "💥 Industrial service failed to start");
         }
         finally
         {
             Log.CloseAndFlush();
         }
     }
+    
+    private static void DisplayStartupBanner()
+    {
+        Console.WriteLine();
+        Console.WriteLine("╔══════════════════════════════════════════════════════════╗");
+        Console.WriteLine("║             SerialPortPool Industrial System            ║");
+        Console.WriteLine("║                                                          ║");
+        Console.WriteLine("║  🏭 Multi-BIB Hot-Add System                            ║");
+        Console.WriteLine("║  📄 Drop XML files in Configuration\\ folder             ║");
+        Console.WriteLine("║  🎭 XML-driven simulation with async timing             ║");
+        Console.WriteLine("║  🔌 Real GPIO hardware detection + fallback             ║");
+        Console.WriteLine("║                                                          ║");
+        Console.WriteLine("║  Status: Ready for XML hot-add                          ║");
+        Console.WriteLine("╚══════════════════════════════════════════════════════════╝");
+        Console.WriteLine();
+    }
 }
 ```
 
-### **🧪 OBJECTIVE 5: Integration Testing (Priority 3)**
-**Priority:** ✅ **MEDIUM** | **Effort:** 2-3 hours | **Status:** HARDWARE + SIMULATION
+### **🧪 OBJECTIVE 5: Demo Scenarios & Testing (Priority 3)**
+**Priority:** ✅ **MEDIUM** | **Effort:** 2-3 hours | **Status:** INDUSTRIAL DEMONSTRATION
 
-**Comprehensive Testing Strategy:**
+**Live Demo Test Scenarios:**
 ```csharp
 [TestFixture]
-public class HardwareBitBangIntegrationTests
+public class IndustrialMultiBibSystemTests
 {
     [Test]
-    public async Task RealGpioProvider_InitializePortD_ConfiguresCorrectly()
+    public async Task Service_StartsWithZeroXml_RunsIdle()
     {
-        // Arrange
-        var config = BitBangConfiguration.CreateDefault();
-        var provider = new RealFtdiBitBangProvider();
+        // Arrange - Clean configuration directory
+        var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Configuration");
+        if (Directory.Exists(configPath))
+            Directory.Delete(configPath, true);
         
-        // Act & Assert (requires actual hardware)
-        if (IsHardwareAvailable())
-        {
-            await provider.InitializeAsync(config);
-            var status = await provider.GetStatusAsync();
-            
-            Assert.That(status.IsConnected, Is.True);
-            Assert.That(status.DeviceId, Is.EqualTo("FT9A9OFO"));
-        }
-        else
-        {
-            Assert.Ignore("Hardware not available - skipping real GPIO test");
-        }
+        // Act - Start service
+        var service = new DynamicBibConfigurationService();
+        await service.StartAsync();
+        
+        // Assert - Service runs with zero active BIBs
+        Assert.That(service.GetActiveBibCount(), Is.EqualTo(0));
+        Assert.That(Directory.Exists(configPath), Is.True);
     }
     
     [Test]
-    public async Task SimulatedProvider_StartTrigger_ExecutesWorkflow()
+    public async Task HotAddXml_FirstBib_DetectedAndActivated()
     {
         // Arrange
-        var simulatedProvider = new SimulatedBitBangProvider();
-        var workflowService = new Mock<IMultiBibWorkflowService>();
+        var service = new DynamicBibConfigurationService();
+        await service.StartAsync();
         
-        // Act
-        await simulatedProvider.SimulateStartTriggerAsync();
+        var xmlContent = CreateTestXmlConfig("client_demo");
+        var xmlPath = Path.Combine("Configuration", "client_demo.xml");
         
-        // Assert
-        workflowService.Verify(s => s.ExecuteConfiguredBibAsync(), Times.Once);
+        // Act - Hot-add first XML file
+        await File.WriteAllTextAsync(xmlPath, xmlContent);
+        await Task.Delay(1000); // Allow file detection
+        
+        // Assert - First BIB activated
+        Assert.That(service.GetActiveBibCount(), Is.EqualTo(1));
+        Assert.That(service.IsBibActive("client_demo"), Is.True);
     }
     
     [Test]
-    public async Task CriticalConditionEvaluator_HardwareFault_TriggersCriticalSignal()
+    public async Task HotAddXml_SecondBib_ActivatedWithoutDisturbingFirst()
     {
-        // Arrange
-        var conditions = new List<CriticalCondition>
-        {
-            new CriticalCondition 
-            { 
-                Name = "HARDWARE_FAULT", 
-                Pattern = "FAULT", 
-                TriggerHardwareSignal = true 
-            }
-        };
+        // Arrange - Start service with first BIB already active
+        var service = new DynamicBibConfigurationService();
+        await service.StartAsync();
         
-        var mockProvider = new Mock<IBitBangProtocolProvider>();
-        var evaluator = new CriticalConditionEvaluator(conditions, mockProvider.Object);
+        var firstXmlContent = CreateTestXmlConfig("client_demo");
+        var firstXmlPath = Path.Combine("Configuration", "client_demo.xml");
+        await File.WriteAllTextAsync(firstXmlPath, firstXmlContent);
+        await Task.Delay(1000);
         
-        // Act
-        var result = await evaluator.EvaluateResponseAsync("SYSTEM FAULT DETECTED");
+        var firstBibCycles = service.GetBibCycleCount("client_demo");
         
-        // Assert
-        Assert.That(result.Level, Is.EqualTo(ValidationLevel.CRITICAL));
-        mockProvider.Verify(p => p.SetCriticalFailSignalAsync(true), Times.Once);
+        // Act - Hot-add second XML file
+        var secondXmlContent = CreateTestXmlConfig("production_test_v2");
+        var secondXmlPath = Path.Combine("Configuration", "production_test_v2.xml");
+        await File.WriteAllTextAsync(secondXmlPath, secondXmlContent);
+        await Task.Delay(1000);
+        
+        // Assert - Second BIB activated, first BIB undisturbed
+        Assert.That(service.GetActiveBibCount(), Is.EqualTo(2));
+        Assert.That(service.IsBibActive("client_demo"), Is.True);
+        Assert.That(service.IsBibActive("production_test_v2"), Is.True);
+        
+        // ✅ Critical: First BIB should continue running normally
+        var firstBibCyclesAfter = service.GetBibCycleCount("client_demo");
+        Assert.That(firstBibCyclesAfter, Is.GreaterThanOrEqualTo(firstBibCycles));
     }
     
-    [Test]
-    public async Task CommandLineOptions_SimulationMode_UseSimulatedProvider()
+    [Test] 
+    public async Task XmlSimulation_DifferentTimings_RunAsynchronously()
     {
-        // Arrange
-        var args = new[] { "--gpio-mode", "simulation", "--sim-start" };
+        // Arrange - Two BIBs with different simulation timings
+        var service = new DynamicBibConfigurationService();
+        await service.StartAsync();
         
-        // Act
-        var options = Parser.Default.ParseArguments<Sprint13CommandLineOptions>(args);
+        // Fast BIB: 5s start delay, 15s intervals
+        var fastBibXml = CreateXmlWithSimulation("fast_bib", 5, 15, 0.1);
         
-        // Assert
-        await options.WithParsedAsync(opts =>
-        {
-            Assert.That(opts.GpioMode, Is.EqualTo("simulation"));
-            Assert.That(opts.SimulateStart, Is.True);
-            return Task.CompletedTask;
-        });
+        // Slow BIB: 12s start delay, 30s intervals
+        var slowBibXml = CreateXmlWithSimulation("slow_bib", 12, 30, 0.05);
+        
+        // Act - Add both XMLs
+        await File.WriteAllTextAsync("Configuration/fast_bib.xml", fastBibXml);
+        await File.WriteAllTextAsync("Configuration/slow_bib.xml", slowBibXml);
+        
+        // Wait and observe async behavior
+        await Task.Delay(20000); // 20 seconds
+        
+        // Assert - Different execution patterns
+        var fastBibStarts = service.GetBibStartCount("fast_bib");
+        var slowBibStarts = service.GetBibStartCount("slow_bib");
+        
+        Assert.That(fastBibStarts, Is.GreaterThan(slowBibStarts), 
+            "Fast BIB should have more starts than slow BIB");
     }
 }
 ```
 
 ---
 
-## 📊 Sprint 13 Timeline - HARDWARE FOCUSED
+## 📊 Sprint 13 Timeline - INDUSTRIAL SYSTEM
 
 | **Objective** | **Effort** | **Priority** | **Days** |
 |---------------|------------|--------------|----------|
-| **Real GPIO Input Monitoring** | 4-5h | ⭐ **HIGHEST** | Day 1-2 |
-| **Command Line Simulation** | 2-3h | ⭐ **HIGHEST** | Day 2 |
-| **XML Critical Configuration** | 2-3h | ⭐ **HIGHEST** | Day 3 |
-| **Original Service Behavior** | 2-3h | 🎯 **HIGH** | Day 4 |
-| **Integration Testing** | 2-3h | ✅ **MEDIUM** | Day 5 |
+| **Hot-Add XML Configuration** | 4-5h | ⭐ **HIGHEST** | Day 1-2 |
+| **XML-Driven Async Simulation** | 4-5h | ⭐ **HIGHEST** | Day 2-3 |
+| **Multi-BIB BitBang Integration** | 3-4h | 🎯 **HIGH** | Day 3-4 |
+| **Zero-Restart BIB Management** | 2-3h | 🎯 **HIGH** | Day 4 |
+| **Demo Scenarios & Testing** | 2-3h | ✅ **MEDIUM** | Day 5 |
 
-**Total Sprint 13 Effort:** 12-17 hours  
+**Total Sprint 13 Effort:** 15-20 hours  
 **Timeline:** 5 days  
-**Dependencies:** FT4232HA hardware availability
+**Dependencies:** None (zero-config startup)
 
 ---
 
 ## ✅ Sprint 13 Success Criteria
 
-### **🔌 Real Hardware Integration**
-- ✅ **FT4232HA Port D GPIO** - Successful bit-bang mode configuration
-- ✅ **Hardware Start Trigger** - DD0 signal triggers workflow execution
-- ✅ **Hardware Stop Trigger** - DD1 signal gracefully stops workflow
-- ✅ **Critical Signal Output** - DD2 activates on critical conditions
-- ✅ **Status Signal Output** - DD3 indicates workflow active state
+### **🔄 Hot-Add XML System**
+- ✅ **Zero-Config Startup** - Service starts and runs with no XML files
+- ✅ **First XML Detection** - Adding client_demo.xml activates first BIB
+- ✅ **Second XML Addition** - Adding production_test_v2.xml doesn't disturb first BIB
+- ✅ **FileSystemWatcher** - Real-time XML file detection and processing
+- ✅ **Error Recovery** - Invalid XML files don't crash the service
 
-### **💻 Simulation Capability**
-- ✅ **Command Line Simulation** - `-simStart`, `-simStop`, `-simCritical` working
-- ✅ **Development Testing** - Full functionality without hardware requirements
-- ✅ **GPIO Mode Selection** - `--gpio-mode real|simulation|disabled`
-- ✅ **Configurable Polling** - `--gpio-polling` for different update rates
+### **🎭 XML-Driven Simulation**
+- ✅ **Per-BIB Timing** - Each BIB follows its own XML-configured schedule
+- ✅ **Async Independence** - BIBs operate completely independently
+- ✅ **Random Variations** - Realistic timing variations per XML config
+- ✅ **Cycle-Based Logic** - Start/Stop/Critical based on XML parameters
+- ✅ **Comprehensive Logging** - Full audit trail of simulation events
 
-### **🚨 Critical Condition System**
-- ✅ **XML Configuration** - Critical conditions loaded from BIB XML files
-- ✅ **Pattern Matching** - Regex and string-based critical detection
-- ✅ **Hardware Triggering** - Critical validation → DD2 GPIO signal
-- ✅ **Auto-Clear Timing** - Configurable signal hold times
-- ✅ **Comprehensive Logging** - Full critical condition audit trail
+### **🔌 Hardware Integration**
+- ✅ **Real Hardware Detection** - FT4232 devices matched to BIBs automatically
+- ✅ **Simulation Fallback** - Graceful fallback when no hardware available
+- ✅ **Per-BIB GPIO** - Independent BitBang control per BIB instance
+- ✅ **EEPROM Matching** - ProductDescription → BIB_ID association
+- ✅ **Mixed Mode** - Some BIBs on real hardware, others on simulation
 
-### **🔄 Service Behavior**
-- ✅ **Original Architecture** - Return to first commit service patterns
-- ✅ **Hardware-Driven Operation** - Service responds to GPIO triggers
-- ✅ **Background Service** - Proper Windows Service behavior
-- ✅ **Error Recovery** - Robust hardware error handling
-- ✅ **Performance** - <100ms GPIO response times
-
----
-
-## 🚧 Sprint 13 Risk Assessment
-
-### **Risk 1: Hardware Availability**
-- **Impact:** Cannot test real GPIO functionality
-- **Mitigation:** Comprehensive simulation mode, hardware detection logic
-- **Status:** LOW RISK (simulation provides full testing capability)
-
-### **Risk 2: FTD2XX_NET Integration**
-- **Impact:** Library conflicts, GPIO timing issues
-- **Mitigation:** Use proven Sprint 10 implementation, error recovery
-- **Status:** LOW RISK (Sprint 10 research provides solutions)
-
-### **Risk 3: GPIO Timing Requirements**
-- **Impact:** 100ms polling might miss fast signals
-- **Mitigation:** Configurable polling rate, edge detection logic
-- **Status:** LOW RISK (hardware spec allows for 100ms response)
+### **📊 Industrial Quality**
+- ✅ **Production Startup** - Professional service banner and logging
+- ✅ **Zero Downtime** - Add/remove BIBs without service restart
+- ✅ **Comprehensive Monitoring** - Per-BIB statistics and health status
+- ✅ **Error Isolation** - One BIB failure doesn't affect others
+- ✅ **Scalable Architecture** - Ready for unlimited BIB additions
 
 ---
 
-## 🎯 Sprint 13 = Hardware Foundation Excellence
+## 🎬 Expected Client Demo Flow - THE REAL INDUSTRIAL THING
 
-### **✅ Real Hardware Control**
-- **Physical GPIO Integration** - Actual FT4232HA Port D control
-- **Hardware-Triggered Workflows** - Start/Stop controlled by external signals
-- **Critical Hardware Response** - Emergency signal output capability
-- **Professional Hardware Interface** - Industrial-grade GPIO control
-
-### **✅ Development & Testing Excellence**
-- **Simulation Mode** - Complete testing without hardware requirements
-- **Command Line Control** - Easy testing and demonstration capability
-- **XML Configuration** - Flexible critical condition management
-- **Comprehensive Testing** - Both hardware and simulation paths validated
-
-### **✅ Production Ready Foundation**
-- **Original Service Behavior** - Return to proven architecture patterns
-- **Enterprise Logging** - Full audit trail for hardware interactions
-- **Error Recovery** - Robust handling of hardware failures
-- **Scalable Architecture** - Ready for Sprint 14 parallel execution
-
----
-
-## 🎬 Expected Client Demo Flow
-
-### **Demo Scenario: Real Hardware Control**
+### **Demo Scenario: Industrial Hot-Add Multi-BIB System**
 
 ```bash
-🎬 DEMO: Real Hardware GPIO Control
+🎬 DEMO: Industrial Multi-BIB Hot-Add System
 
-[14:30:00] 💻 Command: .\SerialPortPoolService.exe --gpio-mode real --bib-ids client_demo
-[14:30:01] 🔌 FT4232HA Port D GPIO initialized successfully
-[14:30:02] 🔍 Starting GPIO input monitoring...
-[14:30:02] 💓 Service heartbeat - GPIO monitoring active
+[14:30:00] 💻 Command: .\SerialPortPoolService.exe
+[14:30:01] ╔══════════════════════════════════════════════════════════╗
+[14:30:01] ║             SerialPortPool Industrial System            ║
+[14:30:01] ║  🏭 Multi-BIB Hot-Add System                            ║
+[14:30:01] ║  📄 Drop XML files in Configuration\ folder             ║
+[14:30:01] ║  Status: Ready for XML hot-add                          ║
+[14:30:01] ╚══════════════════════════════════════════════════════════╝
 
-[14:30:15] 🚀 GPIO TRIGGER: Power On Ready detected (DD0 HIGH)
-[14:30:15] 📡 WORKFLOW ACTIVE SIGNAL: ACTIVE via GPIO DD3  
-[14:30:16] ✅ client_demo/production_uut 🚀 WORKFLOW STARTING
-[14:30:20] ✅ client_demo/production_uut ✅ COMPLETE: Workflow SUCCESS
-[14:30:21] 📡 WORKFLOW ACTIVE SIGNAL: CLEARED via GPIO DD3
+[14:30:02] 🚀 SerialPortPool Industrial System Starting
+[14:30:02] 📂 Monitoring Configuration\ folder for XML hot-add
+[14:30:02] ✅ Dynamic BIB Service ready - monitoring Configuration\ for XML files
+[14:30:12] 💓 Service heartbeat - No BIBs active (ready for XML hot-add)
 
-[14:30:45] 🚨 Critical response detected: "HARDWARE FAULT"
-[14:30:45] 🔌 TRIGGERING HARDWARE CRITICAL SIGNAL (DD2 HIGH)
-[14:30:47] ✅ Auto-cleared critical signal (2s hold time)
+[14:30:30] 📋 DEMO ACTION: Copy client_demo.xml to Configuration\ folder
+[14:30:31] 📄 NEW XML DETECTED: client_demo.xml
+[14:30:32] ✅ BIB client_demo registered and activated
+[14:30:32] 🎭 XML SIMULATION [client_demo]: Will start in 8s
+[14:30:40] 🎭 XML SIMULATION [client_demo]: START trigger fired
+[14:30:40] 🚀 WORKFLOW STARTING: client_demo/production_uut
 
-[14:31:00] ⚠️ GPIO TRIGGER: Power Down Heads-Up detected (DD1 HIGH)
-[14:31:00] 🛑 Service shutdown requested - graceful termination
+[14:31:15] 📋 DEMO ACTION: Copy production_test_v2.xml (while first BIB running!)
+[14:31:16] 📄 NEW XML DETECTED: production_test_v2.xml  
+[14:31:17] ✅ BIB production_test_v2 registered and activated
+[14:31:17] 💓 Service heartbeat - 2 active BIBs
+[14:31:17] 🎭 XML SIMULATION [production_test_v2]: Will start in 15s
+[14:31:32] 🎭 XML SIMULATION [production_test_v2]: START trigger fired
+[14:31:32] 🚀 WORKFLOW STARTING: production_test_v2/test_board_alpha
 
-CLIENT REACTION: "Perfect! Real hardware control exactly as specified!"
+[14:31:45] 🎭 XML SIMULATION [client_demo]: STOP trigger fired (cycle 12)
+[14:31:47] 🎭 XML SIMULATION [production_test_v2]: Still running (different schedule)
+[14:32:00] 🎭 XML SIMULATION [client_demo]: START trigger fired (new cycle)
+
+[14:32:30] 🎭 XML SIMULATION [production_test_v2]: CRITICAL trigger fired
+[14:32:30] 🚨 CRITICAL CONDITION: PROD_SYSTEM_FAULT
+[14:32:30] 🔌 TRIGGERING HARDWARE CRITICAL SIGNAL
+
+CLIENT REACTION: "PERFECT! This is exactly the industrial system we need!"
 ```
 
-### **Demo Scenario: Simulation Mode Testing**
-
-```bash
-🎬 DEMO: Simulation Mode Development Testing
-
-[14:35:00] 💻 Command: .\SerialPortPoolService.exe --gpio-mode simulation --sim-start
-[14:35:01] 🎭 SIMULATION: Triggering start signal...
-[14:35:02] 🚀 HARDWARE TRIGGER: Starting workflow execution...
-[14:35:02] 📡 WORKFLOW ACTIVE SIGNAL: ACTIVE (simulated)
-
-[14:35:10] 💻 Command: .\SerialPortPoolService.exe --gpio-mode simulation --sim-critical
-[14:35:11] 🎭 SIMULATION: Triggering critical condition...
-[14:35:11] 🎭 SIMULATED CRITICAL SIGNAL: ACTIVE
-[14:35:13] 🎭 SIMULATED CRITICAL SIGNAL: Auto-cleared
-
-CLIENT REACTION: "Excellent! Full development capability without hardware dependency!"
-```
+### **Key Demo Points:**
+- ✅ **Service starts with zero configuration**
+- ✅ **First XML hot-add works perfectly** 
+- ✅ **Second XML doesn't disturb first BIB**
+- ✅ **Each BIB follows its own async schedule**
+- ✅ **Critical conditions trigger hardware responses**
+- ✅ **Professional industrial-grade logging**
 
 ---
 
-## 🚀 Sprint 14 Ready
+## 🚀 Sprint 14 Foundation Perfect
 
-### **Sprint 13 Hardware Foundation Enables:**
-- **Parallel Multi-BIB** - Hardware control during concurrent execution  
-- **Advanced Analytics** - GPIO interaction performance metrics
-- **Enterprise Monitoring** - Hardware status in dashboard
-- **Production Deployment** - Proven hardware integration reliability
+### **Sprint 13 Industrial Foundation Enables:**
+- **Multi-BIB Parallel Execution** - Architecture ready for concurrent BIBs
+- **Dashboard Integration** - Rich data for real-time monitoring  
+- **Production Deployment** - Industrial-grade service reliability
+- **Scalable Growth** - Add unlimited BIBs without code changes
+
+### **Sprint 14 Focus Areas:**
+- 🌐 **HTTP Dashboard API** - Visualize multi-BIB operations
+- ⚡ **SignalR Real-Time** - Live updates for all active BIBs
+- 📊 **Advanced Analytics** - Per-BIB performance metrics
+- 🔄 **Parallel Optimization** - Intelligent BIB scheduling
 
 ---
 
-*Sprint 13 Planning - Real Hardware BitBang GPIO Integration*  
+*Sprint 13 Planning - Industrial Multi-BIB Hot-Add System*  
 *Created: September 4, 2025*  
-*Client Priority: Hardware Control Foundation + Simulation*  
-*Risk Level: LOW-MEDIUM | Impact Level: HIGH*
+*Client Priority: The Real Industrial Thing*  
+*Risk Level: LOW | Impact Level: VERY HIGH*
 
-**🚀 Sprint 13 = Hardware Control Foundation Excellence! 🚀**
+**🚀 Sprint 13 = Industrial Production System Excellence! 🚀**
