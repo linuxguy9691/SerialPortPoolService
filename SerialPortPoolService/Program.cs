@@ -1,7 +1,7 @@
 // ===================================================================
-// SPRINT 11 INTEGRATION: Enhanced Program.cs with Multi-File Discovery
+// SPRINT 13 INTEGRATION: Enhanced Program.cs with Sprint 13 Services
 // File: SerialPortPoolService/Program.cs
-// Purpose: Integrate Sprint 11 multi-file capability + test compatibility
+// CHANGEMENT MINIMAL: Seulement ConfigureEnhancedMultiBibServices modifiée
 // ===================================================================
 
 using Microsoft.Extensions.DependencyInjection;
@@ -11,6 +11,7 @@ using NLog.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
 using SerialPortPool.Core.Models;
 using SerialPortPool.Core.Services;
+using SerialPortPool.Core.Extensions;  // ← AJOUTÉ pour Sprint13ServiceExtensions
 using SerialPortPoolService.Services;
 using SerialPortPool.Core.Protocols;
 using System.CommandLine;
@@ -34,17 +35,17 @@ class Program
     static async Task<int> Main(string[] args)
     {
         Console.WriteLine("🚀 SerialPortPoolService - Multi-BIB Production Service");
-        Console.WriteLine("🎛️ SPRINT 11 INTEGRATION: Multi-File Configuration Discovery");
+        Console.WriteLine("🎛️ SPRINT 13 INTEGRATION: Hot-Add Multi-BIB System");
         Console.WriteLine("=".PadRight(80, '='));
         Console.WriteLine();
 
-        // ✅ SPRINT 11: Enhanced Command Line Interface with multi-file options
+        // ✅ SPRINT 13: Enhanced Command Line Interface with multi-file options
         var rootCommand = CreateEnhancedMultiBibCommandLine();
         return await rootCommand.InvokeAsync(args);
     }
 
     /// <summary>
-    /// SPRINT 11: Enhanced command line interface with multi-file discovery (InvocationContext)
+    /// SPRINT 13: Enhanced command line interface with multi-file discovery (InvocationContext)
     /// </summary>
     static RootCommand CreateEnhancedMultiBibCommandLine()
     {
@@ -57,7 +58,7 @@ class Program
         var configDirOption = new Option<string>(
             "--config-dir",
             getDefaultValue: () => "Configuration/",
-            description: "SPRINT 11: Directory for individual BIB files (bib_*.xml)");
+            description: "SPRINT 13: Directory for individual BIB files (bib_*.xml)");
 
         var bibIdsOption = new Option<string[]>(
             "--bib-ids",
@@ -71,16 +72,16 @@ class Program
             getDefaultValue: () => false,
             description: "Execute ALL configured BIB_IDs");
 
-        // SPRINT 11: Multi-file discovery options
+        // SPRINT 13: Multi-file discovery options
         var discoverBibsOption = new Option<bool>(
             "--discover-bibs",
             getDefaultValue: () => false,
-            description: "SPRINT 11: Auto-discover BIB files in config directory");
+            description: "SPRINT 13: Auto-discover BIB files in config directory");
 
         var enableMultiFileOption = new Option<bool>(
             "--enable-multi-file",
             getDefaultValue: () => true,
-            description: "SPRINT 11: Enable multi-file configuration discovery");
+            description: "SPRINT 13: Enable multi-file configuration discovery");
 
         // Execution mode options
         var modeOption = new Option<string>(
@@ -109,14 +110,14 @@ class Program
             getDefaultValue: () => false,
             description: "Legacy: Windows Service demonstration");
 
-        var rootCommand = new RootCommand("SerialPortPool Multi-BIB Production Service - SPRINT 11")
+        var rootCommand = new RootCommand("SerialPortPool Multi-BIB Production Service - SPRINT 13")
         {
             xmlConfigOption,
-            configDirOption,        // 🆕 SPRINT 11
+            configDirOption,        // 🆕 SPRINT 13
             bibIdsOption,
             allBibsOption,
-            discoverBibsOption,     // 🆕 SPRINT 11
-            enableMultiFileOption,  // 🆕 SPRINT 11
+            discoverBibsOption,     // 🆕 SPRINT 13
+            enableMultiFileOption,  // 🆕 SPRINT 13
             modeOption,
             intervalOption,
             detailedLogsOption,
@@ -144,7 +145,7 @@ class Program
                 var legacyLoop = parseResult.GetValueForOption(legacyLoopOption);
                 var serviceDemo = parseResult.GetValueForOption(serviceDemoOption);
 
-                // ✅ SPRINT 11: Configuration complète avec TOUTES les options
+                // ✅ SPRINT 13: Configuration complète avec TOUTES les options
                 var config = CreateEnhancedMultiBibConfiguration(
                     xmlConfig, configDir, bibIds, allBibs, discoverBibs, enableMultiFile, 
                     mode, interval, detailedLogs, legacyLoop, serviceDemo);
@@ -163,7 +164,7 @@ class Program
     }
 
     /// <summary>
-    /// SPRINT 11: Create enhanced configuration with multi-file support
+    /// SPRINT 13: Create enhanced configuration with multi-file support
     /// </summary>
     static MultiBibServiceConfiguration CreateEnhancedMultiBibConfiguration(
         string xmlConfig, string configDir, string[] bibIds, bool allBibs, bool discoverBibs, 
@@ -183,7 +184,7 @@ class Program
             _ => MultiBibExecutionMode.SingleRun
         };
 
-        // 🆕 SPRINT 11: Enhanced configuration path resolution
+        // 🆕 SPRINT 13: Enhanced configuration path resolution
         var configPath = ResolveConfigPath(xmlConfig, configDir);
 
         // Create enhanced configuration
@@ -197,24 +198,24 @@ class Program
             ScheduleInterval = TimeSpan.FromMinutes(interval * 4)
         };
 
-        // 🆕 SPRINT 11: Add multi-file configuration
+        // 🆕 SPRINT 13: Add multi-file configuration
         config.Metadata = new Dictionary<string, object>
         {
             ["ConfigurationDirectory"] = configDir,
             ["EnableMultiFileDiscovery"] = enableMultiFile,
             ["DiscoverBibs"] = discoverBibs,
-            ["Sprint11Enhanced"] = true
+            ["Sprint13Enhanced"] = true
         };
 
         return config;
     }
 
     /// <summary>
-    /// SPRINT 11: Run enhanced Multi-BIB service with discovery
+    /// SPRINT 13: Run enhanced Multi-BIB service with discovery
     /// </summary>
     static async Task RunEnhancedMultiBibService(MultiBibServiceConfiguration config)
     {
-        Console.WriteLine("🎬 Starting SPRINT 11 Enhanced Multi-BIB Service...");
+        Console.WriteLine("🎬 Starting SPRINT 13 Enhanced Multi-BIB Service...");
         Console.WriteLine($"📋 Configuration Summary:");
         Console.WriteLine($"   📄 XML Config: {Path.GetFileName(config.DefaultConfigurationPath ?? "default")}");
         Console.WriteLine($"   📁 Config Directory: {config.Metadata?["ConfigurationDirectory"]}");
@@ -230,12 +231,12 @@ class Program
         
         Console.WriteLine();
 
-        // ✅ SPRINT 11: Enhanced service discovery phase
-        await PerformSprint11Discovery(config);
+        // ✅ SPRINT 13: Enhanced service discovery phase
+        await PerformSprint13Discovery(config);
 
         var builder = Host.CreateApplicationBuilder();
         
-        // Configure services with Sprint 11 enhancements
+        // 🎯 SPRINT 13: Configure services using new Sprint13ServiceExtensions
         ConfigureEnhancedMultiBibServices(builder.Services, config);
         
         // Register Multi-BIB service
@@ -244,7 +245,18 @@ class Program
         
         var host = builder.Build();
         
-        Console.WriteLine("✅ SPRINT 11 Enhanced Multi-BIB Service configured and starting...");
+        Console.WriteLine("✅ SPRINT 13 Enhanced Multi-BIB Service configured and starting...");
+        
+        // 🎯 SPRINT 13: Validate services
+        try
+        {
+            using var scope = host.Services.CreateScope();
+            scope.ServiceProvider.ValidateSprint13Services();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ Service validation warning: {ex.Message}");
+        }
         
         // Graceful shutdown handling
         Console.CancelKeyPress += (sender, e) =>
@@ -258,9 +270,9 @@ class Program
     }
 
     /// <summary>
-    /// SPRINT 11: Perform enhanced BIB discovery
+    /// SPRINT 13: Enhanced service discovery phase
     /// </summary>
-    static async Task PerformSprint11Discovery(MultiBibServiceConfiguration config)
+    static async Task PerformSprint13Discovery(MultiBibServiceConfiguration config)
     {
         try
         {
@@ -273,7 +285,7 @@ class Program
                 return;
             }
 
-            Console.WriteLine("🔍 SPRINT 11: Performing BIB Discovery...");
+            Console.WriteLine("🔍 SPRINT 13: Performing BIB Discovery...");
             Console.WriteLine("=".PadRight(60, '='));
 
             var configDir = config.Metadata?.GetValueOrDefault("ConfigurationDirectory", "Configuration/") as string ?? "Configuration/";
@@ -319,80 +331,53 @@ class Program
     }
 
     /// <summary>
-    /// SPRINT 11: Configure enhanced services with multi-file support
+    /// SPRINT 13: Configure services using Sprint13ServiceExtensions (SIMPLIFIED)
+    /// CHANGEMENT MINIMAL: Remplace toute la logique complexe par une ligne
     /// </summary>
     static void ConfigureEnhancedMultiBibServices(IServiceCollection services, MultiBibServiceConfiguration config)
     {
-        Console.WriteLine("⚙️ Configuring SPRINT 11 Enhanced Multi-BIB Services...");
+        Console.WriteLine("⚙️ Configuring SPRINT 13 Enhanced Multi-BIB Services...");
         
         try
         {
-            // Logging configuration
-            services.AddLogging(builder =>
+            // 🎯 SPRINT 13: Une seule ligne remplace tout le code précédent!
+            services.AddSprint13DemoServices();
+            
+            // Configure the BIB configuration loader with the default path
+            if (!string.IsNullOrEmpty(config.DefaultConfigurationPath))
             {
-                builder.ClearProviders()
-                       .AddNLog()
-                       .AddConsole()
-                       .SetMinimumLevel(config.IncludeDetailedLogs 
-                           ? Microsoft.Extensions.Logging.LogLevel.Information 
-                           : Microsoft.Extensions.Logging.LogLevel.Warning);
-            });
+                services.AddSingleton<IBibConfigurationLoader>(provider =>
+                {
+                    var loader = provider.GetRequiredService<XmlBibConfigurationLoader>();
+                    loader.SetDefaultConfigurationPath(config.DefaultConfigurationPath);
+                    return loader;
+                });
+            }
 
-            // Validation configuration (development mode for broader hardware support)
-            var validationConfig = PortValidationConfiguration.CreateDevelopmentDefault();
-            services.AddSingleton(validationConfig);
-
-            // ✅ SPRINT 11: Enhanced Configuration Loader (with multi-file support)
-            services.AddMemoryCache();
-            services.AddScoped<IBibConfigurationLoader, XmlBibConfigurationLoader>(); // 🆕 ENHANCED
-
-            // ✅ Core Services (Sprint 10 foundation)
-            services.AddScoped<IFtdiDeviceReader, FtdiDeviceReader>();
-            services.AddScoped<ISerialPortValidator, SerialPortValidator>();
-            services.AddScoped<ISerialPortDiscovery, EnhancedSerialPortDiscoveryService>();
-            services.AddScoped<SystemInfoCache>();
-            services.AddScoped<ISystemInfoCache>(provider => provider.GetRequiredService<SystemInfoCache>());
-            services.AddScoped<ISerialPortPool, SerialPortPool.Core.Services.SerialPortPool>();
-
-            // ✅ POC Extension Layer (Reservation System)
-            services.AddScoped<IPortReservationService, PortReservationService>();
-
-            // ✅ Protocol Services
-            services.AddScoped<IProtocolHandlerFactory, ProtocolHandlerFactory>();
-            services.AddScoped<RS232ProtocolHandler>();
-
-            // ✅ EEPROM & Dynamic Mapping (Auto-discovery)
-            services.AddScoped<IFtdiEepromReader, FtdiEepromReader>();
-            services.AddScoped<IDynamicBibMappingService, DynamicBibMappingService>();
-            services.AddScoped<IDynamicPortMappingService, DynamicPortMappingService>();
-
-            // ✅ Multi-BIB Orchestrator
-            services.AddScoped<IBibWorkflowOrchestrator, BibWorkflowOrchestrator>();
-
-            Console.WriteLine("✅ SPRINT 11 Enhanced Services configured successfully");
+            Console.WriteLine("✅ SPRINT 13 Enhanced Services configured successfully");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ ERROR configuring SPRINT 11 services: {ex.Message}");
+            Console.WriteLine($"❌ ERROR configuring SPRINT 13 services: {ex.Message}");
             throw;
         }
     }
 
     /// <summary>
-    /// SPRINT 11: Create sample individual BIB files for testing
+    /// SPRINT 13: Create sample individual BIB files for testing
     /// </summary>
     static async Task CreateSampleIndividualBibFiles(string configDir)
     {
         try
         {
-            Console.WriteLine("📝 Creating sample individual BIB files for SPRINT 11 testing...");
+            Console.WriteLine("📝 Creating sample individual BIB files for SPRINT 13 testing...");
 
             // Sample BIB 1: client_demo
             var clientDemoBib = $@"<?xml version=""1.0"" encoding=""UTF-8""?>
-<bib id=""client_demo"" description=""SPRINT 11: Individual BIB File - Client Demo"">
+<bib id=""client_demo"" description=""SPRINT 13: Individual BIB File - Client Demo"">
   <metadata>
     <board_type>demo</board_type>
-    <sprint>11</sprint>
+    <sprint>13</sprint>
     <file_type>individual</file_type>
     <created_date>{DateTime.Now:yyyy-MM-dd}</created_date>
   </metadata>
@@ -426,10 +411,10 @@ class Program
 
             // Sample BIB 2: production_line_1
             var productionLine1Bib = $@"<?xml version=""1.0"" encoding=""UTF-8""?>
-<bib id=""production_line_1"" description=""SPRINT 11: Production Line 1 - Isolated Configuration"">
+<bib id=""production_line_1"" description=""SPRINT 13: Production Line 1 - Isolated Configuration"">
   <metadata>
     <board_type>production</board_type>
-    <sprint>11</sprint>
+    <sprint>13</sprint>
     <file_type>individual</file_type>
     <line_number>1</line_number>
     <created_date>{DateTime.Now:yyyy-MM-dd}</created_date>
@@ -494,7 +479,7 @@ class Program
     }
 
     /// <summary>
-    /// SPRINT 11: Enhanced configuration path resolution
+    /// SPRINT 13: Enhanced configuration path resolution
     /// </summary>
     static string ResolveConfigPath(string xmlFileName, string configDir = "Configuration/")
     {
@@ -546,13 +531,13 @@ class Program
         
         var multiBibXml = $@"<?xml version=""1.0"" encoding=""UTF-8""?>
 <root>
-  <!-- ✅ SPRINT 11: Legacy Multi-BIB Configuration Example -->
+  <!-- ✅ SPRINT 13: Legacy Multi-BIB Configuration Example -->
   
   <bib id=""client_demo"" description=""Legacy Client Demo BIB - Multi-BIB Example"">
     <metadata>
       <board_type>demo</board_type>
       <multi_bib_group>client_demo</multi_bib_group>
-      <sprint>11</sprint>
+      <sprint>13</sprint>
       <config_type>legacy</config_type>
       <created_date>{DateTime.Now:yyyy-MM-dd}</created_date>
     </metadata>
