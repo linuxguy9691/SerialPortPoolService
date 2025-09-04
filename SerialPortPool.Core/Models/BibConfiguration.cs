@@ -1,9 +1,15 @@
-// SerialPortPool.Core/Models/BibConfiguration.cs - NEW Week 2 CORRECTED COMPLETE FILE
-// DEBUGGED: Fixed ValidationResult → BibValidationResult
+// ===================================================================
+// SPRINT 13 BOUCHÉE #1: BibConfiguration.cs - Extended with Hardware Simulation
+// File: SerialPortPool.Core/Models/BibConfiguration.cs
+// Purpose: Add HardwareSimulation capability for demo without real hardware
+// Philosophy: "Minimum Change" - ONLY add HardwareSimulation property
+// ===================================================================
+
 namespace SerialPortPool.Core.Models;
 
 /// <summary>
 /// Complete BIB (Board In Board) configuration supporting hierarchical structure
+/// SPRINT 13 ENHANCED: Added hardware simulation capability for demo mode
 /// Week 2: XML Configuration System with temporary BIB_ID mapping
 /// </summary>
 public class BibConfiguration
@@ -27,6 +33,12 @@ public class BibConfiguration
     /// BIB-level metadata and settings
     /// </summary>
     public Dictionary<string, string> Metadata { get; set; } = new();
+
+    /// <summary>
+    /// 🆕 SPRINT 13: Hardware simulation configuration for demo mode
+    /// When hardware is not available, enables simulated hardware responses
+    /// </summary>
+    public HardwareSimulationConfig? HardwareSimulation { get; set; }
 
     /// <summary>
     /// When this configuration was created/loaded
@@ -69,9 +81,28 @@ public class BibConfiguration
         return GetAllPorts().Count(p => p.Protocol.Equals(protocol, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// 🆕 SPRINT 13: Check if hardware simulation is enabled
+    /// </summary>
+    public bool IsHardwareSimulationEnabled => HardwareSimulation?.Enabled == true;
+
+    /// <summary>
+    /// 🆕 SPRINT 13: Get simulation mode summary for logging
+    /// </summary>
+    public string GetSimulationSummary()
+    {
+        if (!IsHardwareSimulationEnabled)
+            return "Real Hardware Mode";
+
+        return $"Simulation Mode: Start={HardwareSimulation!.StartTrigger.DelaySeconds}s, " +
+               $"Stop={HardwareSimulation.StopTrigger.DelaySeconds}s, " +
+               $"Critical={HardwareSimulation.CriticalTrigger.Enabled}";
+    }
+
     public override string ToString()
     {
-        return $"BIB {BibId}: {Uuts.Count} UUT(s), {TotalPortCount} port(s)";
+        var mode = IsHardwareSimulationEnabled ? " (Simulation)" : " (Real HW)";
+        return $"BIB {BibId}: {Uuts.Count} UUT(s), {TotalPortCount} port(s){mode}";
     }
 }
 
