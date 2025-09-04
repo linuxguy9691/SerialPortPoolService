@@ -1,771 +1,886 @@
-# 🚀 SPRINT 13 - Hybrid Multi-BIB Parallel Execution
+# 🚀 SPRINT 13 - Real Hardware BitBang GPIO Integration
 
 **Sprint Period:** September 8-22, 2025  
-**Phase:** Enterprise Parallel Execution + Advanced Analytics  
-**Status:** PLANNED - BUILDING ON SPRINT 12 DASHBOARD FOUNDATION  
+**Phase:** Hardware-Triggered Workflow Control + GPIO Integration  
+**Status:** CLIENT PRIORITY - REAL HARDWARE CONTROL  
 
 ---
 
-## 📋 Sprint 13 Overview - ENTERPRISE PARALLEL EXECUTION
+## 📋 Sprint 13 Overview - HARDWARE-FIRST APPROACH
 
-**Mission:** Hybrid Multi-BIB Parallel Execution with Enterprise-Grade Resource Management
+**Mission:** Real FT4232HA BitBang GPIO Integration with Hardware-Triggered Start/Stop Control
 
-**CLIENT SATISFACTION SPRINT 12:** ✅ **Dashboard Excellence!** Real-time visibility achieved! 🎉
+**CLIENT NEW PRIORITY:** ✅ **HARDWARE CONTROL FOUNDATION**  
+- Real GPIO monitoring for workflow start/stop triggers
+- Command line simulation for testing without hardware  
+- XML-based critical condition configuration
+- Critical validation → Hardware GPIO signal output
+- Return to original service behavior patterns
 
-**SPRINT 13 EVOLUTION:**
-- 🔄 **Hybrid Parallel Execution** - 2-3 BIBs maximum concurrent (safe approach)
-- 📊 **Advanced Dashboard Analytics** - Building on Sprint 12 foundation
-- 🧠 **Intelligent Resource Management** - Smart allocation and conflict resolution
-- 🚨 **Enterprise Monitoring** - Advanced alerting and performance optimization
-- 🎯 **Production Scalability** - Real-world deployment ready features
+**SPRINT 13 FOCUS:**
+- 🔌 **Real GPIO Input Monitoring** - Start/Stop triggered by hardware signals
+- 💻 **Command Line Simulation** - `-simStart`, `-simStop` for testing
+- 🚨 **Critical Validation → GPIO Output** - XML config + DD2 hardware signal
+- 📡 **FT4232HA Integration** - Real FTD2XX_NET implementation
+- 🔄 **Original Service Behavior** - Restore first commit patterns
 
 **CORE PHILOSOPHY:** 
-- Build incrementally on proven Sprint 12 dashboard foundation
-- Hybrid approach: some parallel, some sequential based on resource analysis
-- Safety first: never compromise reliability for speed
-- Enterprise quality: production-ready monitoring and error handling
+- Hardware foundation first - establish real GPIO control before advanced features
+- Simulation capability for development and testing without physical hardware
+- Critical conditions must trigger actual hardware responses
+- Return to original service architecture and behavior
 
 ---
 
-## 🎯 Sprint 13 Core Objectives - ENTERPRISE READY
+## 🎯 Sprint 13 Core Objectives - HARDWARE INTEGRATION
 
-### **🔄 OBJECTIVE 1: Hybrid Multi-BIB Parallel Execution (Priority 1)**
-**Priority:** ⭐ **HIGHEST** | **Effort:** 6-8 hours | **Status:** INTELLIGENT PARALLEL APPROACH
+### **🔌 OBJECTIVE 1: Real GPIO Input Monitoring (Priority 1)**
+**Priority:** ⭐ **HIGHEST** | **Effort:** 4-5 hours | **Status:** HARDWARE-TRIGGERED WORKFLOWS
 
-**Client Requirements:**
-- Parallel execution of 2-3 BIBs maximum (safe hybrid approach)
-- Intelligent resource analysis before parallel execution
-- Graceful degradation to sequential if resource conflicts detected
-- Real-time monitoring via Sprint 12 dashboard integration
-
-**Hybrid Strategy:**
+**FT4232HA Port D GPIO Implementation:**
 ```csharp
-// Intelligent hybrid execution strategy
-public enum ExecutionStrategy
+// ✅ Real FTD2XX_NET GPIO monitoring implementation
+public class RealFtdiBitBangProvider : IBitBangProtocolProvider
 {
-    Sequential,           // Safe fallback - one BIB at a time
-    LimitedParallel,     // 2 BIBs parallel - most common case
-    MaximumParallel,     // 3 BIBs parallel - optimal resources only
-    Adaptive             // Dynamic strategy based on real-time analysis
-}
-
-public class HybridMultiBibExecutor
-{
-    private readonly int _maxConcurrentBibs = 3; // Conservative limit
+    private FTDI _ftdiDevice = new FTDI();
+    private const string FT4232H_SERIAL = "FT9A9OFO"; // Client hardware
+    private CancellationTokenSource _monitoringCancellation;
+    private Task _monitoringTask;
     
-    public async Task<MultiBibExecutionResult> ExecuteMultipleBibsHybridAsync(
-        List<string> bibIds,
-        HybridExecutionOptions options)
+    // ✅ Port D Pin Mapping (from hardware spec)
+    private const int POWER_ON_READY_BIT = 0;    // DD0 (CN3-17) - START trigger
+    private const int POWER_DOWN_HEADS_UP_BIT = 1; // DD1 (CN3-16) - STOP trigger  
+    private const int CRITICAL_FAIL_BIT = 2;     // DD2 (CN3-15) - Critical output
+    private const int WORKFLOW_ACTIVE_BIT = 3;   // DD3 (CN3-14) - Status output
+    
+    public async Task InitializeAsync(BitBangConfiguration config)
     {
-        // ✅ STEP 1: Analyze resource requirements
-        var resourceAnalysis = await AnalyzeResourceRequirements(bibIds);
+        _logger.LogInformation("🔌 Initializing FT4232HA Port D GPIO...");
         
-        // ✅ STEP 2: Determine optimal execution strategy
-        var strategy = DetermineExecutionStrategy(resourceAnalysis, options);
+        // ✅ Open Port D (interface index 3 for FT4232H)
+        var status = _ftdiDevice.OpenByIndex(3);
+        if (status != FTDI.FT_STATUS.FT_OK)
+            throw new FtdiException($"Failed to open Port D: {status}", config.SerialNumber);
         
-        // ✅ STEP 3: Execute based on strategy
-        return strategy switch
-        {
-            ExecutionStrategy.Sequential => await ExecuteSequentialAsync(bibIds),
-            ExecutionStrategy.LimitedParallel => await ExecuteLimitedParallelAsync(bibIds, 2),
-            ExecutionStrategy.MaximumParallel => await ExecuteMaximumParallelAsync(bibIds, 3),
-            ExecutionStrategy.Adaptive => await ExecuteAdaptiveAsync(bibIds),
-            _ => await ExecuteSequentialAsync(bibIds) // Safe fallback
-        };
+        // ✅ Configure for async bit-bang mode
+        status = _ftdiDevice.SetBaudRate(62500); // 1MHz actual rate (62500 × 16)
+        status |= _ftdiDevice.SetBitMode(0x00, FTDI.FT_BIT_MODES.FT_BIT_MODE_RESET);
+        await Task.Delay(50); // Critical delay for mode reset
+        
+        // ✅ Direction mask: DD0,DD1 = inputs, DD2,DD3 = outputs
+        status |= _ftdiDevice.SetBitMode(0x0C, FTDI.FT_BIT_MODES.FT_BIT_MODE_ASYNC_BITBANG);
+        
+        if (status != FTDI.FT_STATUS.FT_OK)
+            throw new FtdiException($"Failed to configure bit-bang mode: {status}");
+        
+        _logger.LogInformation("✅ FT4232HA Port D GPIO initialized successfully");
+        
+        // ✅ Start continuous input monitoring
+        StartInputMonitoring();
     }
     
-    private async Task<ResourceAnalysis> AnalyzeResourceRequirements(List<string> bibIds)
+    private void StartInputMonitoring()
     {
-        var analysis = new ResourceAnalysis();
-        
-        foreach (var bibId in bibIds)
+        _monitoringCancellation = new CancellationTokenSource();
+        _monitoringTask = Task.Run(async () =>
         {
-            var bibConfig = await _configLoader.LoadBibAsync(bibId);
-            var requirements = new BibResourceRequirements
+            _logger.LogInformation("🔍 Starting GPIO input monitoring...");
+            
+            bool lastPowerOnReady = false;
+            bool lastPowerDownHeadsUp = false;
+            
+            while (!_monitoringCancellation.Token.IsCancellationRequested)
             {
-                BibId = bibId,
-                RequiredPorts = bibConfig.GetRequiredPortCount(),
-                EstimatedDuration = EstimateExecutionDuration(bibConfig),
-                PortTypes = GetRequiredPortTypes(bibConfig),
-                ConflictPotential = AnalyzeConflictPotential(bibConfig)
-            };
-            
-            analysis.BibRequirements.Add(requirements);
-        }
-        
-        // ✅ Detect potential conflicts
-        analysis.HasPortConflicts = DetectPortConflicts(analysis.BibRequirements);
-        analysis.HasResourceContention = DetectResourceContention(analysis.BibRequirements);
-        analysis.RecommendedStrategy = CalculateOptimalStrategy(analysis);
-        
-        return analysis;
-    }
-    
-    private ExecutionStrategy DetermineExecutionStrategy(
-        ResourceAnalysis analysis, 
-        HybridExecutionOptions options)
-    {
-        // ✅ SAFETY FIRST: If conflicts detected, use sequential
-        if (analysis.HasPortConflicts || analysis.HasResourceContention)
-        {
-            _logger.LogWarning("🔄 Resource conflicts detected, using sequential execution");
-            return ExecutionStrategy.Sequential;
-        }
-        
-        // ✅ RESOURCE BASED: Choose based on available resources
-        var availablePorts = _portMonitor.GetAvailablePortCount();
-        var totalRequiredPorts = analysis.BibRequirements.Sum(r => r.RequiredPorts);
-        
-        if (totalRequiredPorts > availablePorts)
-        {
-            _logger.LogInformation("🔄 Insufficient ports for full parallel, using adaptive strategy");
-            return ExecutionStrategy.Adaptive;
-        }
-        
-        // ✅ PARALLEL DECISION: Based on BIB count and complexity
-        return analysis.BibRequirements.Count switch
-        {
-            <= 1 => ExecutionStrategy.Sequential,
-            2 => ExecutionStrategy.LimitedParallel,
-            >= 3 when analysis.AllBibsLowComplexity => ExecutionStrategy.MaximumParallel,
-            >= 3 => ExecutionStrategy.LimitedParallel, // Conservative for complex BIBs
-            _ => ExecutionStrategy.Sequential
-        };
-    }
-}
-```
-
-**Resource Management:**
-```csharp
-public class IntelligentResourceManager
-{
-    private readonly SemaphoreSlim _globalResourceSemaphore;
-    private readonly ConcurrentDictionary<string, BibResourceLease> _activeBibLeases = new();
-    
-    public async Task<BibResourceLease> AcquireResourcesAsync(
-        BibResourceRequirements requirements,
-        CancellationToken cancellationToken)
-    {
-        // ✅ Wait for global resource availability
-        await _globalResourceSemaphore.WaitAsync(cancellationToken);
-        
-        try
-        {
-            // ✅ Check for specific resource conflicts
-            if (HasResourceConflict(requirements))
-            {
-                _globalResourceSemaphore.Release();
-                throw new ResourceConflictException($"Resource conflict for BIB {requirements.BibId}");
-            }
-            
-            // ✅ Allocate specific resources
-            var allocatedPorts = await AllocatePortsAsync(requirements.PortTypes, requirements.RequiredPorts);
-            
-            var lease = new BibResourceLease
-            {
-                BibId = requirements.BibId,
-                AllocatedPorts = allocatedPorts,
-                AcquiredAt = DateTime.UtcNow,
-                ResourceManager = this
-            };
-            
-            _activeBibLeases[requirements.BibId] = lease;
-            
-            // ✅ Update dashboard with resource allocation
-            await _dashboardHub.Clients.All.SendAsync("ResourceAllocated", new
-            {
-                bibId = requirements.BibId,
-                allocatedPorts = allocatedPorts,
-                timestamp = DateTime.UtcNow
-            });
-            
-            return lease;
-        }
-        catch
-        {
-            _globalResourceSemaphore.Release();
-            throw;
-        }
-    }
-    
-    public async Task ReleaseResourcesAsync(BibResourceLease lease)
-    {
-        if (_activeBibLeases.TryRemove(lease.BibId, out var activeLease))
-        {
-            // ✅ Release allocated ports
-            await ReleasePortsAsync(activeLease.AllocatedPorts);
-            
-            // ✅ Update dashboard
-            await _dashboardHub.Clients.All.SendAsync("ResourceReleased", new
-            {
-                bibId = lease.BibId,
-                releasedPorts = activeLease.AllocatedPorts,
-                duration = DateTime.UtcNow - activeLease.AcquiredAt,
-                timestamp = DateTime.UtcNow
-            });
-            
-            _globalResourceSemaphore.Release();
-        }
-    }
-}
-```
-
-### **📊 OBJECTIVE 2: Advanced Dashboard Analytics (Priority 1)**
-**Priority:** ⭐ **HIGHEST** | **Effort:** 4-5 hours | **Status:** SPRINT 12 FOUNDATION ENHANCEMENT
-
-**Building on Sprint 12 Dashboard:**
-- Enhanced real-time monitoring for parallel executions
-- Resource allocation visualization
-- Performance analytics and optimization insights
-- Parallel execution conflict detection and resolution
-
-**Enhanced Dashboard Features:**
-```javascript
-// Sprint 13 Dashboard Enhancements
-class ParallelExecutionMonitor {
-    updateParallelExecutionView(parallelData) {
-        // ✅ Visual representation of parallel BIB executions
-        const parallelContainer = document.getElementById('parallelExecutions');
-        
-        parallelContainer.innerHTML = parallelData.activeGroups.map(group => `
-            <div class="parallel-group">
-                <h4>📊 Parallel Group ${group.id} (${group.strategy})</h4>
-                <div class="execution-timeline">
-                    ${group.executions.map(exec => `
-                        <div class="execution-bar" style="width: ${exec.progressPercent}%">
-                            <span>${exec.bibId}</span>
-                            <small>${exec.currentPhase} - ${exec.duration}</small>
-                        </div>
-                    `).join('')}
-                </div>
-                <div class="resource-usage">
-                    <span>🔌 Ports: ${group.usedPorts}/${group.totalPorts}</span>
-                    <span>⚡ Efficiency: ${group.efficiencyPercent}%</span>
-                </div>
-            </div>
-        `).join('');
-    }
-    
-    updateResourceAllocationChart(resourceData) {
-        // ✅ Real-time resource allocation visualization
-        const chart = new Chart(document.getElementById('resourceChart'), {
-            type: 'doughnut',
-            data: {
-                labels: ['In Use', 'Reserved', 'Available'],
-                datasets: [{
-                    data: [
-                        resourceData.inUse,
-                        resourceData.reserved, 
-                        resourceData.available
-                    ],
-                    backgroundColor: ['#f44336', '#FF9800', '#4CAF50']
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: '🔌 Real-Time Port Allocation'
+                try
+                {
+                    var currentState = await ReadGpioInputsAsync();
+                    
+                    // ✅ Detect POWER ON READY rising edge (START trigger)
+                    if (currentState.PowerOnReady && !lastPowerOnReady)
+                    {
+                        _logger.LogInformation("🚀 GPIO TRIGGER: Power On Ready detected - triggering workflow START");
+                        await TriggerWorkflowStartAsync();
                     }
+                    
+                    // ✅ Detect POWER DOWN HEADS-UP rising edge (STOP trigger)
+                    if (currentState.PowerDownHeadsUp && !lastPowerDownHeadsUp)
+                    {
+                        _logger.LogWarning("⚠️ GPIO TRIGGER: Power Down Heads-Up detected - triggering workflow STOP");
+                        await TriggerWorkflowStopAsync();
+                    }
+                    
+                    lastPowerOnReady = currentState.PowerOnReady;
+                    lastPowerDownHeadsUp = currentState.PowerDownHeadsUp;
+                    
+                    // ✅ Configurable polling interval (default 100ms from spec)
+                    await Task.Delay(100, _monitoringCancellation.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "❌ GPIO monitoring error - continuing...");
+                    await Task.Delay(1000); // Error recovery delay
                 }
             }
+            
+            _logger.LogInformation("🔍 GPIO input monitoring stopped");
         });
     }
     
-    updatePerformanceMetrics(metrics) {
-        // ✅ Enhanced performance metrics for parallel execution
-        document.getElementById('parallelEfficiency').textContent = 
-            `${metrics.parallelEfficiencyPercent}%`;
-        document.getElementById('resourceUtilization').textContent = 
-            `${metrics.resourceUtilizationPercent}%`;
-        document.getElementById('conflictRate').textContent = 
-            `${metrics.conflictsPerHour}/h`;
-        document.getElementById('throughputGain').textContent = 
-            `+${metrics.throughputGainPercent}%`;
+    private async Task<BitBangInputState> ReadGpioInputsAsync()
+    {
+        uint bytesRead = 0;
+        byte[] buffer = new byte[1];
+        
+        var status = _ftdiDevice.Read(buffer, 1, ref bytesRead);
+        if (status != FTDI.FT_STATUS.FT_OK || bytesRead == 0)
+            throw new FtdiException($"GPIO read failed: {status}");
+        
+        byte rawValue = buffer[0];
+        
+        return new BitBangInputState
+        {
+            PowerOnReady = (rawValue & (1 << POWER_ON_READY_BIT)) != 0,
+            PowerDownHeadsUp = (rawValue & (1 << POWER_DOWN_HEADS_UP_BIT)) != 0,
+            RawInputValue = rawValue,
+            Timestamp = DateTime.Now
+        };
+    }
+    
+    // ✅ Critical fail signal output (CLIENT REQUIREMENT)
+    public async Task SetCriticalFailSignalAsync(bool state)
+    {
+        var currentOutput = await ReadCurrentOutputState();
+        byte newOutput = state 
+            ? (byte)(currentOutput | (1 << CRITICAL_FAIL_BIT))
+            : (byte)(currentOutput & ~(1 << CRITICAL_FAIL_BIT));
+        
+        uint bytesWritten = 0;
+        var status = _ftdiDevice.Write(new byte[] { newOutput }, 1, ref bytesWritten);
+        
+        if (status != FTDI.FT_STATUS.FT_OK)
+            throw new FtdiException($"Failed to set critical fail signal: {status}");
+        
+        _logger.LogCritical("🚨 CRITICAL FAIL SIGNAL: {State} via GPIO DD2", state ? "ACTIVE" : "CLEARED");
+        
+        // ✅ Auto-clear after configured time (default 2s from spec)
+        if (state)
+        {
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2));
+                await SetCriticalFailSignalAsync(false);
+            });
+        }
+    }
+    
+    // ✅ Workflow active signal for status indication
+    public async Task SetWorkflowActiveSignalAsync(bool state)
+    {
+        var currentOutput = await ReadCurrentOutputState();
+        byte newOutput = state 
+            ? (byte)(currentOutput | (1 << WORKFLOW_ACTIVE_BIT))
+            : (byte)(currentOutput & ~(1 << WORKFLOW_ACTIVE_BIT));
+        
+        uint bytesWritten = 0;
+        var status = _ftdiDevice.Write(new byte[] { newOutput }, 1, ref bytesWritten);
+        
+        if (status != FTDI.FT_STATUS.FT_OK)
+            throw new FtdiException($"Failed to set workflow active signal: {status}");
+        
+        _logger.LogInformation("📡 WORKFLOW ACTIVE SIGNAL: {State} via GPIO DD3", state ? "ACTIVE" : "CLEARED");
+    }
+}
+
+// ✅ Service integration with hardware triggers
+public class HardwareTriggeredWorkflowService
+{
+    private readonly IBitBangProtocolProvider _bitBangProvider;
+    private readonly IMultiBibWorkflowService _workflowService;
+    
+    private async Task TriggerWorkflowStartAsync()
+    {
+        try
+        {
+            _logger.LogInformation("🚀 HARDWARE TRIGGER: Starting workflow execution...");
+            
+            // ✅ Set workflow active signal
+            await _bitBangProvider.SetWorkflowActiveSignalAsync(true);
+            
+            // ✅ Execute configured BIB workflow
+            var result = await _workflowService.ExecuteConfiguredBibAsync();
+            
+            _logger.LogInformation("✅ HARDWARE TRIGGERED WORKFLOW: {Result}", result.Success ? "SUCCESS" : "FAILED");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Hardware triggered workflow failed");
+        }
+        finally
+        {
+            // ✅ Clear workflow active signal
+            await _bitBangProvider.SetWorkflowActiveSignalAsync(false);
+        }
+    }
+    
+    private async Task TriggerWorkflowStopAsync()
+    {
+        _logger.LogWarning("⚠️ HARDWARE TRIGGER: Stopping workflow execution...");
+        
+        // ✅ Request graceful stop
+        await _workflowService.RequestStopAsync();
+        
+        // ✅ Clear workflow active signal
+        await _bitBangProvider.SetWorkflowActiveSignalAsync(false);
     }
 }
 ```
 
-**Analytics Dashboard Extensions:**
-```html
-<!-- Sprint 13 Dashboard Additions -->
-<div class="card">
-    <h2>🔄 Parallel Execution Analytics</h2>
-    <div class="analytics-grid">
-        <div class="metric-card">
-            <h3>Parallel Efficiency</h3>
-            <div class="metric-value" id="parallelEfficiency">87%</div>
-            <small>vs Sequential</small>
-        </div>
-        <div class="metric-card">
-            <h3>Resource Utilization</h3>
-            <div class="metric-value" id="resourceUtilization">73%</div>
-            <small>Optimal Range: 60-80%</small>
-        </div>
-        <div class="metric-card">
-            <h3>Conflict Rate</h3>
-            <div class="metric-value" id="conflictRate">0.3/h</div>
-            <small>Auto-resolved</small>
-        </div>
-        <div class="metric-card">
-            <h3>Throughput Gain</h3>
-            <div class="metric-value status-running" id="throughputGain">+45%</div>
-            <small>vs Sequential</small>
-        </div>
-    </div>
-</div>
+### **💻 OBJECTIVE 2: Command Line Simulation (Priority 1)**
+**Priority:** ⭐ **HIGHEST** | **Effort:** 2-3 hours | **Status:** TESTING WITHOUT HARDWARE
 
-<div class="card">
-    <h2>📊 Resource Allocation</h2>
-    <div style="display: flex; gap: 20px; align-items: center;">
-        <canvas id="resourceChart" width="300" height="300"></canvas>
-        <div class="resource-details">
-            <h3>🔌 Port Allocation Details</h3>
-            <div id="portAllocationDetails">
-                <!-- Real-time port allocation list -->
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="card">
-    <h2>🔄 Parallel Execution Groups</h2>
-    <div id="parallelExecutions">
-        <!-- Real-time parallel execution visualization -->
-    </div>
-</div>
-```
-
-### **🧠 OBJECTIVE 3: Intelligent Failure Policies (Priority 2)**
-**Priority:** 🎯 **HIGH** | **Effort:** 3-4 hours | **Status:** ENTERPRISE ERROR HANDLING
-
-**Advanced Failure Management:**
+**Simulation Commands for Development:**
 ```csharp
-public class EnterpriseFailurePolicy
+// ✅ Extended command line options for Sprint 13
+public class Sprint13CommandLineOptions
 {
-    // ✅ Global failure cascade control
-    public bool StopAllOnCritical { get; set; } = true;
-    public bool IsolateBibOnFailure { get; set; } = true;
-    public bool ContinueOtherBibsOnFailure { get; set; } = true;
-    public int MaxConcurrentFailures { get; set; } = 2;
+    // ✅ Existing options preserved
+    [Option("mode", Required = false, HelpText = "Execution mode")]
+    public string Mode { get; set; } = "single";
     
-    // ✅ Parallel execution specific policies
-    public bool ReduceParallelismOnFailures { get; set; } = true;
-    public bool QuarantineFailingBibs { get; set; } = true;
-    public TimeSpan FailureQuarantineDuration { get; set; } = TimeSpan.FromMinutes(5);
+    [Option("bib-ids", Required = false, HelpText = "BIB identifiers")]  
+    public string BibIds { get; set; } = "client_demo";
     
-    // ✅ Resource protection policies
-    public bool ProtectResourcesOnCritical { get; set; } = true;
-    public bool ReleaseResourcesOnFailure { get; set; } = true;
-    public bool PreventConflictingRetries { get; set; } = true;
+    // ✅ NEW Sprint 13: GPIO simulation options
+    [Option("sim-start", Required = false, HelpText = "Simulate GPIO start trigger")]
+    public bool SimulateStart { get; set; } = false;
     
-    public async Task<FailureHandlingResult> HandleFailureAsync(
-        BibExecutionFailure failure,
-        List<ActiveBibExecution> activeExecutions)
+    [Option("sim-stop", Required = false, HelpText = "Simulate GPIO stop trigger")]
+    public bool SimulateStop { get; set; } = false;
+    
+    [Option("sim-critical", Required = false, HelpText = "Simulate critical condition")]
+    public bool SimulateCritical { get; set; } = false;
+    
+    [Option("gpio-mode", Required = false, HelpText = "GPIO mode: real, simulation, disabled")]
+    public string GpioMode { get; set; } = "real";
+    
+    [Option("gpio-polling", Required = false, HelpText = "GPIO polling interval in ms")]
+    public int GpioPollingMs { get; set; } = 100;
+}
+
+// ✅ Simulation provider for testing without hardware
+public class SimulatedBitBangProvider : IBitBangProtocolProvider
+{
+    private bool _simulatedPowerReady = false;
+    private bool _simulatedPowerDown = false;
+    private bool _simulatedCriticalSignal = false;
+    private bool _simulatedWorkflowActive = false;
+    
+    public async Task SimulateStartTriggerAsync()
     {
-        var result = new FailureHandlingResult();
+        _logger.LogInformation("🎭 SIMULATION: Triggering start signal...");
+        _simulatedPowerReady = true;
         
-        switch (failure.Level)
-        {
-            case ValidationLevel.CRITICAL:
-                result = await HandleCriticalFailureAsync(failure, activeExecutions);
-                break;
-                
-            case ValidationLevel.FAIL:
-                result = await HandleStandardFailureAsync(failure, activeExecutions);
-                break;
-                
-            case ValidationLevel.WARN:
-                result = await HandleWarningAsync(failure);
-                break;
-        }
+        // ✅ Trigger same events as real hardware
+        await TriggerWorkflowStartAsync();
         
-        // ✅ Update dashboard with failure handling
-        await NotifyDashboardOfFailureHandling(failure, result);
-        
-        return result;
+        await Task.Delay(100);
+        _simulatedPowerReady = false;
     }
     
-    private async Task<FailureHandlingResult> HandleCriticalFailureAsync(
-        BibExecutionFailure failure,
-        List<ActiveBibExecution> activeExecutions)
+    public async Task SimulateStopTriggerAsync()
     {
-        var result = new FailureHandlingResult();
+        _logger.LogWarning("🎭 SIMULATION: Triggering stop signal...");
+        _simulatedPowerDown = true;
         
-        if (StopAllOnCritical)
+        // ✅ Trigger same events as real hardware
+        await TriggerWorkflowStopAsync();
+        
+        await Task.Delay(100);
+        _simulatedPowerDown = false;
+    }
+    
+    public async Task SimulateCriticalConditionAsync()
+    {
+        _logger.LogCritical("🎭 SIMULATION: Triggering critical condition...");
+        
+        // ✅ Same behavior as real critical validation
+        await SetCriticalFailSignalAsync(true);
+    }
+    
+    public async Task SetCriticalFailSignalAsync(bool state)
+    {
+        _simulatedCriticalSignal = state;
+        _logger.LogCritical("🎭 SIMULATED CRITICAL SIGNAL: {State}", state ? "ACTIVE" : "CLEARED");
+        
+        // ✅ Auto-clear simulation after 2 seconds
+        if (state)
         {
-            // ✅ Emergency stop all parallel executions
-            _logger.LogCritical("🚨 CRITICAL failure detected, emergency stop all executions");
-            
-            foreach (var execution in activeExecutions)
+            _ = Task.Run(async () =>
             {
-                if (execution.BibId != failure.BibId)
+                await Task.Delay(2000);
+                _simulatedCriticalSignal = false;
+                _logger.LogInformation("🎭 SIMULATED CRITICAL SIGNAL: Auto-cleared");
+            });
+        }
+    }
+}
+
+// ✅ Program.cs integration with simulation
+public static async Task Main(string[] args)
+{
+    var options = Parser.Default.ParseArguments<Sprint13CommandLineOptions>(args);
+    
+    await options.WithParsedAsync(async opts =>
+    {
+        // ✅ Configure GPIO provider based on mode
+        IBitBangProtocolProvider bitBangProvider = opts.GpioMode.ToLower() switch
+        {
+            "real" => new RealFtdiBitBangProvider(),
+            "simulation" => new SimulatedBitBangProvider(), 
+            "disabled" => new DisabledBitBangProvider(),
+            _ => new RealFtdiBitBangProvider()
+        };
+        
+        var workflowService = ConfigureWorkflowService(bitBangProvider);
+        
+        // ✅ Handle simulation commands
+        if (opts.SimulateStart && bitBangProvider is SimulatedBitBangProvider sim)
+        {
+            Console.WriteLine("🎭 Simulating GPIO START trigger...");
+            await sim.SimulateStartTriggerAsync();
+        }
+        
+        if (opts.SimulateStop && bitBangProvider is SimulatedBitBangProvider sim2)
+        {
+            Console.WriteLine("🎭 Simulating GPIO STOP trigger...");
+            await sim2.SimulateStopTriggerAsync();
+        }
+        
+        if (opts.SimulateCritical && bitBangProvider is SimulatedBitBangProvider sim3)
+        {
+            Console.WriteLine("🎭 Simulating CRITICAL condition...");
+            await sim3.SimulateCriticalConditionAsync();
+        }
+        
+        // ✅ Start hardware monitoring or simulation
+        await workflowService.StartAsync();
+        
+        Console.WriteLine("Press any key to stop...");
+        Console.ReadKey();
+        
+        await workflowService.StopAsync();
+    });
+}
+```
+
+**Example Command Line Usage:**
+```bash
+# ✅ Real hardware monitoring
+.\SerialPortPoolService.exe --gpio-mode real --bib-ids client_demo
+
+# ✅ Simulation mode for testing
+.\SerialPortPoolService.exe --gpio-mode simulation --sim-start --bib-ids production_test
+
+# ✅ Test critical condition
+.\SerialPortPoolService.exe --gpio-mode simulation --sim-critical
+
+# ✅ Faster GPIO polling for testing
+.\SerialPortPoolService.exe --gpio-mode real --gpio-polling 50
+```
+
+### **🚨 OBJECTIVE 3: XML-Based Critical Configuration (Priority 1)**
+**Priority:** ⭐ **HIGHEST** | **Effort:** 2-3 hours | **Status:** CRITICAL → GPIO INTEGRATION
+
+**Enhanced XML Configuration with Critical Triggers:**
+```xml
+<!-- ✅ Enhanced BIB configuration with critical conditions -->
+<BibConfiguration>
+    <BibId>client_demo</BibId>
+    <Description>Client Demo with Critical Conditions</Description>
+    
+    <!-- ✅ NEW: Critical condition configuration -->
+    <CriticalConditions>
+        <Condition>
+            <Name>HARDWARE_FAULT</Name>
+            <Pattern>FAULT|ERROR|FAIL</Pattern>
+            <IsRegex>true</IsRegex>
+            <TriggerHardwareSignal>true</TriggerHardwareSignal>
+            <HoldTimeSeconds>2</HoldTimeSeconds>
+            <Description>Hardware fault detection</Description>
+        </Condition>
+        <Condition>
+            <Name>OVERVOLTAGE</Name>
+            <Pattern>OVERVOLT|VOLTAGE.*HIGH</Pattern>
+            <IsRegex>true</IsRegex>
+            <TriggerHardwareSignal>true</TriggerHardwareSignal>
+            <HoldTimeSeconds>5</HoldTimeSeconds>
+            <Description>Overvoltage protection</Description>
+        </Condition>
+        <Condition>
+            <Name>EMERGENCY_STOP</Name>
+            <Pattern>EMERGENCY|ESTOP</Pattern>
+            <IsRegex>true</IsRegex>
+            <TriggerHardwareSignal>true</TriggerHardwareSignal>
+            <HoldTimeSeconds>10</HoldTimeSeconds>
+            <Description>Emergency stop condition</Description>
+        </Condition>
+    </CriticalConditions>
+    
+    <Uuts>
+        <Uut>
+            <UutId>production_uut</UutId>
+            <Description>Production UUT with Critical Monitoring</Description>
+            <Ports>
+                <Port>
+                    <PortNumber>1</PortNumber>
+                    <Protocol>rs232</Protocol>
+                    <Speed>115200</Speed>
+                    <DataPattern>n81</DataPattern>
+                    
+                    <!-- ✅ Enhanced commands with critical validation -->
+                    <TestCommands>
+                        <Command>
+                            <Command>TEST</Command>
+                            <ExpectedResponse>OK</ExpectedResponse>
+                            <TimeoutMs>5000</TimeoutMs>
+                            <!-- ✅ Multi-level validation patterns -->
+                            <ValidationPatterns>
+                                <Pattern Level="PASS">OK|PASS</Pattern>
+                                <Pattern Level="WARN">SLOW|DELAY</Pattern>
+                                <Pattern Level="FAIL">FAIL|ERROR</Pattern>
+                                <Pattern Level="CRITICAL">FAULT|EMERGENCY|OVERVOLT</Pattern>
+                            </ValidationPatterns>
+                        </Command>
+                    </TestCommands>
+                </Port>
+            </Ports>
+        </Uut>
+    </Uuts>
+</BibConfiguration>
+```
+
+**Critical Condition Processing:**
+```csharp
+// ✅ XML critical condition loader
+public class CriticalConditionLoader
+{
+    public List<CriticalCondition> LoadFromXml(string bibConfigPath)
+    {
+        var doc = XDocument.Load(bibConfigPath);
+        var conditions = new List<CriticalCondition>();
+        
+        foreach (var conditionElement in doc.Descendants("Condition"))
+        {
+            var condition = new CriticalCondition
+            {
+                Name = conditionElement.Element("Name")?.Value ?? "",
+                Pattern = conditionElement.Element("Pattern")?.Value ?? "",
+                IsRegex = bool.Parse(conditionElement.Element("IsRegex")?.Value ?? "false"),
+                TriggerHardwareSignal = bool.Parse(conditionElement.Element("TriggerHardwareSignal")?.Value ?? "false"),
+                HoldTimeSeconds = int.Parse(conditionElement.Element("HoldTimeSeconds")?.Value ?? "2"),
+                Description = conditionElement.Element("Description")?.Value ?? ""
+            };
+            
+            if (condition.IsRegex)
+            {
+                condition.CompiledPattern = new Regex(condition.Pattern, RegexOptions.IgnoreCase);
+            }
+            
+            conditions.Add(condition);
+        }
+        
+        return conditions;
+    }
+}
+
+// ✅ Critical condition evaluation with hardware integration
+public class CriticalConditionEvaluator
+{
+    private readonly List<CriticalCondition> _conditions;
+    private readonly IBitBangProtocolProvider _bitBangProvider;
+    
+    public async Task<EnhancedValidationResult> EvaluateResponseAsync(string response)
+    {
+        foreach (var condition in _conditions)
+        {
+            bool matches = condition.IsRegex 
+                ? condition.CompiledPattern.IsMatch(response)
+                : response.Contains(condition.Pattern, StringComparison.OrdinalIgnoreCase);
+            
+            if (matches)
+            {
+                _logger.LogCritical("🚨 CRITICAL CONDITION DETECTED: {Name} - {Description}", 
+                    condition.Name, condition.Description);
+                
+                // ✅ Trigger hardware signal if configured
+                if (condition.TriggerHardwareSignal)
                 {
-                    await execution.RequestGracefulStopAsync();
-                    result.StoppedExecutions.Add(execution.BibId);
+                    _logger.LogCritical("🔌 TRIGGERING HARDWARE CRITICAL SIGNAL for condition: {Name}", condition.Name);
+                    await _bitBangProvider.SetCriticalFailSignalAsync(true);
+                    
+                    // ✅ Schedule auto-clear based on XML configuration
+                    _ = Task.Run(async () =>
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(condition.HoldTimeSeconds));
+                        await _bitBangProvider.SetCriticalFailSignalAsync(false);
+                        _logger.LogInformation("✅ Auto-cleared critical signal for condition: {Name}", condition.Name);
+                    });
+                }
+                
+                return EnhancedValidationResult.Critical(
+                    $"Critical condition '{condition.Name}': {condition.Description}",
+                    pattern: condition.Pattern, 
+                    triggerHardware: condition.TriggerHardwareSignal);
+            }
+        }
+        
+        // ✅ No critical conditions matched
+        return EnhancedValidationResult.Pass("No critical conditions detected");
+    }
+}
+```
+
+### **🔄 OBJECTIVE 4: Original Service Behavior Restoration (Priority 2)**
+**Priority:** 🎯 **HIGH** | **Effort:** 2-3 hours | **Status:** RETURN TO FOUNDATIONS
+
+**Service Architecture Aligned with First Commits:**
+```csharp
+// ✅ Restore original service behavior patterns
+public class SerialPortPoolService : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        _logger.LogInformation("🚀 SerialPortPool Service Starting - Sprint 13 Hardware Integration");
+        
+        // ✅ Initialize hardware GPIO monitoring
+        await InitializeHardwareMonitoringAsync();
+        
+        // ✅ Wait for hardware triggers (original pattern)
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                // ✅ Hardware monitoring handles start/stop triggers
+                // Service remains responsive but waits for GPIO signals
+                await Task.Delay(1000, stoppingToken);
+                
+                // ✅ Optional: heartbeat logging
+                if (DateTime.Now.Second == 0) // Once per minute
+                {
+                    _logger.LogInformation("💓 Service heartbeat - GPIO monitoring active");
                 }
             }
-        }
-        
-        if (ProtectResourcesOnCritical)
-        {
-            // ✅ Protect resources from further allocation
-            await _resourceManager.EnterProtectionModeAsync();
-            result.ResourceProtectionActivated = true;
-        }
-        
-        // ✅ Trigger hardware critical signal if available
-        if (_bitBangProvider != null)
-        {
-            await _bitBangProvider.SetCriticalFailSignalAsync(true);
-            result.HardwareSignalTriggered = true;
-        }
-        
-        return result;
-    }
-}
-```
-
-### **🎯 OBJECTIVE 4: Enhanced Multi-BIB Reporting (Priority 2)**
-**Priority:** 🎯 **HIGH** | **Effort:** 3-4 hours | **Status:** ENTERPRISE ANALYTICS
-
-**Comprehensive Multi-BIB Reporting:**
-```csharp
-public class EnterpriseMultiBibReport
-{
-    // ✅ Executive Summary
-    public string ExecutionId { get; set; } = Guid.NewGuid().ToString();
-    public DateTime StartTime { get; set; }
-    public DateTime EndTime { get; set; }
-    public TimeSpan TotalExecutionTime => EndTime - StartTime;
-    
-    // ✅ Execution Strategy Analysis
-    public ExecutionStrategy UsedStrategy { get; set; }
-    public string StrategyReason { get; set; } = string.Empty;
-    public int MaxConcurrentBibs { get; set; }
-    public double ParallelEfficiencyPercent { get; set; }
-    
-    // ✅ Resource Utilization Metrics
-    public ResourceUtilizationMetrics ResourceMetrics { get; set; } = new();
-    public List<ResourceConflict> DetectedConflicts { get; set; } = new();
-    public List<ResourceOptimization> AppliedOptimizations { get; set; } = new();
-    
-    // ✅ Performance Analysis
-    public PerformanceComparisonMetrics Performance { get; set; } = new();
-    public List<BibPerformanceSummary> BibPerformanceSummaries { get; set; } = new();
-    
-    // ✅ Quality Metrics
-    public MultiBibQualityMetrics QualityMetrics { get; set; } = new();
-    public List<ValidationLevelStatistics> ValidationStatistics { get; set; } = new();
-    
-    // ✅ Failure Analysis
-    public FailureAnalysisReport FailureAnalysis { get; set; } = new();
-    public List<FailurePattern> IdentifiedPatterns { get; set; } = new();
-    
-    // ✅ Recommendations
-    public List<OptimizationRecommendation> Recommendations { get; set; } = new();
-    public List<ConfigurationSuggestion> ConfigurationSuggestions { get; set; } = new();
-    
-    public void GenerateExecutiveSummary()
-    {
-        var summary = new StringBuilder();
-        
-        summary.AppendLine($"📊 MULTI-BIB EXECUTION REPORT");
-        summary.AppendLine($"═══════════════════════════════════════════════════");
-        summary.AppendLine($"🆔 Execution ID: {ExecutionId}");
-        summary.AppendLine($"📅 Date: {StartTime:yyyy-MM-dd HH:mm:ss}");
-        summary.AppendLine($"⏱️ Duration: {TotalExecutionTime.TotalMinutes:F1} minutes");
-        summary.AppendLine($"🔄 Strategy: {UsedStrategy} ({StrategyReason})");
-        summary.AppendLine($"📈 Efficiency: {ParallelEfficiencyPercent:F1}% vs Sequential");
-        summary.AppendLine();
-        
-        summary.AppendLine($"🎯 BIB EXECUTION SUMMARY");
-        summary.AppendLine($"───────────────────────────────────────────────────");
-        foreach (var bibSummary in BibPerformanceSummaries)
-        {
-            summary.AppendLine($"  📋 {bibSummary.BibId}:");
-            summary.AppendLine($"     ⏱️ Duration: {bibSummary.ExecutionTime.TotalSeconds:F1}s");
-            summary.AppendLine($"     ✅ Success: {bibSummary.OverallSuccess}");
-            summary.AppendLine($"     📊 Validation: {bibSummary.ValidationSummary}");
-        }
-        
-        summary.AppendLine();
-        summary.AppendLine($"🔌 RESOURCE UTILIZATION");
-        summary.AppendLine($"───────────────────────────────────────────────────");
-        summary.AppendLine($"  📊 Peak Port Usage: {ResourceMetrics.PeakPortUsage}/{ResourceMetrics.TotalAvailablePorts}");
-        summary.AppendLine($"  ⚡ Avg Utilization: {ResourceMetrics.AverageUtilizationPercent:F1}%");
-        summary.AppendLine($"  🚨 Conflicts: {DetectedConflicts.Count} detected, {DetectedConflicts.Count(c => c.Resolved)} resolved");
-        
-        if (Recommendations.Any())
-        {
-            summary.AppendLine();
-            summary.AppendLine($"💡 OPTIMIZATION RECOMMENDATIONS");
-            summary.AppendLine($"───────────────────────────────────────────────────");
-            foreach (var recommendation in Recommendations.Take(3))
+            catch (OperationCanceledException)
             {
-                summary.AppendLine($"  • {recommendation.Title}: {recommendation.Description}");
+                _logger.LogInformation("🛑 Service shutdown requested");
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Service error - continuing operation");
             }
         }
         
-        ExecutiveSummary = summary.ToString();
+        // ✅ Cleanup hardware monitoring
+        await CleanupHardwareMonitoringAsync();
+        
+        _logger.LogInformation("✅ SerialPortPool Service Stopped");
+    }
+    
+    private async Task InitializeHardwareMonitoringAsync()
+    {
+        _logger.LogInformation("🔌 Initializing hardware GPIO monitoring...");
+        
+        // ✅ Load configuration from XML (original pattern)
+        var config = await LoadBitBangConfigurationAsync();
+        
+        // ✅ Initialize GPIO provider (real or simulated)
+        await _bitBangProvider.InitializeAsync(config);
+        
+        _logger.LogInformation("✅ Hardware GPIO monitoring initialized");
+    }
+}
+
+// ✅ Original startup pattern with hardware integration
+public class Program
+{
+    public static async Task Main(string[] args)
+    {
+        // ✅ Original logging configuration
+        Log.Logger = new LoggerConfiguration()
+            .WriteTo.Console()
+            .WriteTo.File("C:\\Logs\\SerialPortPool\\service-.log", rollingInterval: RollingInterval.Day)
+            .CreateLogger();
+        
+        try
+        {
+            _logger.LogInformation("🚀 SerialPortPool Service Starting - Sprint 13");
+            
+            // ✅ Parse command line (original + new GPIO options)
+            var options = ParseCommandLine(args);
+            
+            // ✅ Build service with hardware integration
+            var host = CreateHostBuilder(args, options).Build();
+            
+            // ✅ Start service (original async pattern)
+            await host.RunAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogFatal(ex, "💥 Service failed to start");
+        }
+        finally
+        {
+            Log.CloseAndFlush();
+        }
     }
 }
 ```
 
-### **🧪 OBJECTIVE 5: Comprehensive Testing Suite (Priority 3)**
-**Priority:** ✅ **MEDIUM** | **Effort:** 4-5 hours | **Status:** QUALITY ASSURANCE
+### **🧪 OBJECTIVE 5: Integration Testing (Priority 3)**
+**Priority:** ✅ **MEDIUM** | **Effort:** 2-3 hours | **Status:** HARDWARE + SIMULATION
 
-**Parallel Execution Test Scenarios:**
+**Comprehensive Testing Strategy:**
 ```csharp
 [TestFixture]
-public class HybridParallelExecutionTests
+public class HardwareBitBangIntegrationTests
 {
     [Test]
-    public async Task HybridExecution_TwoBibsNoConflicts_ExecutesInParallel()
+    public async Task RealGpioProvider_InitializePortD_ConfiguresCorrectly()
     {
         // Arrange
-        var bibIds = new[] { "bib_a", "bib_b" };
-        SetupNoResourceConflicts();
+        var config = BitBangConfiguration.CreateDefault();
+        var provider = new RealFtdiBitBangProvider();
         
-        // Act
-        var result = await _hybridExecutor.ExecuteMultipleBibsHybridAsync(bibIds, _defaultOptions);
-        
-        // Assert
-        Assert.That(result.UsedStrategy, Is.EqualTo(ExecutionStrategy.LimitedParallel));
-        Assert.That(result.MaxConcurrentExecutions, Is.EqualTo(2));
-        Assert.That(result.ParallelEfficiencyPercent, Is.GreaterThan(50));
+        // Act & Assert (requires actual hardware)
+        if (IsHardwareAvailable())
+        {
+            await provider.InitializeAsync(config);
+            var status = await provider.GetStatusAsync();
+            
+            Assert.That(status.IsConnected, Is.True);
+            Assert.That(status.DeviceId, Is.EqualTo("FT9A9OFO"));
+        }
+        else
+        {
+            Assert.Ignore("Hardware not available - skipping real GPIO test");
+        }
     }
     
     [Test]
-    public async Task HybridExecution_ResourceConflicts_FallsBackToSequential()
+    public async Task SimulatedProvider_StartTrigger_ExecutesWorkflow()
     {
         // Arrange
-        var bibIds = new[] { "bib_conflict_a", "bib_conflict_b" };
-        SetupResourceConflicts();
+        var simulatedProvider = new SimulatedBitBangProvider();
+        var workflowService = new Mock<IMultiBibWorkflowService>();
         
         // Act
-        var result = await _hybridExecutor.ExecuteMultipleBibsHybridAsync(bibIds, _defaultOptions);
+        await simulatedProvider.SimulateStartTriggerAsync();
         
         // Assert
-        Assert.That(result.UsedStrategy, Is.EqualTo(ExecutionStrategy.Sequential));
-        Assert.That(result.ConflictsDetected, Is.GreaterThan(0));
-        Assert.That(result.OverallSuccess, Is.True); // Should still succeed
+        workflowService.Verify(s => s.ExecuteConfiguredBibAsync(), Times.Once);
     }
     
     [Test]
-    public async Task HybridExecution_CriticalFailure_StopsAllParallelExecutions()
+    public async Task CriticalConditionEvaluator_HardwareFault_TriggersCriticalSignal()
     {
         // Arrange
-        var bibIds = new[] { "bib_normal", "bib_critical_fail", "bib_normal_2" };
-        SetupCriticalFailureScenario();
+        var conditions = new List<CriticalCondition>
+        {
+            new CriticalCondition 
+            { 
+                Name = "HARDWARE_FAULT", 
+                Pattern = "FAULT", 
+                TriggerHardwareSignal = true 
+            }
+        };
+        
+        var mockProvider = new Mock<IBitBangProtocolProvider>();
+        var evaluator = new CriticalConditionEvaluator(conditions, mockProvider.Object);
         
         // Act
-        var result = await _hybridExecutor.ExecuteMultipleBibsHybridAsync(bibIds, _defaultOptions);
+        var result = await evaluator.EvaluateResponseAsync("SYSTEM FAULT DETECTED");
         
         // Assert
-        Assert.That(result.FailureAnalysis.CriticalFailuresCount, Is.EqualTo(1));
-        Assert.That(result.FailureAnalysis.EmergencyStopsTriggered, Is.GreaterThan(0));
-        Assert.That(result.ResourceMetrics.ProtectionModeActivated, Is.True);
+        Assert.That(result.Level, Is.EqualTo(ValidationLevel.CRITICAL));
+        mockProvider.Verify(p => p.SetCriticalFailSignalAsync(true), Times.Once);
     }
     
     [Test]
-    public async Task ResourceManager_ConcurrentBibExecution_HandlesResourceContention()
+    public async Task CommandLineOptions_SimulationMode_UseSimulatedProvider()
     {
         // Arrange
-        var requirements = CreateResourceRequirements(4); // More than available
-        
-        // Act & Assert
-        var tasks = requirements.Select(req => 
-            _resourceManager.AcquireResourcesAsync(req, CancellationToken.None));
-        
-        var results = await Task.WhenAll(tasks);
-        
-        // Some should succeed, some should be queued or fail gracefully
-        Assert.That(results.Count(r => r != null), Is.LessThanOrEqualTo(_maxConcurrentBibs));
-    }
-    
-    [Test]
-    public async Task Dashboard_ParallelExecution_UpdatesRealTimeMetrics()
-    {
-        // Arrange
-        var mockHub = new Mock<IHubContext<DashboardHub>>();
-        var executor = new HybridMultiBibExecutor(mockHub.Object, _logger);
+        var args = new[] { "--gpio-mode", "simulation", "--sim-start" };
         
         // Act
-        await executor.ExecuteMultipleBibsHybridAsync(new[] { "bib_a", "bib_b" }, _defaultOptions);
+        var options = Parser.Default.ParseArguments<Sprint13CommandLineOptions>(args);
         
         // Assert
-        mockHub.Verify(h => h.Clients.All.SendAsync("ParallelExecutionStarted", It.IsAny<object>(), default), 
-            Times.Once);
-        mockHub.Verify(h => h.Clients.All.SendAsync("ResourceAllocated", It.IsAny<object>(), default), 
-            Times.AtLeast(2));
+        await options.WithParsedAsync(opts =>
+        {
+            Assert.That(opts.GpioMode, Is.EqualTo("simulation"));
+            Assert.That(opts.SimulateStart, Is.True);
+            return Task.CompletedTask;
+        });
     }
 }
 ```
-
-### **📚 OBJECTIVE 6: Complete Documentation Package (Priority 3)**
-**Priority:** 📖 **MEDIUM** | **Effort:** 2-3 hours | **Status:** ENTERPRISE DEPLOYMENT
-
-**Documentation Deliverables:**
-- **Enterprise Multi-BIB User Guide** - Complete operational manual
-- **Hybrid Execution Strategy Guide** - When to use parallel vs sequential
-- **Dashboard Analytics Guide** - Interpreting performance metrics
-- **Troubleshooting Guide** - Common issues and resolutions
-- **Performance Optimization Guide** - Tuning for maximum efficiency
-- **API Reference** - Complete HTTP dashboard API documentation
 
 ---
 
-## 📊 Sprint 13 Timeline - ENTERPRISE DELIVERY
+## 📊 Sprint 13 Timeline - HARDWARE FOCUSED
 
-| **Objective** | **Effort** | **Priority** | **Week** |
+| **Objective** | **Effort** | **Priority** | **Days** |
 |---------------|------------|--------------|----------|
-| **Hybrid Multi-BIB Execution** | 6-8h | ⭐ **HIGHEST** | Week 1 |
-| **Advanced Dashboard Analytics** | 4-5h | ⭐ **HIGHEST** | Week 1 |
-| **Intelligent Failure Policies** | 3-4h | 🎯 **HIGH** | Week 2 |
-| **Enhanced Multi-BIB Reporting** | 3-4h | 🎯 **HIGH** | Week 2 |
-| **Comprehensive Testing Suite** | 4-5h | ✅ **MEDIUM** | Week 2 |
-| **Complete Documentation** | 2-3h | 📖 **MEDIUM** | Week 2 |
+| **Real GPIO Input Monitoring** | 4-5h | ⭐ **HIGHEST** | Day 1-2 |
+| **Command Line Simulation** | 2-3h | ⭐ **HIGHEST** | Day 2 |
+| **XML Critical Configuration** | 2-3h | ⭐ **HIGHEST** | Day 3 |
+| **Original Service Behavior** | 2-3h | 🎯 **HIGH** | Day 4 |
+| **Integration Testing** | 2-3h | ✅ **MEDIUM** | Day 5 |
 
-**Total Sprint 13 Effort:** 22-29 hours  
-**Timeline:** 2 weeks  
-**Dependencies:** Sprint 12 dashboard foundation
+**Total Sprint 13 Effort:** 12-17 hours  
+**Timeline:** 5 days  
+**Dependencies:** FT4232HA hardware availability
 
 ---
 
 ## ✅ Sprint 13 Success Criteria
 
-### **🔄 Hybrid Parallel Execution**
-- ✅ **2-3 BIBs Parallel** - Safe concurrent execution without conflicts
-- ✅ **Intelligent Strategy Selection** - Automatic parallel vs sequential decisions
-- ✅ **Resource Conflict Detection** - Proactive conflict identification and resolution
-- ✅ **Graceful Degradation** - Fallback to sequential on resource issues
-- ✅ **Real-Time Monitoring** - Dashboard integration for parallel execution visibility
+### **🔌 Real Hardware Integration**
+- ✅ **FT4232HA Port D GPIO** - Successful bit-bang mode configuration
+- ✅ **Hardware Start Trigger** - DD0 signal triggers workflow execution
+- ✅ **Hardware Stop Trigger** - DD1 signal gracefully stops workflow
+- ✅ **Critical Signal Output** - DD2 activates on critical conditions
+- ✅ **Status Signal Output** - DD3 indicates workflow active state
 
-### **📊 Advanced Analytics**
-- ✅ **Parallel Efficiency Metrics** - Quantified improvement over sequential
-- ✅ **Resource Utilization Analysis** - Optimal resource usage tracking
-- ✅ **Performance Optimization Insights** - Actionable recommendations
-- ✅ **Conflict Pattern Analysis** - Historical conflict trend analysis
-- ✅ **Executive Reporting** - Business-ready performance summaries
+### **💻 Simulation Capability**
+- ✅ **Command Line Simulation** - `-simStart`, `-simStop`, `-simCritical` working
+- ✅ **Development Testing** - Full functionality without hardware requirements
+- ✅ **GPIO Mode Selection** - `--gpio-mode real|simulation|disabled`
+- ✅ **Configurable Polling** - `--gpio-polling` for different update rates
 
-### **🧠 Enterprise Quality**
-- ✅ **Intelligent Failure Handling** - Advanced error recovery and isolation
-- ✅ **Production Monitoring** - 24/7 operational visibility
-- ✅ **Performance Optimization** - Continuous improvement recommendations
-- ✅ **Comprehensive Testing** - 95%+ test coverage for parallel scenarios
-- ✅ **Enterprise Documentation** - Complete operational guides
+### **🚨 Critical Condition System**
+- ✅ **XML Configuration** - Critical conditions loaded from BIB XML files
+- ✅ **Pattern Matching** - Regex and string-based critical detection
+- ✅ **Hardware Triggering** - Critical validation → DD2 GPIO signal
+- ✅ **Auto-Clear Timing** - Configurable signal hold times
+- ✅ **Comprehensive Logging** - Full critical condition audit trail
 
-### **🎯 Client Satisfaction**
-- ✅ **Improved Throughput** - 40-60% faster than sequential execution
-- ✅ **Maintained Reliability** - 99%+ success rate preservation
-- ✅ **Professional Monitoring** - Enterprise-grade operational visibility
-- ✅ **Scalable Architecture** - Ready for production deployment
-- ✅ **Zero Regression** - All existing functionality preserved
+### **🔄 Service Behavior**
+- ✅ **Original Architecture** - Return to first commit service patterns
+- ✅ **Hardware-Driven Operation** - Service responds to GPIO triggers
+- ✅ **Background Service** - Proper Windows Service behavior
+- ✅ **Error Recovery** - Robust hardware error handling
+- ✅ **Performance** - <100ms GPIO response times
 
 ---
 
 ## 🚧 Sprint 13 Risk Assessment
 
-### **Risk 1: Parallel Execution Complexity**
-- **Impact:** Race conditions, resource conflicts, deadlocks
-- **Mitigation:** Conservative approach (max 3 BIBs), comprehensive testing, graceful fallback
-- **Status:** MEDIUM RISK (managed with hybrid approach)
+### **Risk 1: Hardware Availability**
+- **Impact:** Cannot test real GPIO functionality
+- **Mitigation:** Comprehensive simulation mode, hardware detection logic
+- **Status:** LOW RISK (simulation provides full testing capability)
 
-### **Risk 2: Resource Management**
-- **Impact:** Port allocation conflicts, resource exhaustion
-- **Mitigation:** Intelligent resource analysis, proactive conflict detection, automatic fallback
-- **Status:** MEDIUM RISK (mitigated with conservative limits)
+### **Risk 2: FTD2XX_NET Integration**
+- **Impact:** Library conflicts, GPIO timing issues
+- **Mitigation:** Use proven Sprint 10 implementation, error recovery
+- **Status:** LOW RISK (Sprint 10 research provides solutions)
 
-### **Risk 3: Performance Overhead**
-- **Impact:** Parallel coordination might reduce overall performance
-- **Mitigation:** Performance monitoring, adaptive strategy selection, sequential fallback
-- **Status:** LOW RISK (Sprint 12 dashboard provides real-time monitoring)
-
-### **Risk 4: Dashboard Performance**
-- **Impact:** Real-time updates for parallel execution might overwhelm dashboard
-- **Mitigation:** Update throttling, efficient SignalR usage, optional real-time features
-- **Status:** LOW RISK (building on proven Sprint 12 foundation)
+### **Risk 3: GPIO Timing Requirements**
+- **Impact:** 100ms polling might miss fast signals
+- **Mitigation:** Configurable polling rate, edge detection logic
+- **Status:** LOW RISK (hardware spec allows for 100ms response)
 
 ---
 
-## 🎯 Sprint 13 = Perfect Enterprise Evolution
+## 🎯 Sprint 13 = Hardware Foundation Excellence
 
-### **✅ Building on Sprint 12 Excellence**
-- **Dashboard Foundation** - Proven real-time monitoring infrastructure
-- **Professional Interface** - Client-approved presentation layer
-- **Operational Excellence** - Established logging and monitoring patterns
-- **Client Confidence** - Sprint 12 success builds trust for advanced features
+### **✅ Real Hardware Control**
+- **Physical GPIO Integration** - Actual FT4232HA Port D control
+- **Hardware-Triggered Workflows** - Start/Stop controlled by external signals
+- **Critical Hardware Response** - Emergency signal output capability
+- **Professional Hardware Interface** - Industrial-grade GPIO control
 
-### **✅ Conservative Parallel Approach**
-- **Hybrid Strategy** - Balance performance with reliability
-- **Resource Protection** - Never compromise system stability
-- **Graceful Degradation** - Sequential fallback ensures continuous operation
-- **Intelligent Decision Making** - Automatic strategy selection based on real conditions
+### **✅ Development & Testing Excellence**
+- **Simulation Mode** - Complete testing without hardware requirements
+- **Command Line Control** - Easy testing and demonstration capability
+- **XML Configuration** - Flexible critical condition management
+- **Comprehensive Testing** - Both hardware and simulation paths validated
 
-### **✅ Enterprise Quality Standards**
-- **Comprehensive Testing** - 95%+ coverage for all parallel scenarios
-- **Professional Documentation** - Complete operational and technical guides
-- **Advanced Monitoring** - Real-time visibility into parallel execution performance
-- **Production Ready** - Deployment-ready enterprise architecture
+### **✅ Production Ready Foundation**
+- **Original Service Behavior** - Return to proven architecture patterns
+- **Enterprise Logging** - Full audit trail for hardware interactions
+- **Error Recovery** - Robust handling of hardware failures
+- **Scalable Architecture** - Ready for Sprint 14 parallel execution
 
 ---
 
 ## 🎬 Expected Client Demo Flow
 
-### **Demo Scenario: Enterprise Hybrid Execution**
+### **Demo Scenario: Real Hardware Control**
 
 ```bash
-🎬 DEMO: Enterprise Hybrid Multi-BIB Execution
+🎬 DEMO: Real Hardware GPIO Control
 
-[15:30:00] 🌐 Opening Enhanced Dashboard: http://localhost:8080
-[15:30:01] 📊 Service Status: RUNNING | Hybrid Mode: ENABLED
-[15:30:01] 🔄 Execution Strategy: ADAPTIVE | Max Concurrent: 3 BIBs
+[14:30:00] 💻 Command: .\SerialPortPoolService.exe --gpio-mode real --bib-ids client_demo
+[14:30:01] 🔌 FT4232HA Port D GPIO initialized successfully
+[14:30:02] 🔍 Starting GPIO input monitoring...
+[14:30:02] 💓 Service heartbeat - GPIO monitoring active
 
-[15:30:05] 🎯 Starting Multi-BIB Execution: client_demo, production_test_v2, calibration_jig
-[15:30:06] 🧠 Resource Analysis: 12 ports available, 6 required, 0 conflicts
-[15:30:07] ✅ Strategy Selected: LIMITED_PARALLEL (2 concurrent)
-[15:30:08] 📊 Dashboard: Parallel efficiency 78%, Resource utilization 65%
+[14:30:15] 🚀 GPIO TRIGGER: Power On Ready detected (DD0 HIGH)
+[14:30:15] 📡 WORKFLOW ACTIVE SIGNAL: ACTIVE via GPIO DD3  
+[14:30:16] ✅ client_demo/production_uut 🚀 WORKFLOW STARTING
+[14:30:20] ✅ client_demo/production_uut ✅ COMPLETE: Workflow SUCCESS
+[14:30:21] 📡 WORKFLOW ACTIVE SIGNAL: CLEARED via GPIO DD3
 
-[15:30:10] 🔄 PARALLEL GROUP 1: client_demo + production_test_v2 (STARTED)
-[15:30:10] 📋 Real-time logs: Both BIBs executing in parallel
-[15:30:15] ✅ client_demo COMPLETED (5.2s) | production_test_v2 CONTINUES
-[15:30:18] ✅ production_test_v2 COMPLETED (8.1s)
+[14:30:45] 🚨 Critical response detected: "HARDWARE FAULT"
+[14:30:45] 🔌 TRIGGERING HARDWARE CRITICAL SIGNAL (DD2 HIGH)
+[14:30:47] ✅ Auto-cleared critical signal (2s hold time)
 
-[15:30:20] 🔄 SEQUENTIAL: calibration_jig (STARTED - resource optimization)
-[15:30:28] ✅ calibration_jig COMPLETED (8.3s)
+[14:31:00] ⚠️ GPIO TRIGGER: Power Down Heads-Up detected (DD1 HIGH)
+[14:31:00] 🛑 Service shutdown requested - graceful termination
 
-[15:30:30] 📊 EXECUTION SUMMARY:
-           ⏱️ Total Duration: 21.7s (vs 28.4s sequential = +31% faster)
-           🎯 Strategy: HYBRID (2 parallel + 1 sequential)
-           📈 Efficiency: 78% | Resource Utilization: 65%
-           ✅ Success Rate: 100% | Conflicts: 0
+CLIENT REACTION: "Perfect! Real hardware control exactly as specified!"
+```
 
-CLIENT REACTION: "Perfect! Faster execution with zero risk!"
+### **Demo Scenario: Simulation Mode Testing**
+
+```bash
+🎬 DEMO: Simulation Mode Development Testing
+
+[14:35:00] 💻 Command: .\SerialPortPoolService.exe --gpio-mode simulation --sim-start
+[14:35:01] 🎭 SIMULATION: Triggering start signal...
+[14:35:02] 🚀 HARDWARE TRIGGER: Starting workflow execution...
+[14:35:02] 📡 WORKFLOW ACTIVE SIGNAL: ACTIVE (simulated)
+
+[14:35:10] 💻 Command: .\SerialPortPoolService.exe --gpio-mode simulation --sim-critical
+[14:35:11] 🎭 SIMULATION: Triggering critical condition...
+[14:35:11] 🎭 SIMULATED CRITICAL SIGNAL: ACTIVE
+[14:35:13] 🎭 SIMULATED CRITICAL SIGNAL: Auto-cleared
+
+CLIENT REACTION: "Excellent! Full development capability without hardware dependency!"
 ```
 
 ---
 
-## 🚀 Sprint 14+ Enterprise Platform Ready
+## 🚀 Sprint 14 Ready
 
-### **Sprint 13 Achievements Enable Future:**
-- **Parallel Architecture** → Full enterprise scalability
-- **Advanced Analytics** → Machine learning and AI integration
-- **Resource Management** → Cloud and multi-node deployment
-- **Professional Monitoring** → 24/7 production operations
-
-### **Enterprise Platform Evolution:**
-- 🌐 **Multi-Node Deployment** - Distributed execution across multiple servers
-- 🤖 **AI-Powered Optimization** - Machine learning for execution strategy
-- ☁️ **Cloud Integration** - Azure/AWS deployment with auto-scaling
-- 📊 **Advanced Analytics** - Predictive failure analysis and optimization
+### **Sprint 13 Hardware Foundation Enables:**
+- **Parallel Multi-BIB** - Hardware control during concurrent execution  
+- **Advanced Analytics** - GPIO interaction performance metrics
+- **Enterprise Monitoring** - Hardware status in dashboard
+- **Production Deployment** - Proven hardware integration reliability
 
 ---
 
-*Sprint 13 Planning - Hybrid Parallel Execution & Enterprise Analytics*  
-*Created: August 25, 2025*  
-*Client Priority: Performance + Reliability + Enterprise Quality*  
-*Risk Level: MEDIUM | Impact Level: HIGH*
+*Sprint 13 Planning - Real Hardware BitBang GPIO Integration*  
+*Created: September 4, 2025*  
+*Client Priority: Hardware Control Foundation + Simulation*  
+*Risk Level: LOW-MEDIUM | Impact Level: HIGH*
 
-**🚀 Sprint 13 = Enterprise Parallel Excellence! 🚀**
+**🚀 Sprint 13 = Hardware Control Foundation Excellence! 🚀**
