@@ -1,8 +1,8 @@
 // ===================================================================
-// SPRINT 12 FIX: BibUutLogger - Corrected Format String Issue
+// SPRINT 12 FIX: BibUutLogger Path Alignment
 // File: SerialPortPool.Core/Services/BibUutLogger.cs
-// Purpose: Fix regression in string formatting that broke XML interpretation
-// ISSUE: Incompatible format strings between logging calls and string.Format
+// Purpose: Fix path inconsistency with existing NLog configuration
+// Issue: BibUutLogger used C:\ProgramData\ but NLog uses C:\Logs\
 // ===================================================================
 
 using Microsoft.Extensions.Logging;
@@ -11,7 +11,7 @@ namespace SerialPortPool.Core.Services;
 
 /// <summary>
 /// SPRINT 12 FIXED: Enhanced logger providing BIB/UUT specific logging
-/// REGRESSION FIX: Corrected string formatting compatibility issue
+/// PATH FIX: Now aligned with existing NLog configuration path
 /// ZERO TOUCH: Composes with existing ILogger without modification
 /// </summary>
 public class BibUutLogger
@@ -151,15 +151,20 @@ public class BibUutLogger
     }
 
     /// <summary>
-    /// Create structured log directory for BIB
-    /// Structure: Logs/SerialPortPool/BIB_{bibId}/{date}/
+    /// SPRINT 12 FIXED: Create structured log directory for BIB
+    /// PATH FIX: Now uses same base path as NLog configuration
+    /// Structure: C:\Logs\SerialPortPool\BIB_{bibId}\{date}\
     /// </summary>
     private static string CreateLogDirectory(string bibId)
     {
-        var baseLogPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "SerialPortPool", "Logs");
-            
+        // ✅ FIXED: Use same base path as NLog configuration
+        var baseLogPath = Path.Combine("C:", "Logs", "SerialPortPool");
+        
+        // ❌ ORIGINAL INCORRECT PATH:
+        // var baseLogPath = Path.Combine(
+        //     Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        //     "SerialPortPool", "Logs");
+        
         var bibLogPath = Path.Combine(baseLogPath, $"BIB_{bibId}", DateTime.Now.ToString("yyyy-MM-dd"));
         
         Directory.CreateDirectory(bibLogPath);
