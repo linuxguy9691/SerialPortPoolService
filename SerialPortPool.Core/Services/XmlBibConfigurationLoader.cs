@@ -864,7 +864,62 @@ public class XmlBibConfigurationLoader : IBibConfigurationLoader
         return DateTime.Now.Ticks.ToString();
     }
 
-    
+    /// <summary>
+    /// SPRINT 13: Parse hardware simulation configuration from XML
+    /// </summary>
+    private void ParseHardwareSimulation(XmlNode bibNode, BibConfiguration bib)
+    {
+        try
+        {
+            var simNode = bibNode.SelectSingleNode("hardware_simulation");
+            if (simNode == null)
+            {
+                return; // No simulation config - normal
+            }
+
+            _logger.LogDebug($"🎭 Parsing hardware simulation for BIB: {bib.BibId}");
+
+            var config = new HardwareSimulationConfig();
+
+            // Parse enabled flag
+            var enabledNode = simNode.SelectSingleNode("enabled");
+            config.Enabled = bool.Parse(enabledNode?.InnerText ?? "false");
+
+            if (!config.Enabled)
+            {
+                bib.HardwareSimulation = config;
+                return;
+            }
+
+            // Parse mode
+            var modeNode = simNode.SelectSingleNode("mode");
+            if (modeNode != null && Enum.TryParse<SimulationMode>(modeNode.InnerText, true, out var mode))
+            {
+                config.Mode = mode;
+            }
+
+            // Parse speed multiplier
+            var speedNode = simNode.SelectSingleNode("speed_multiplier");
+            if (speedNode != null && double.TryParse(speedNode.InnerText, out var speedMultiplier))
+            {
+                config.SpeedMultiplier = speedMultiplier;
+            }
+
+            // Parse triggers (simplified)
+            config.StartTrigger = new StartTriggerConfig();
+            config.StopTrigger = new StopTriggerConfig();
+            config.CriticalTrigger = new CriticalTriggerConfig();
+            config.RandomBehavior = new RandomBehaviorConfig();
+
+            bib.HardwareSimulation = config;
+            
+            _logger.LogInformation($"✅ Hardware simulation configured for BIB {bib.BibId}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, $"⚠️ Could not parse hardware simulation for BIB {bib.BibId}");
+        }
+    }
 
     // [Placeholder for remaining parsing methods - include all existing methods unchanged]
     // This includes ParseMultipleStartCommands, ParseMultipleTestCommands, ParseMultipleStopCommands, etc.
