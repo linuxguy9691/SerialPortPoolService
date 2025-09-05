@@ -581,3 +581,17 @@ jobs:
         echo "Check the workflow logs for details"
         echo "Sprint 10 Multi-BIB + GPIO integration requires investigation"
         echo "Review failed test cases and build outputs"
+
+# ===============================================================
+# JOB: SPRINT 13 TESTS - Hot Add & Hardware Simulation
+# ===============================================================
+sprint13-tests:
+  name: "Sprint 13 - Hot Add & Hardware Simulation Tests"
+  runs-on: windows-latest
+  needs: unit-tests
+  
+  steps:
+  - name: "TC-027: Sprint 13 Unit Tests"
+    run: |
+      dotnet test tests/SerialPortPool.Core.Tests/ --filter "Category=Sprint13" --configuration Release
+      # Tests: DynamicBibConfigurationService, HardwareSimulation, etc.
