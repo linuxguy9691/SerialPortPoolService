@@ -1,7 +1,8 @@
 // ===================================================================
-// SPRINT 13 BOUCHÉE #3: Service Registration Extensions - FIXED VERSION
+// SPRINT 13 BOUCHÉE #3: Service Registration Extensions - FIXED VERSION (MINIMUM CHANGES)
 // File: SerialPortPool.Core/Extensions/Sprint13ServiceExtensions.cs
 // Purpose: Complete Sprint 13 service registration following established patterns
+// PHILOSOPHY: Minimum changes - only add missing services
 // ===================================================================
 
 using Microsoft.Extensions.DependencyInjection;
@@ -27,6 +28,17 @@ public static class Sprint13ServiceExtensions
         // ✅ FOUNDATION: Use existing excellent services
         services.AddSprint6CoreServices();      // XML loading, protocol handling
         services.AddSprint8Services();          // Dynamic BIB mapping, EEPROM reading
+        
+        // 🔧 SPRINT 13 CRITICAL FIXES: Add missing services that Sprint 6/8 don't register
+        
+        // Fix 1: Register XmlBibConfigurationLoader directly (DynamicBibConfigurationService needs concrete type)
+        services.AddScoped<XmlBibConfigurationLoader>();
+        
+        // Fix 2: Register IBibWorkflowOrchestrator (not registered in Sprint 6/8)
+        services.AddScoped<IBibWorkflowOrchestrator, BibWorkflowOrchestrator>();
+        
+        // Fix 3: Register IPortReservationService (exists but not registered)
+        services.AddScoped<IPortReservationService, PortReservationService>();
         
         // 🆕 SPRINT 13: Hot-Add specific services
         services.AddSingleton<DynamicBibConfigurationOptions>(provider =>
@@ -127,7 +139,21 @@ public static class Sprint13ServiceExtensions
             serviceProvider.ValidateSprint6Services();
             serviceProvider.ValidateSprint8Services();
             
-            // 🔧 FIXED: Test Sprint 13 specific services without casting issues
+            // 🔧 FIXED: Test Sprint 13 specific services
+            
+            // Test concrete XmlBibConfigurationLoader
+            var xmlConfigLoader = serviceProvider.GetRequiredService<XmlBibConfigurationLoader>();
+            Console.WriteLine("✅ XmlBibConfigurationLoader (concrete) registered");
+            
+            // Test IBibWorkflowOrchestrator
+            var orchestrator = serviceProvider.GetRequiredService<IBibWorkflowOrchestrator>();
+            Console.WriteLine("✅ IBibWorkflowOrchestrator registered");
+            
+            // Test IPortReservationService
+            var portReservation = serviceProvider.GetRequiredService<IPortReservationService>();
+            Console.WriteLine("✅ IPortReservationService registered");
+            
+            // Test DynamicBibConfigurationService
             var dynamicBibService = serviceProvider.GetRequiredService<DynamicBibConfigurationService>();
             Console.WriteLine("✅ DynamicBibConfigurationService registered");
             
