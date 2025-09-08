@@ -30,6 +30,7 @@ public static class Sprint6ServiceExtensions
         // 2️⃣ XML Configuration Services - FIXED
         services.AddScoped<IBibConfigurationLoader, XmlBibConfigurationLoader>();
         services.AddScoped<IConfigurationValidator, ConfigurationValidator>();
+        
 
         // 3️⃣ Protocol Handler Services  
         services.AddScoped<IProtocolHandlerFactory, ProtocolHandlerFactory>();
@@ -79,8 +80,8 @@ public static class Sprint6ServiceExtensions
             var configLoader = serviceProvider.GetRequiredService<IBibConfigurationLoader>();
             Console.WriteLine("✅ IBibConfigurationLoader registered");
 
-            var xmlConfigLoader = serviceProvider.GetRequiredService<IXmlConfigurationLoader>();
-            Console.WriteLine("✅ IXmlConfigurationLoader registered");
+            /*var xmlConfigLoader = serviceProvider.GetRequiredService<IXmlConfigurationLoader>();
+            Console.WriteLine("✅ IXmlConfigurationLoader registered");*/
 
             var protocolFactory = serviceProvider.GetRequiredService<IProtocolHandlerFactory>();
             var protocols = protocolFactory.GetSupportedProtocols();
