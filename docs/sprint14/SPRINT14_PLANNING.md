@@ -1,587 +1,361 @@
-# 🚀 SPRINT 14 - Hybrid Multi-BIB Parallel Execution + Dashboard API
+# 🚀 SPRINT 14 PLANNING - Production Simulation Architecture
 
-**Sprint Period:** TBD (After Sprint 13)  
-**Phase:** Enterprise Parallel Execution + Dashboard API Integration  
-**Status:** PLANNED - BUILDING ON SPRINT 12 DASHBOARD FOUNDATION  
-
----
-
-## 📋 Sprint 14 Overview - ENTERPRISE PARALLEL EXECUTION
-
-**Mission:** Hybrid Multi-BIB Parallel Execution with HTTP API + Real-Time Dashboard Integration
-
-**SPRINT 12 DASHBOARD FOUNDATION:** ✅ **DELIVERED & CLIENT APPROVED!** 
-- Modern glassmorphism interface ✅
-- BIB/UUT log analysis ✅  
-- Intelligent filtering ✅
-- Real-time metrics ✅
-- Mobile responsive ✅
-
-**SPRINT 14 EVOLUTION:**
-- 🌐 **HTTP API Integration** - Connect dashboard to real service
-- ⚡ **SignalR Real-Time** - Live updates from service to dashboard
-- 🔄 **Hybrid Parallel Execution** - 2-3 BIBs concurrent (safe approach)
-- 📊 **Enhanced Dashboard** - Parallel execution monitoring
-- 🧠 **Intelligent Resource Management** - Smart allocation and conflict resolution
-
-**CORE PHILOSOPHY:** 
-- Build on proven Sprint 12 dashboard success
-- Add HTTP API backend for real service connection
-- Implement hybrid parallel execution with existing models
-- Safety first: never compromise reliability for speed
+**Sprint Period:** September 22 - October 6, 2025  
+**Phase:** Critical Architecture Discovery & Production Simulation Implementation  
+**Status:** 🔥 **MAJOR ARCHITECTURAL DISCOVERY** - New Core Service Required  
+**Priority:** **HIGHEST** - Foundation for Real Production Behavior
 
 ---
 
-## 🎯 Sprint 14 Core Objectives - REALISTIC & FOCUSED
+## 📊 **CRITICAL DISCOVERY SUMMARY**
 
-### **🌐 OBJECTIVE 1: HTTP API + SignalR Integration (Priority 1)**
-**Priority:** ⭐ **HIGHEST** | **Effort:** 4-5 hours | **Status:** DASHBOARD BACKEND CONNECTION
+### 🔍 **Architecture Gap Identified**
+During Sprint 13 testing, a fundamental architectural limitation was discovered:
 
-**Building on Sprint 12 Dashboard Success:**
+**Current System (Workflow Orchestration):**
+```
+Execution 1: START → TEST → STOP (complete cycle)
+Wait interval...
+Execution 2: START → TEST → STOP (complete cycle)
+Wait interval...
+```
+
+**Required System (Production Simulation):**
+```
+START (once) → TEST (continuous loop) → STOP (on hardware trigger)
+```
+
+### 💡 **Context: Building on Proven Foundations**
+**Sprint 10-12 Success:** The team delivered outstanding orchestration architecture (Multi-BIB execution), enterprise configuration management (multi-file, hot-reload), and professional monitoring infrastructure (structured logging). All systems work flawlessly for discrete workflow execution.
+
+**Sprint 13 Discovery:** Testing revealed that orchestration architecture ≠ production simulation architecture. The existing system executes perfect workflows but cannot simulate the continuous hardware behavior required for production testing.
+
+### 🔍 **Root Cause Analysis**
+- `MultiBibWorkflowService` (Sprint 10) designed for **discrete workflow orchestration**
+- `BibWorkflowOrchestrator` executes **atomic workflows**, not continuous loops
+- Hot-reload system (Sprint 11) and logging infrastructure (Sprint 12) perfect for orchestration but missing production simulation hooks
+- **No hardware trigger simulation** for BitBang protocol behaviors that Sprint 13 hardware_simulation config expects
+
+---
+
+## 🎯 **SPRINT 14 OBJECTIVES**
+
+### **🔧 PRIMARY OBJECTIVE: Production Simulation Architecture**
+**Priority:** ⭐ **CRITICAL** | **Effort:** 25-30h | **Risk:** MEDIUM-HIGH
+
+Create a completely new service architecture to simulate real production hardware behavior:
+
+#### **New Services Required:**
+
+**1. ProductionSimulationService** (8-10h)
+- Manage continuous test execution state
+- Simulate hardware lifecycle (START once → TEST loop → STOP on trigger)
+- Integration with existing BIB configuration system
+- Support for multiple UUT simulation simultaneously
+
+**2. HardwareTriggerSimulator** (6-8h)
+- Simulate BitBang protocol stop signals
+- Configurable trigger scenarios (time-based, manual, failure simulation)
+- Integration with hardware_simulation XML configuration
+- Event-driven trigger system
+
+**3. ContinuousTestController** (6-8h)
+- Maintain test loop execution without complete workflow restart
+- Intelligent test cycle management
+- Performance monitoring and statistics
+- Error handling and recovery during continuous operation
+
+**4. ProductionStateManager** (4-6h)
+- Track production state across multiple UUTs
+- State persistence and recovery
+- Coordination between simulation and orchestration systems
+- Real-time status reporting
+
+### **🧪 SECONDARY OBJECTIVE: Sprint 13 Validation & Integration**
+**Priority:** 🎯 **HIGH** | **Effort:** 8-12h | **Risk:** LOW
+
+Complete testing and validation of Sprint 13 implementation:
+
+#### **Sprint 13 Testing Tasks:**
+- **Hot-Add XML Validation** (2-3h) - Test FileSystemWatcher functionality
+- **Hardware Simulation Accuracy** (3-4h) - Verify timing and trigger behavior
+- **Multi-File Configuration** (2-3h) - Test individual BIB file discovery
+- **Integration Testing** (2-3h) - End-to-end system validation
+
+### **🔗 TERTIARY OBJECTIVE: Architecture Integration**
+**Priority:** ✅ **MEDIUM** | **Effort:** 6-8h | **Risk:** MEDIUM
+
+Integrate new production simulation with existing orchestration:
+
+#### **Integration Tasks:**
+- **Dual-Mode Operation** - Switch between orchestration and simulation modes
+- **Configuration Compatibility** - Ensure XML configs work in both modes
+- **Service Coordination** - Prevent conflicts between services
+- **CLI Enhancement** - Add production simulation options
+
+---
+
+## 📋 **DETAILED IMPLEMENTATION PLAN**
+
+### **WEEK 1: Core Production Simulation (Sept 22-28)**
+
+#### **Day 1-2: ProductionSimulationService Foundation**
 ```csharp
-// ✅ EXTEND existing dashboard.html with HTTP backend
-[ApiController]
-[Route("api")]
-public class DashboardApiController : ControllerBase
+public class ProductionSimulationService : IHostedService
 {
-    private readonly IMultiBibWorkflowService _workflowService;
-    private readonly IHubContext<DashboardHub> _hubContext;
+    // Core simulation state management
+    private readonly Dictionary<string, UutSimulationState> _activeSimulations;
+    private readonly IBibConfigurationLoader _configLoader;
+    private readonly IHardwareTriggerSimulator _triggerSimulator;
     
-    // ✅ Use existing MultiBibWorkflowResult model
-    [HttpGet("status")]
-    public IActionResult GetServiceStatus()
+    // Production behavior simulation
+    public async Task StartProductionSimulationAsync(string bibId, string uutId)
     {
-        return Ok(new {
-            status = _workflowService.IsRunning ? "running" : "stopped",
-            uptime = _workflowService.Uptime,
-            version = "Sprint 14",
-            lastActivity = DateTime.Now
-        });
-    }
-    
-    [HttpGet("executions")]
-    public IActionResult GetCurrentExecutions()
-    {
-        var active = _workflowService.GetActiveExecutions();
-        return Ok(active.Select(e => new {
-            executionId = e.Id,
-            bibId = e.BibId,
-            uutId = e.UutId,
-            portName = e.PortName,
-            startTime = e.StartTime,
-            duration = DateTime.Now - e.StartTime,
-            currentPhase = e.CurrentPhase,
-            validationLevel = e.LastValidationLevel?.ToString() ?? "UNKNOWN"
-        }));
-    }
-    
-    [HttpGet("metrics")]
-    public IActionResult GetPerformanceMetrics()
-    {
-        // ✅ Use existing BibWorkflowStatistics
-        var stats = _workflowService.GetStatistics();
-        return Ok(new {
-            successRate = stats.SuccessRate,
-            totalExecutions = stats.TotalWorkflows,
-            averageDuration = stats.AverageWorkflowDuration.TotalSeconds,
-            executionsPerHour = CalculateExecutionsPerHour(),
-            errorsPerHour = CalculateErrorsPerHour()
-        });
-    }
-}
-
-// ✅ SignalR Hub for real-time updates to existing dashboard
-public class DashboardHub : Hub
-{
-    public async Task JoinDashboard()
-    {
-        await Groups.AddToGroupAsync(Context.ConnectionId, "Dashboard");
-        await Clients.Caller.SendAsync("Connected", "Dashboard connected successfully");
-    }
-    
-    // ✅ Push updates to existing dashboard.html
-    public async Task NotifyExecutionStarted(BibWorkflowResult execution)
-    {
-        await Clients.Group("Dashboard").SendAsync("ExecutionStarted", new {
-            executionId = execution.WorkflowId,
-            bibId = execution.BibId,
-            uutId = execution.UutId,
-            portName = execution.PhysicalPort,
-            timestamp = execution.StartTime
-        });
-    }
-    
-    public async Task NotifyExecutionCompleted(BibWorkflowResult execution)
-    {
-        await Clients.Group("Dashboard").SendAsync("ExecutionCompleted", new {
-            executionId = execution.WorkflowId,
-            success = execution.Success,
-            duration = execution.Duration.TotalSeconds,
-            timestamp = execution.EndTime
-        });
-    }
-}
-
-// ✅ Startup configuration
-public class Startup
-{
-    public void ConfigureServices(IServiceCollection services)
-    {
-        services.AddControllers();
-        services.AddSignalR();
-        services.AddCors(options => 
-        {
-            options.AddDefaultPolicy(builder => 
-                builder.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
-        });
-    }
-    
-    public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
-    {
-        app.UseCors();
-        app.UseRouting();
+        // 1. Execute START phase (once)
+        await ExecuteStartPhaseAsync(bibId, uutId);
         
-        // ✅ Serve existing dashboard.html
-        app.UseStaticFiles();
-        app.UseEndpoints(endpoints =>
-        {
-            endpoints.MapControllers();
-            endpoints.MapHub<DashboardHub>("/dashboardHub");
-            endpoints.MapFallbackToFile("dashboard.html"); // Existing dashboard
-        });
+        // 2. Begin continuous TEST loop
+        await BeginContinuousTestingAsync(bibId, uutId);
+        
+        // 3. Monitor for stop triggers
+        MonitorStopTriggers(bibId, uutId);
     }
 }
 ```
 
-### **🔄 OBJECTIVE 2: Hybrid Multi-BIB Parallel Execution (Priority 1)**
-**Priority:** ⭐ **HIGHEST** | **Effort:** 6-8 hours | **Status:** USING EXISTING MODELS
-
-**Smart Implementation Using Existing Infrastructure:**
+#### **Day 3-4: Hardware Trigger Simulation**
 ```csharp
-// ✅ Use existing MultiBibWorkflowResult for reporting
-public class HybridMultiBibExecutor
+public class HardwareTriggerSimulator : IHardwareTriggerSimulator
 {
-    private readonly IMultiBibWorkflowService _workflowService;
-    private readonly IHubContext<DashboardHub> _hubContext;
-    private readonly int _maxConcurrentBibs = 3; // Conservative limit
-    
-    // ✅ MAIN METHOD: Hybrid execution strategy
-    public async Task<MultiBibWorkflowResult> ExecuteMultipleBibsHybridAsync(
-        List<string> bibIds,
-        HybridExecutionOptions options)
+    // Simulate BitBang protocol stop signals
+    public async Task<bool> WaitForStopTriggerAsync(
+        HardwareSimulationConfig config, 
+        CancellationToken cancellationToken)
     {
-        // ✅ STEP 1: Analyze resource requirements using existing models
-        var resourceAnalysis = await AnalyzeResourceRequirements(bibIds);
-        
-        // ✅ STEP 2: Determine optimal execution strategy
-        var strategy = DetermineExecutionStrategy(resourceAnalysis, options);
-        
-        // ✅ STEP 3: Execute based on strategy
-        var result = strategy switch
-        {
-            ExecutionStrategy.Sequential => await ExecuteSequentialAsync(bibIds),
-            ExecutionStrategy.LimitedParallel => await ExecuteLimitedParallelAsync(bibIds, 2),
-            ExecutionStrategy.MaximumParallel => await ExecuteMaximumParallelAsync(bibIds, 3),
-            ExecutionStrategy.Adaptive => await ExecuteAdaptiveAsync(bibIds),
-            _ => await ExecuteSequentialAsync(bibIds) // Safe fallback
-        };
-        
-        // ✅ STEP 4: Notify dashboard of completion
-        await NotifyDashboardOfCompletion(result);
-        
-        return result;
+        // Time-based triggers
+        // Manual triggers
+        // Failure scenario triggers
+        // External signal simulation
     }
-    
-    private async Task<MultiBibWorkflowResult> ExecuteLimitedParallelAsync(List<string> bibIds, int maxConcurrent)
-    {
-        var result = new MultiBibWorkflowResult
-        {
-            TargetBibIds = bibIds,
-            GeneratedAt = DateTime.Now
-        };
-        
-        // ✅ Process in batches of maxConcurrent
-        var batches = SplitIntoBatches(bibIds, maxConcurrent);
-        var allResults = new List<BibWorkflowResult>();
-        
-        foreach (var batch in batches)
-        {
-            // ✅ Execute batch in parallel
-            var batchTasks = batch.Select(bibId => ExecuteSingleBibAsync(bibId));
-            var batchResults = await Task.WhenAll(batchTasks);
-            
-            allResults.AddRange(batchResults);
-            
-            // ✅ Update dashboard in real-time
-            await NotifyDashboardOfBatchCompletion(batch, batchResults);
-        }
-        
-        // ✅ Aggregate results using existing logic
-        result.AllResults = allResults;
-        result.TotalWorkflows = allResults.Count;
-        result.SuccessfulWorkflows = allResults.Count(r => r.Success);
-        result.FailedWorkflows = allResults.Count(r => !r.Success);
-        result.TotalExecutionTime = TimeSpan.FromTicks(allResults.Sum(r => r.Duration.Ticks));
-        
-        return result;
-    }
-    
-    // ✅ Use existing BibWorkflowResult for individual execution
-    private async Task<BibWorkflowResult> ExecuteSingleBibAsync(string bibId)
-    {
-        // ✅ Leverage existing workflow service
-        var workflowResult = await _workflowService.ExecuteBibWorkflowAsync(bibId);
-        
-        // ✅ Notify dashboard of individual completion
-        await _hubContext.Clients.Group("Dashboard").SendAsync("ExecutionCompleted", new
-        {
-            bibId = workflowResult.BibId,
-            success = workflowResult.Success,
-            duration = workflowResult.Duration.TotalSeconds,
-            timestamp = DateTime.Now
-        });
-        
-        return workflowResult;
-    }
-}
-
-// ✅ New models for Sprint 14 (minimal addition)
-public enum ExecutionStrategy
-{
-    Sequential,           // Safe fallback - one BIB at a time
-    LimitedParallel,     // 2 BIBs parallel - most common case
-    MaximumParallel,     // 3 BIBs parallel - optimal resources only
-    Adaptive             // Dynamic strategy based on real-time analysis
-}
-
-public class HybridExecutionOptions
-{
-    public ExecutionStrategy PreferredStrategy { get; set; } = ExecutionStrategy.Adaptive;
-    public bool EnableResourceProtection { get; set; } = true;
-    public int MaxConcurrentBibs { get; set; } = 3;
-    public TimeSpan MaxExecutionTime { get; set; } = TimeSpan.FromMinutes(30);
 }
 ```
 
-### **🧠 OBJECTIVE 3: Intelligent Resource Management (Priority 2)**
-**Priority:** 🎯 **HIGH** | **Effort:** 3-4 hours | **Status:** EXISTING PORT ALLOCATION
-
-**Use Existing PortAllocation + PortReservation:**
+#### **Day 5: Continuous Test Controller**
 ```csharp
-// ✅ EXTEND existing PortReservation for parallel execution
-public class ParallelResourceManager
+public class ContinuousTestController
 {
-    private readonly IPortPool _portPool;
-    private readonly SemaphoreSlim _resourceSemaphore;
+    // Maintain test execution without workflow restart
+    private Timer _testExecutionTimer;
+    private readonly SemaphoreSlim _testExecutionLock;
     
-    // ✅ Use existing PortReservationCriteria
-    public async Task<List<PortReservation>> AllocateResourcesForParallelExecution(
-        List<string> bibIds)
+    public async Task StartContinuousTestingAsync(
+        BibConfiguration bib, 
+        UutConfiguration uut,
+        CancellationToken stopTrigger)
     {
-        var reservations = new List<PortReservation>();
-        
-        foreach (var bibId in bibIds)
-        {
-            // ✅ Use existing reservation system
-            var criteria = PortReservationCriteria.CreateForClient(TimeSpan.FromMinutes(60));
-            var reservation = await _portPool.ReservePortAsync(bibId, criteria);
-            
-            if (reservation != null)
-            {
-                reservations.Add(reservation);
-            }
-        }
-        
-        return reservations;
+        // Execute TEST commands in loop
+        // Monitor performance metrics
+        // Handle test failures gracefully
+        // Maintain statistics
     }
-    
-    // ✅ Use existing resource analysis
-    public async Task<ResourceConflictAnalysis> AnalyzeResourceConflicts(List<string> bibIds)
-    {
-        var analysis = new ResourceConflictAnalysis();
-        
-        foreach (var bibId in bibIds)
-        {
-            var bibConfig = await LoadBibConfiguration(bibId);
-            var requiredPorts = GetRequiredPortCount(bibConfig);
-            
-            analysis.TotalPortsRequired += requiredPorts;
-        }
-        
-        analysis.AvailablePorts = _portPool.GetAvailablePortCount();
-        analysis.HasConflicts = analysis.TotalPortsRequired > analysis.AvailablePorts;
-        
-        return analysis;
-    }
-}
-
-public class ResourceConflictAnalysis
-{
-    public int TotalPortsRequired { get; set; }
-    public int AvailablePorts { get; set; }
-    public bool HasConflicts { get; set; }
-    public List<string> ConflictDetails { get; set; } = new();
 }
 ```
 
-### **📊 OBJECTIVE 4: Enhanced Dashboard Integration (Priority 2)**
-**Priority:** 🎯 **HIGH** | **Effort:** 2-3 hours | **Status:** EXTEND EXISTING DASHBOARD
+### **WEEK 2: Integration & Testing (Sept 29 - Oct 5)**
 
-**Minimal Changes to Existing dashboard.html:**
-```javascript
-// ✅ ADD to existing dashboard.html (minimal changes)
-class Sprint14Extensions {
-    
-    // ✅ Connect to real service API
-    async connectToRealService() {
-        try {
-            const response = await fetch('/api/status');
-            const status = await response.json();
-            
-            if (status.status === 'running') {
-                serviceConnected = true;
-                updateServiceStatusIndicator('running', 'Connected to SerialPortPool service');
-                this.startRealTimeUpdates();
-            }
-        } catch (error) {
-            console.error('Failed to connect to service:', error);
-            updateServiceStatusIndicator('error', 'Failed to connect to service');
-        }
-    }
-    
-    // ✅ SignalR real-time updates
-    startRealTimeUpdates() {
-        const connection = new signalR.HubConnectionBuilder()
-            .withUrl("/dashboardHub")
-            .build();
-
-        connection.start().then(() => {
-            console.log("🔌 Connected to real-time updates");
-            connection.invoke("JoinDashboard");
-        });
-
-        // ✅ Listen for real execution events
-        connection.on("ExecutionStarted", (data) => {
-            this.addRealTimeLog(`[${new Date().toTimeString().slice(0,8)}] [Information] 🚀 ${data.bibId}/${data.uutId} WORKFLOW STARTING`);
-            this.updateActiveExecutions();
-        });
-
-        connection.on("ExecutionCompleted", (data) => {
-            const status = data.success ? "✅ SUCCESS" : "❌ FAILED";
-            this.addRealTimeLog(`[${new Date().toTimeString().slice(0,8)}] [Information] ${status} ${data.bibId} completed in ${data.duration}s`);
-            this.updateMetrics();
-        });
-    }
-    
-    // ✅ Add to existing log viewer
-    addRealTimeLog(logLine) {
-        allLogLines.push(logLine);
-        extractFiltersFromLogs();
-        filterLogs();
-        updateMetricsFromLogs();
-    }
-}
-
-// ✅ Initialize Sprint 14 extensions
-document.addEventListener('DOMContentLoaded', function() {
-    // ... existing code ...
-    
-    // Add Sprint 14 functionality
-    const sprint14 = new Sprint14Extensions();
-    
-    // Replace existing connect button functionality
-    document.getElementById('connectBtn').onclick = () => sprint14.connectToRealService();
-});
-```
-
-### **🧪 OBJECTIVE 5: Testing & Validation (Priority 3)**
-**Priority:** ✅ **MEDIUM** | **Effort:** 3-4 hours | **Status:** COMPREHENSIVE TESTING
-
-**Focus on Parallel Execution Testing:**
+#### **Day 6-7: Production State Management**
 ```csharp
-[TestFixture]
-public class HybridParallelExecutionTests
+public class ProductionStateManager : IProductionStateManager
 {
-    [Test]
-    public async Task HybridExecution_TwoBibsNoConflicts_ExecutesInParallel()
+    public enum ProductionState
     {
-        // Arrange
-        var bibIds = new[] { "client_demo", "production_test_v2" };
-        SetupNoResourceConflicts();
-        
-        // Act
-        var result = await _hybridExecutor.ExecuteMultipleBibsHybridAsync(bibIds, _defaultOptions);
-        
-        // Assert
-        Assert.That(result.TotalWorkflows, Is.EqualTo(2));
-        Assert.That(result.WorkflowSuccessRate, Is.GreaterThan(0));
-        Assert.That(result.TotalExecutionTime.TotalSeconds, Is.LessThan(15)); // Should be faster than sequential
+        Idle,           // No production active
+        Starting,       // START phase executing
+        Testing,        // Continuous testing active
+        Stopping,       // STOP phase executing
+        Completed,      // Production cycle complete
+        Failed          // Production cycle failed
     }
     
-    [Test]
-    public async Task DashboardApi_GetStatus_ReturnsValidData()
-    {
-        // Arrange
-        var controller = new DashboardApiController(_workflowService, _hubContext);
-        
-        // Act
-        var result = controller.GetServiceStatus() as OkObjectResult;
-        
-        // Assert
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result.StatusCode, Is.EqualTo(200));
-    }
-    
-    [Test]
-    public async Task ResourceManager_ParallelAllocation_HandlesConflicts()
-    {
-        // Arrange
-        var bibIds = new[] { "bib1", "bib2", "bib3", "bib4" }; // More than available ports
-        
-        // Act
-        var reservations = await _resourceManager.AllocateResourcesForParallelExecution(bibIds);
-        
-        // Assert
-        Assert.That(reservations.Count, Is.LessThanOrEqualTo(_maxConcurrentBibs));
-        Assert.That(reservations.All(r => r.IsActive), Is.True);
-    }
+    public async Task<ProductionState> GetUutStateAsync(string bibId, string uutId);
+    public async Task TransitionStateAsync(string bibId, string uutId, ProductionState newState);
 }
 ```
 
----
+#### **Day 8-9: Sprint 13 Integration Testing**
+- Test Hot-Add functionality with production simulation
+- Validate hardware_simulation XML parsing
+- End-to-end testing with real configuration files
+- Performance and reliability testing
 
-## 📊 Sprint 14 Timeline - REALISTIC DELIVERY
-
-| **Objective** | **Effort** | **Priority** | **Week** |
-|---------------|------------|--------------|----------|
-| **HTTP API + SignalR Integration** | 4-5h | ⭐ **HIGHEST** | Week 1 |
-| **Hybrid Multi-BIB Execution** | 6-8h | ⭐ **HIGHEST** | Week 1-2 |
-| **Intelligent Resource Management** | 3-4h | 🎯 **HIGH** | Week 2 |
-| **Enhanced Dashboard Integration** | 2-3h | 🎯 **HIGH** | Week 2 |
-| **Testing & Validation** | 3-4h | ✅ **MEDIUM** | Week 2 |
-
-**Total Sprint 14 Effort:** 18-24 hours (REALISTIC!)  
-**Timeline:** 2 weeks  
-**Dependencies:** Sprint 12 dashboard success ✅
-
----
-
-## ✅ Sprint 14 Success Criteria
-
-### **🌐 HTTP API + Real-Time Integration**
-- ✅ **HTTP Server Running** - API accessible at /api/* endpoints
-- ✅ **SignalR Connected** - Real-time updates to existing dashboard
-- ✅ **Service Integration** - Dashboard connects to actual SerialPortPoolService
-- ✅ **Zero Dashboard Changes** - Existing dashboard.html works with new backend
-- ✅ **Performance** - API responses < 200ms, SignalR updates < 1s
-
-### **🔄 Hybrid Parallel Execution**
-- ✅ **2-3 BIBs Parallel** - Safe concurrent execution without conflicts
-- ✅ **Intelligent Strategy Selection** - Automatic parallel vs sequential decisions
-- ✅ **Resource Conflict Detection** - Proactive conflict identification and resolution
-- ✅ **Graceful Degradation** - Fallback to sequential on resource issues
-- ✅ **Performance Gain** - 30-50% faster than sequential execution
-
-### **📊 Dashboard Excellence**
-- ✅ **Real-Time Updates** - Live execution status in existing dashboard
-- ✅ **Parallel Monitoring** - Visualization of concurrent executions
-- ✅ **Performance Metrics** - Success rate, throughput, efficiency
-- ✅ **Professional Quality** - Client-ready operational interface
-- ✅ **Mobile Compatible** - Works on all device sizes
-
-### **🎯 Production Quality**
-- ✅ **Zero Regression** - All existing functionality preserved
-- ✅ **Comprehensive Testing** - 90%+ coverage for new features
-- ✅ **Enterprise Monitoring** - Production-ready operational visibility
-- ✅ **Client Satisfaction** - Improved performance with maintained reliability
-
----
-
-## 🚧 Sprint 14 Risk Assessment
-
-### **Risk 1: Parallel Execution Complexity**
-- **Impact:** Race conditions, resource conflicts, deadlocks
-- **Mitigation:** Conservative approach (max 3 BIBs), use existing models, comprehensive testing
-- **Status:** LOW-MEDIUM RISK (existing infrastructure helps)
-
-### **Risk 2: Dashboard Integration**
-- **Impact:** Breaking existing dashboard functionality
-- **Mitigation:** Minimal changes to dashboard.html, extensive testing, graceful degradation
-- **Status:** LOW RISK (proven dashboard foundation)
-
-### **Risk 3: SignalR Performance**
-- **Impact:** Real-time updates might affect service performance
-- **Mitigation:** Throttle updates, efficient message batching, optional real-time features
-- **Status:** LOW RISK (SignalR is well-established)
-
----
-
-## 🎯 Sprint 14 = Perfect Foundation Extension
-
-### **✅ Building on Sprint 12 Dashboard Success**
-- **Modern UI** ✅ - Glassmorphism interface client loves
-- **Log Analysis** ✅ - BIB/UUT filtering and metrics
-- **Mobile Ready** ✅ - Responsive design working perfectly
-- **Professional Quality** ✅ - Client confidence established
-
-### **✅ Smart Architecture Decisions**
-- **Use Existing Models** - MultiBibWorkflowResult, PortReservation, etc.
-- **Minimal Dashboard Changes** - Extend, don't rebuild
-- **Conservative Parallel Approach** - Safety over speed
-- **Real Infrastructure Connection** - HTTP API + SignalR
-
-### **✅ Production Ready Foundation**
-- **Enterprise Quality** - Professional monitoring and reporting
-- **Scalable Architecture** - Ready for future enhancements
-- **Comprehensive Testing** - High confidence deployment
-- **Client Satisfaction** - Building on proven success
-
----
-
-## 🎬 Expected Client Demo Flow
-
-### **Demo Scenario: Real-Time Hybrid Execution**
-
+#### **Day 10: CLI & Documentation**
 ```bash
-🎬 DEMO: Real-Time Hybrid Multi-BIB Execution
+# New CLI options for Sprint 14
+SerialPortPoolService.exe --production-simulation \
+                         --bib-ids "client_demo" \
+                         --simulation-mode continuous \
+                         --trigger-timeout 300s
 
-[15:30:00] 🌐 Opening Dashboard: http://localhost:8080
-[15:30:01] 📊 Dashboard: Connected to SerialPortPool service ✅
-[15:30:02] 🔄 Service Status: RUNNING | Hybrid Mode: ENABLED
-
-[15:30:05] 🎯 Command: .\SerialPortPoolService.exe --bib-ids client_demo,production_test_v2 --mode hybrid
-[15:30:06] 🧠 Resource Analysis: 12 ports available, 4 required, 0 conflicts
-[15:30:07] ✅ Strategy Selected: LIMITED_PARALLEL (2 concurrent)
-[15:30:08] 📊 Dashboard: Real-time execution start notifications
-
-[15:30:10] 🔄 PARALLEL EXECUTION: client_demo + production_test_v2
-[15:30:10] 📋 Live Dashboard Updates: Both BIBs showing progress bars
-[15:30:15] ✅ client_demo COMPLETED (5.2s) - Dashboard updated instantly
-[15:30:18] ✅ production_test_v2 COMPLETED (8.1s) - Dashboard updated instantly
-
-[15:30:20] 📊 REAL-TIME METRICS UPDATE:
-           ⏱️ Total Duration: 8.1s (vs 13.3s sequential = +39% faster)
-           🎯 Strategy: LIMITED_PARALLEL
-           📈 Success Rate: 100% | Parallel Efficiency: 78%
-
-CLIENT REACTION: "Perfect! Real-time visibility with improved performance!"
+# Dual-mode operation
+SerialPortPoolService.exe --mode orchestration  # Sprint 10-13 behavior
+SerialPortPoolService.exe --mode simulation     # Sprint 14 behavior
 ```
 
 ---
 
-## 🚀 Sprint 15+ Ready
+## 🔧 **TECHNICAL ARCHITECTURE**
 
-### **Sprint 14 Achievements Enable:**
-- **Enterprise Scalability** - Parallel foundation for unlimited scaling
-- **Advanced Analytics** - Performance data for AI optimization
-- **Cloud Deployment** - HTTP API ready for cloud/container deployment
-- **Advanced Monitoring** - Foundation for enterprise operations
+### **New Service Dependencies:**
+```
+ProductionSimulationService
+├── IBibConfigurationLoader (existing)
+├── IHardwareTriggerSimulator (new)
+├── IContinuousTestController (new)
+├── IProductionStateManager (new)
+└── IProtocolHandlerFactory (existing)
+
+HardwareTriggerSimulator
+├── HardwareSimulationConfig (Sprint 13)
+├── Timer-based triggers
+├── Event-driven triggers
+└── Manual control triggers
+
+ContinuousTestController
+├── IProtocolHandler (existing)
+├── Test execution loop
+├── Performance monitoring
+└── Error recovery logic
+```
+
+### **Configuration Extensions:**
+```xml
+<!-- Sprint 14: Enhanced hardware simulation -->
+<hardware_simulation>
+    <Enabled>true</Enabled>
+    <Mode>ProductionSimulation</Mode>  <!-- NEW: Production mode -->
+    
+    <!-- Production behavior configuration -->
+    <ProductionBehavior>
+        <ContinuousTestingEnabled>true</ContinuousTestingEnabled>
+        <TestInterval>5000</TestInterval>  <!-- 5s between tests -->
+        <MaxTestDuration>3600</MaxTestDuration>  <!-- 1 hour max -->
+    </ProductionBehavior>
+    
+    <!-- Hardware triggers -->
+    <StopTriggers>
+        <TimerTrigger>
+            <Enabled>true</Enabled>
+            <TimeoutSeconds>300</TimeoutSeconds>
+        </TimerTrigger>
+        <ManualTrigger>
+            <Enabled>true</Enabled>
+            <TriggerKey>STOP_PRODUCTION</TriggerKey>
+        </ManualTrigger>
+        <FailureTrigger>
+            <Enabled>true</Enabled>
+            <FailureThreshold>3</FailureThreshold>
+        </FailureTrigger>
+    </StopTriggers>
+</hardware_simulation>
+```
 
 ---
 
-*Sprint 14 Planning - Hybrid Parallel Execution + Dashboard API*  
-*Created: September 4, 2025*  
-*Based on: Sprint 12 Dashboard Success + Existing Model Infrastructure*  
-*Risk Level: LOW-MEDIUM | Impact Level: HIGH*
+## 📊 **EFFORT ESTIMATION**
 
-**🚀 Sprint 14 = Real-Time Hybrid Excellence! 🚀**
+| **Component** | **Effort** | **Complexity** | **Risk** |
+|---------------|------------|----------------|----------|
+| **ProductionSimulationService** | 8-10h | High | Medium |
+| **HardwareTriggerSimulator** | 6-8h | Medium | Low |
+| **ContinuousTestController** | 6-8h | Medium | Medium |
+| **ProductionStateManager** | 4-6h | Low | Low |
+| **Sprint 13 Testing** | 8-12h | Medium | Low |
+| **Integration & CLI** | 6-8h | Medium | Medium |
+| **Documentation** | 2-3h | Low | Low |
+
+**TOTAL SPRINT 14 EFFORT:** **40-55 hours** over **14 days**  
+**AVERAGE DAILY EFFORT:** **3-4 hours** (sustainable pace)  
+**RISK LEVEL:** **MEDIUM** (new architecture, but clear requirements)
+
+---
+
+## 🚨 **RISK MITIGATION**
+
+### **Technical Risks:**
+
+| **Risk** | **Probability** | **Impact** | **Mitigation** |
+|----------|----------------|------------|----------------|
+| **Service Coordination Conflicts** | Medium | High | Clear service boundaries, dependency injection isolation |
+| **Performance Degradation** | Low | Medium | Lightweight timer-based implementation, performance monitoring |
+| **Configuration Complexity** | Medium | Medium | Backward compatibility, gradual feature introduction |
+| **Test Coverage Gaps** | Low | High | Comprehensive unit tests, integration test suite |
+
+### **Architectural Risks:**
+- **Scope Creep:** Focus on minimum viable production simulation
+- **Over-Engineering:** Start simple, iterate based on testing feedback
+- **Integration Issues:** Maintain compatibility with existing Sprint 10-13 functionality
+
+---
+
+## ✅ **SUCCESS CRITERIA**
+
+### **🎯 Production Simulation Functionality**
+- **START Phase:** Execute initialization once per production run
+- **TEST Loop:** Continuous test execution without workflow restart
+- **STOP Trigger:** Respond to simulated hardware stop signals
+- **State Management:** Track production state across multiple UUTs
+- **Performance:** Sub-100ms test cycle overhead
+
+### **🧪 System Integration**
+- **Dual-Mode Operation:** Switch between orchestration and simulation modes
+- **Configuration Compatibility:** All Sprint 13 XMLs work in simulation mode
+- **Service Harmony:** No conflicts between simulation and orchestration services
+- **CLI Enhancement:** Professional command-line interface for production simulation
+
+### **📊 Quality & Reliability**
+- **Zero Regression:** All Sprint 10-13 functionality preserved
+- **Test Coverage:** 90%+ coverage for new production simulation services
+- **Performance:** Production simulation runs stable for 1+ hours
+- **Documentation:** Complete API documentation and usage examples
+
+---
+
+## 🚀 **POST-SPRINT 14 CAPABILITIES**
+
+### **Immediate Benefits:**
+- **Real Production Behavior:** Accurate simulation of hardware production workflows
+- **Hardware Testing Preparation:** Foundation for real BitBang protocol integration
+- **Performance Analysis:** Continuous test execution metrics and monitoring
+- **Flexible Operation:** Choose between orchestration and simulation based on needs
+
+### **Sprint 15 Opportunities:**
+- **Parallel Production Simulation:** Multiple UUTs running simultaneously
+- **Advanced Trigger Systems:** Complex hardware failure scenario simulation
+- **Real Hardware Integration:** Replace simulation with actual BitBang protocol
+- **Production Analytics Dashboard:** Real-time monitoring and control interface
+
+---
+
+## 🏆 **CONCLUSION (REVISED)**
+
+**SPRINT 14 = TARGETED IMPLEMENTATION ON SOLID FOUNDATION**
+
+Sprint 13 delivered substantially more infrastructure than initially estimated, transforming Sprint 14 from a major architectural initiative into a focused implementation of the missing simulation logic.
+
+**KEY INSIGHT:** The discovery that workflow orchestration ≠ production simulation remains valid and important, but Sprint 13 already solved the infrastructure challenges. Sprint 14 now focuses on implementing the behavior logic rather than building foundation systems.
+
+**REVISED SCOPE:** Instead of building entire services from scratch, Sprint 14 extends existing proven components with the specific production simulation logic.
+
+**DEVELOPER CONFIDENCE:** **VERY HIGH** - Working with proven Sprint 13 infrastructure rather than building new architecture.
+
+**IMPACT:** This sprint completes the transformation from workflow orchestration to production simulation platform by implementing the final missing piece - continuous test behavior logic.
+
+---
+
+*Sprint 14 Planning - Revised Based on Sprint 13 Deliveries*  
+*Updated: September 9, 2025*  
+*Risk Assessment: LOW (building on proven foundation)*  
+*Effort Reduction: 65% (from 40-55h to 15-20h)*  
+*Sprint 13 Infrastructure: SUBSTANTIAL*
+
+**Sprint 14 = Complete Production Simulation on Proven Foundation**

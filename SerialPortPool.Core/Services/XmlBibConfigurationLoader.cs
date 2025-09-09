@@ -414,6 +414,7 @@ public class XmlBibConfigurationLoader : IBibConfigurationLoader
             }
         }
 
+        ParseHardwareSimulation(bibNode, bib); //Simulation
         // Parse UUTs
         var uutNodes = bibNode.SelectNodes("uut");
         if (uutNodes != null)
@@ -882,8 +883,8 @@ public class XmlBibConfigurationLoader : IBibConfigurationLoader
             var config = new HardwareSimulationConfig();
 
             // Parse enabled flag
-            var enabledNode = simNode.SelectSingleNode("enabled");
-            config.Enabled = bool.Parse(enabledNode?.InnerText ?? "false");
+            var enabledNode = simNode.SelectSingleNode("Enabled");
+            config.Enabled = bool.Parse(enabledNode?.InnerText ?? "False");
 
             if (!config.Enabled)
             {
