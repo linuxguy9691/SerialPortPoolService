@@ -22,7 +22,7 @@ Wait interval...
 
 **Required System (Production Simulation):**
 ```
-START (once) → TEST (continuous loop) → STOP (on hardware trigger)
+START (on hardware trigger or simulation from Sprint 13) → TEST (continuous loop) → STOP (on hardware trigger or simulation from Sprint 13)
 ```
 
 ### 💡 **Context: Building on Proven Foundations**
