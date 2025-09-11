@@ -86,8 +86,8 @@ class Program
         // Execution mode options
         var modeOption = new Option<string>(
             "--mode",
-            getDefaultValue: () => "single",
-            description: "Execution mode: single, continuous, scheduled, on-demand");
+            getDefaultValue: () => "production",  // ← NEW (CHANGE 1/2)
+            description: "Execution mode: production, single, continuous, scheduled, on-demand");
 
         var intervalOption = new Option<int>(
             "--interval",
@@ -177,11 +177,12 @@ class Program
         // Parse execution mode
         var executionMode = mode.ToLowerInvariant() switch
         {
+            "production" => MultiBibExecutionMode.Production,  // ← NEW (CHANGE 2/2)
             "single" => MultiBibExecutionMode.SingleRun,
             "continuous" => MultiBibExecutionMode.Continuous,
             "scheduled" => MultiBibExecutionMode.Scheduled,
             "on-demand" => MultiBibExecutionMode.OnDemand,
-            _ => MultiBibExecutionMode.SingleRun
+            _ => MultiBibExecutionMode.Production  // ← NEW default fallback
         };
 
         // 🆕 SPRINT 13: Enhanced configuration path resolution

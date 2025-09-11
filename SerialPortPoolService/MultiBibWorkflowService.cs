@@ -21,7 +21,7 @@ public class MultiBibWorkflowService : IHostedService
     private readonly IBibConfigurationLoader _configLoader;
     private readonly ILogger<MultiBibWorkflowService> _logger;
     private readonly MultiBibServiceConfiguration _config;
-    
+
     private Timer? _scheduledExecutionTimer;
     private CancellationTokenSource? _cancellationTokenSource;
 
@@ -44,9 +44,9 @@ public class MultiBibWorkflowService : IHostedService
     {
         _logger.LogInformation("🚀 Multi-BIB Workflow Service Starting...");
         _logger.LogInformation($"📋 Mode: {_config.ExecutionMode}");
-        
+
         _cancellationTokenSource = new CancellationTokenSource();
-        
+
         try
         {
             // Initialize configuration loader
@@ -73,6 +73,11 @@ public class MultiBibWorkflowService : IHostedService
 
                 case MultiBibExecutionMode.OnDemand:
                     _logger.LogInformation("📡 On-demand mode - waiting for execution requests");
+                    break;
+
+                case MultiBibExecutionMode.Production:  // ← ADD THIS CASE
+                    _logger.LogInformation("🏭 Production BitBang mode - starting hardware-driven execution...");
+                    _logger.LogInformation("📡 Production mode implementation coming in Bouchée #3...");
                     break;
 
                 default:
@@ -103,7 +108,7 @@ public class MultiBibWorkflowService : IHostedService
             // Give running workflows time to complete
             var timeoutTask = Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
             var completed = await Task.WhenAny(timeoutTask);
-            
+
             if (completed == timeoutTask)
             {
                 _logger.LogWarning("⏰ Service stop timeout - some workflows may have been interrupted");
@@ -135,8 +140,8 @@ public class MultiBibWorkflowService : IHostedService
                 // Execute specific BIB_IDs
                 _logger.LogInformation($"📋 Target BIB_IDs: {string.Join(", ", _config.TargetBibIds)}");
                 result = await _orchestrator.ExecuteMultipleBibsWithSummaryAsync(
-                    _config.TargetBibIds, 
-                    _config.IncludeDetailedLogs, 
+                    _config.TargetBibIds,
+                    _config.IncludeDetailedLogs,
                     "MultiBibService",
                     cancellationToken);
             }
@@ -171,7 +176,7 @@ public class MultiBibWorkflowService : IHostedService
         while (!cancellationToken.IsCancellationRequested)
         {
             cycleNumber++;
-            
+
             try
             {
                 _logger.LogInformation($"🔄 Multi-BIB Cycle #{cycleNumber} Starting...");
@@ -211,7 +216,7 @@ public class MultiBibWorkflowService : IHostedService
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"❌ Multi-BIB Cycle #{cycleNumber} failed");
-                
+
                 // Continue with next cycle after error delay
                 if (!cancellationToken.IsCancellationRequested)
                 {
@@ -330,12 +335,12 @@ public class MultiBibWorkflowService : IHostedService
         _logger.LogInformation($"📈 Workflow Success Rate: {result.WorkflowSuccessRate:F1}%");
         _logger.LogInformation($"⏱️ Total Execution Time: {result.TotalExecutionTime.TotalMinutes:F1} minutes");
         _logger.LogInformation($"⚡ Average per Workflow: {result.AverageWorkflowDuration.TotalSeconds:F1} seconds");
-        
+
         if (!string.IsNullOrEmpty(result.ErrorMessage))
         {
             _logger.LogError($"❌ Error: {result.ErrorMessage}");
         }
-        
+
         _logger.LogInformation("📊 " + "=".PadRight(60, '='));
 
         // BIB-level breakdown
@@ -344,10 +349,397 @@ public class MultiBibWorkflowService : IHostedService
         {
             _logger.LogInformation($"📋 {bib.Value}");
         }
-        
+
         _logger.LogInformation("📊 " + "=".PadRight(60, '='));
     }
 
+  // ===================================================================
+// SPRINT 14 BOUCHÉE #3: Production Mode Implementation
+// File: SerialPortPoolService/MultiBibWorkflowService.cs
+// ADD: ExecuteProductionModeAsync method + helpers (~200 lines)
+// Pattern: START-once → TEST(loop) → STOP-once per UUT_ID
+// ===================================================================
+
+// ADD TO EXISTING MultiBibWorkflowService class after line ~280
+
+// ===================================================================
+// NEW SECTION: Production Mode Methods (ADD AFTER EXISTING METHODS)
+// ===================================================================
+
+#region Sprint 14: Production Mode Implementation
+
+private BitBangProductionService? _bitBangService;
+
+/// <summary>
+/// SPRINT 14: Execute production mode with per UUT_ID BitBang-driven execution
+/// Pattern: START-once → TEST(loop) → STOP-once per UUT_ID
+/// </summary>
+private async Task ExecuteProductionModeAsync(CancellationToken cancellationToken)
+{
+    try
+    {
+        _logger.LogInformation("🏭 PRODUCTION MODE: Per UUT_ID BitBang-driven execution starting...");
+        
+        // Initialize BitBang service if not already created
+        if (_bitBangService == null)
+        {
+            _bitBangService = new BitBangProductionService(_logger);
+            _logger.LogInformation("🔌 BitBang Production Service initialized");
+        }
+
+        // Use existing DynamicBibConfigurationService for BIB discovery
+        var discoveredBibs = await DiscoverConfiguredBibsAsync();
+        _logger.LogInformation($"📋 Discovered BIBs for production: {string.Join(", ", discoveredBibs)}");
+
+        if (!discoveredBibs.Any())
+        {
+            _logger.LogWarning("⚠️ No BIBs discovered for production mode");
+            return;
+        }
+
+        // Execute all BIBs in parallel (each BIB manages its own UUTs)
+        var bibTasks = discoveredBibs.Select(bibId => 
+            ExecuteSingleBibProductionAsync(bibId, cancellationToken));
+            
+        await Task.WhenAll(bibTasks);
+        
+        _logger.LogInformation("🏁 Production mode execution completed for all BIBs");
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "💥 Production mode execution failed");
+    }
+    finally
+    {
+        // Cleanup BitBang service
+        _bitBangService?.Dispose();
+        _bitBangService = null;
+    }
+}
+
+/// <summary>
+/// Execute production workflow for a single BIB with all its UUTs
+/// </summary>
+private async Task ExecuteSingleBibProductionAsync(string bibId, CancellationToken cancellationToken)
+{
+    _logger.LogInformation($"🏭 Starting production execution for BIB: {bibId}");
+    
+    try
+    {
+        // 1. Load BIB configuration (REUSE existing)
+        var bibConfig = await _configLoader.LoadBibConfigurationAsync(bibId);
+        if (bibConfig == null)
+        {
+            _logger.LogError($"❌ Could not load BIB configuration: {bibId}");
+            return;
+        }
+
+        var simConfig = bibConfig.HardwareSimulation;
+        if (simConfig == null)
+        {
+            _logger.LogWarning($"⚠️ No hardware simulation config for BIB: {bibId} - using defaults");
+            simConfig = new HardwareSimulationConfig { Enabled = true };
+        }
+        
+        _logger.LogInformation($"📊 BIB {bibId}: {bibConfig.Uuts.Count} UUTs detected for production");
+        _logger.LogInformation($"🎭 Simulation: {simConfig.GetSimulationSummary()}");
+
+        // Execute all UUTs in parallel (each UUT independent cycle)
+        var uutTasks = bibConfig.Uuts.Select(uut => 
+            ExecuteUutProductionCycleAsync(bibId, uut, simConfig, cancellationToken));
+            
+        await Task.WhenAll(uutTasks);
+        
+        _logger.LogInformation($"✅ Production execution completed for BIB: {bibId}");
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"💥 Production execution failed for BIB: {bibId}");
+    }
+}
+
+/// <summary>
+/// Execute production cycle for a single UUT: START-once → TEST(loop) → STOP-once
+/// </summary>
+private async Task ExecuteUutProductionCycleAsync(string bibId, UutConfiguration uut, 
+    HardwareSimulationConfig simConfig, CancellationToken cancellationToken)
+{
+    var uutId = uut.UutId;
+    _logger.LogInformation($"🔧 Starting independent production cycle: {bibId}.{uutId}");
+    
+    try
+    {
+        // 2. Wait for BitBang START signal (PER UUT_ID)
+        _logger.LogInformation($"⏳ Waiting for START signal: {bibId}.{uutId}");
+        var startReceived = await _bitBangService!.WaitForStartSignalAsync(uutId, simConfig);
+        
+        if (!startReceived)
+        {
+            _logger.LogWarning($"⚠️ START signal timeout or failure: {bibId}.{uutId}");
+            return;
+        }
+
+        // 3. Execute START phase ONCE (PER UUT_ID)
+        _logger.LogInformation($"🚀 Executing START phase: {bibId}.{uutId}");
+        var startResult = await ExecuteStartPhaseAsync(bibId, uutId);
+        
+        if (!startResult)
+        {
+            _logger.LogError($"❌ START phase failed: {bibId}.{uutId}");
+            return;
+        }
+
+        // 4. Continuous TEST loop (PER UUT_ID) - NEW PATTERN
+        _logger.LogInformation($"🔄 Starting continuous TEST loop: {bibId}.{uutId}");
+        await ExecuteContinuousTestLoopAsync(bibId, uutId, simConfig, cancellationToken);
+
+        // 5. Execute STOP phase ONCE (PER UUT_ID)
+        _logger.LogInformation($"🛑 Executing STOP phase: {bibId}.{uutId}");
+        var stopResult = await ExecuteStopPhaseAsync(bibId, uutId);
+        
+        if (stopResult)
+        {
+            _logger.LogInformation($"✅ Production cycle completed successfully: {bibId}.{uutId}");
+        }
+        else
+        {
+            _logger.LogWarning($"⚠️ STOP phase issues: {bibId}.{uutId}");
+        }
+    }
+    catch (OperationCanceledException)
+    {
+        _logger.LogInformation($"🛑 Production cycle cancelled: {bibId}.{uutId}");
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"💥 Production cycle exception: {bibId}.{uutId}");
+    }
+}
+
+/// <summary>
+/// Continuous TEST loop - NEW PRODUCTION PATTERN
+/// Runs until STOP signal or critical failure per UUT_ID
+/// </summary>
+private async Task ExecuteContinuousTestLoopAsync(string bibId, string uutId, 
+    HardwareSimulationConfig simConfig, CancellationToken cancellationToken)
+{
+    var cycleCount = 0;
+    _logger.LogInformation($"🔄 Continuous TEST loop started: {bibId}.{uutId}");
+    
+    while (!cancellationToken.IsCancellationRequested)
+    {
+        cycleCount++;
+        
+        // Check for STOP signal or critical fail (PER UUT_ID)
+        var shouldStop = await CheckStopConditionsAsync(uutId, simConfig);
+        if (shouldStop) 
+        {
+            _logger.LogInformation($"🛑 STOP condition detected after {cycleCount} cycles: {bibId}.{uutId}");
+            break;
+        }
+
+        // Execute TEST phase (PER UUT_ID) - REUSE existing orchestrator
+        _logger.LogDebug($"🧪 TEST cycle #{cycleCount}: {bibId}.{uutId}");
+        var testResult = await ExecuteTestPhaseAsync(bibId, uutId);
+        
+        // Handle critical failures (PER UUT_ID)
+        if (IsCriticalFailure(testResult))
+        {
+            _logger.LogCritical($"🚨 Critical failure on cycle #{cycleCount}: {bibId}.{uutId} - emergency stop");
+            break;
+        }
+
+        // Log test result
+        if (testResult)
+        {
+            _logger.LogDebug($"✅ TEST cycle #{cycleCount} success: {bibId}.{uutId}");
+        }
+        else
+        {
+            _logger.LogWarning($"⚠️ TEST cycle #{cycleCount} failed: {bibId}.{uutId} - continuing");
+        }
+
+        // Test interval (from config or default)
+        var testInterval = GetTestInterval(simConfig);
+        await Task.Delay(testInterval, cancellationToken);
+    }
+    
+    _logger.LogInformation($"📊 Continuous TEST loop completed: {cycleCount} cycles executed for {bibId}.{uutId}");
+}
+
+/// <summary>
+/// Check STOP conditions per UUT_ID: BitBang signal or critical failure
+/// </summary>
+private async Task<bool> CheckStopConditionsAsync(string uutId, HardwareSimulationConfig simConfig)
+{
+    try
+    {
+        // Check BitBang STOP signal (per UUT_ID)
+        var stopSignal = await _bitBangService!.WaitForStopSignalAsync(uutId, simConfig);
+        if (stopSignal)
+        {
+            _logger.LogInformation($"🛑 BitBang STOP signal received: {uutId}");
+            return true;
+        }
+        
+        // Check critical failure (per UUT_ID)
+        var criticalFailure = await _bitBangService.CheckCriticalFailureAsync(uutId, simConfig);
+        if (criticalFailure)
+        {
+            _logger.LogCritical($"🚨 Critical failure detected: {uutId}");
+            return true;
+        }
+        
+        return false;
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"❌ Error checking stop conditions: {uutId}");
+        return false; // Don't stop on error
+    }
+}
+
+/// <summary>
+/// Execute START phase for UUT (simplified - will use orchestrator in Bouchée #4)
+/// </summary>
+private async Task<bool> ExecuteStartPhaseAsync(string bibId, string uutId)
+{
+    try
+    {
+        // TODO Bouchée #4: Use _orchestrator.ExecuteStartPhaseOnlyAsync(bibId, uutId)
+        _logger.LogInformation($"🚀 START phase placeholder: {bibId}.{uutId}");
+        
+        // Simulate START phase execution
+        await Task.Delay(1000); // Simulate START commands
+        
+        _logger.LogInformation($"✅ START phase completed: {bibId}.{uutId}");
+        return true;
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"❌ START phase failed: {bibId}.{uutId}");
+        return false;
+    }
+}
+
+/// <summary>
+/// Execute TEST phase for UUT (simplified - will use orchestrator in Bouchée #4)
+/// </summary>
+private async Task<bool> ExecuteTestPhaseAsync(string bibId, string uutId)
+{
+    try
+    {
+        // TODO Bouchée #4: Use _orchestrator.ExecuteTestPhaseOnlyAsync(bibId, uutId)
+        _logger.LogDebug($"🧪 TEST phase placeholder: {bibId}.{uutId}");
+        
+        // Simulate TEST phase execution
+        await Task.Delay(500); // Simulate TEST commands
+        
+        return true; // Assume success for now
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"❌ TEST phase failed: {bibId}.{uutId}");
+        return false;
+    }
+}
+
+/// <summary>
+/// Execute STOP phase for UUT (simplified - will use orchestrator in Bouchée #4)
+/// </summary>
+private async Task<bool> ExecuteStopPhaseAsync(string bibId, string uutId)
+{
+    try
+    {
+        // TODO Bouchée #4: Use _orchestrator.ExecuteStopPhaseOnlyAsync(bibId, uutId)
+        _logger.LogInformation($"🛑 STOP phase placeholder: {bibId}.{uutId}");
+        
+        // Simulate STOP phase execution
+        await Task.Delay(500); // Simulate STOP commands
+        
+        _logger.LogInformation($"✅ STOP phase completed: {bibId}.{uutId}");
+        return true;
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"❌ STOP phase failed: {bibId}.{uutId}");
+        return false;
+    }
+}
+
+/// <summary>
+/// Helper: Discover configured BIB IDs
+/// </summary>
+private async Task<List<string>> DiscoverConfiguredBibsAsync()
+{
+    try
+    {
+        // TODO: Integrate with DynamicBibConfigurationService when available
+        // For now, use target BIB IDs from config or default
+        if (_config.TargetBibIds?.Any() == true)
+        {
+            _logger.LogInformation($"📋 Using configured target BIBs: {string.Join(", ", _config.TargetBibIds)}");
+            return _config.TargetBibIds;
+        }
+        
+        // Default discovery: try to load common BIB IDs
+        var defaultBibs = new[] { "client_demo", "production_line_1", "hardware_test" };
+        var discoveredBibs = new List<string>();
+        
+        foreach (var bibId in defaultBibs)
+        {
+            try
+            {
+                var config = await _configLoader.LoadBibConfigurationAsync(bibId);
+                if (config != null)
+                {
+                    discoveredBibs.Add(bibId);
+                    _logger.LogDebug($"📋 Discovered BIB: {bibId}");
+                }
+            }
+            catch
+            {
+                _logger.LogDebug($"📋 BIB not found: {bibId}");
+            }
+        }
+        
+        return discoveredBibs;
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "❌ Error discovering BIBs");
+        return new List<string>();
+    }
+}
+
+/// <summary>
+/// Helper: Check if result indicates critical failure
+/// </summary>
+private bool IsCriticalFailure(bool testResult)
+{
+    // For now, simple check - will enhance in Bouchée #4 with real validation results
+    return !testResult; // Any failure is considered critical for now
+}
+
+/// <summary>
+/// Helper: Get test interval from simulation config
+/// </summary>
+private TimeSpan GetTestInterval(HardwareSimulationConfig simConfig)
+{
+    // Extract test interval from simulation config or use default
+    var baseInterval = TimeSpan.FromSeconds(2); // Default 2 seconds between tests
+    
+    if (simConfig?.Enabled == true)
+    {
+        // Adjust based on simulation speed multiplier
+        var adjustedInterval = baseInterval.TotalMilliseconds / simConfig.SpeedMultiplier;
+        return TimeSpan.FromMilliseconds(Math.Max(100, adjustedInterval)); // Minimum 100ms
+    }
+    
+    return baseInterval;
+}
+
+#endregion
     #endregion
 }
 
@@ -415,7 +807,13 @@ public enum MultiBibExecutionMode
     /// <summary>
     /// Execute only when requested (API mode)
     /// </summary>
-    OnDemand
+    OnDemand,
+
+    /// <summary>
+    /// SPRINT 14: Production BitBang-driven mode (new default)
+    /// Per UUT_ID hardware-driven START → TEST(loop) → STOP
+    /// </summary>
+    Production // ← ADD THIS
 }
 
 /// <summary>
