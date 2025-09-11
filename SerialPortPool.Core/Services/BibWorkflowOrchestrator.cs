@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
 using SerialPortPool.Core.Models;
 using SerialPortPool.Core.Services; // 🆕 SPRINT 12: For BibUutLogger extensions
+using System.Collections.Concurrent;
 
 namespace SerialPortPool.Core.Services;
 
@@ -123,8 +124,8 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
             workflowResult.EndTime = DateTime.Now;
 
             // 🆕 SPRINT 12: Log workflow completion with summary (CHANGE 3/3)
-            var totalCommands = portConfig.StartCommands.Commands.Count + 
-                               portConfig.TestCommands.Commands.Count + 
+            var totalCommands = portConfig.StartCommands.Commands.Count +
+                               portConfig.TestCommands.Commands.Count +
                                portConfig.StopCommands.Commands.Count;
             bibLogger.LogWorkflowSummary(workflowResult.Success, workflowResult.Duration, totalCommands);
 
@@ -137,10 +138,10 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
         {
             workflowResult.EndTime = DateTime.Now;
             var errorMessage = $"SPRINT 8: Dynamic BIB workflow failed: {ex.Message}";
-            
+
             // 🆕 SPRINT 12: Enhanced error logging (BONUS CHANGE)
             bibLogger.LogBibExecution(LogLevel.Critical, "💥 WORKFLOW EXCEPTION: {Error}", ex.Message);
-            
+
             _logger.LogError(ex, $"❌ {errorMessage} (Workflow: {workflowResult.WorkflowId})");
             return workflowResult.WithError(errorMessage);
         }
@@ -167,8 +168,8 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
 
             // ✨ SPRINT 8: Use dynamic port mapping service
             var availableMappings = await _dynamicPortMapping.GetAllPortMappingsAsync();
-            var relevantMappings = availableMappings.Where(m => 
-                m.BibId.Equals(bibId, StringComparison.OrdinalIgnoreCase) && 
+            var relevantMappings = availableMappings.Where(m =>
+                m.BibId.Equals(bibId, StringComparison.OrdinalIgnoreCase) &&
                 m.UutId.Equals(uutId, StringComparison.OrdinalIgnoreCase)).ToList();
 
             // ✨ SPRINT 8: Use dynamic mappings
@@ -177,15 +178,15 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
             foreach (var mapping in relevantMappings.OrderBy(m => m.UutPortNumber))
             {
                 _logger.LogDebug($"🔌 SPRINT 8: Attempting dynamic workflow - UUT Port {mapping.UutPortNumber} → {mapping.PhysicalPort}");
-                
+
                 var result = await ExecuteBibWorkflowAsync(bibId, uutId, mapping.UutPortNumber, clientId, cancellationToken);
-                
+
                 if (result.Success)
                 {
                     _logger.LogInformation($"✅ SPRINT 8: Dynamic auto-port workflow succeeded with UUT Port {mapping.UutPortNumber} → {mapping.PhysicalPort}");
                     return result;
                 }
-                
+
                 _logger.LogWarning($"⚠️ Dynamic port {mapping.UutPortNumber} failed, trying next port...");
                 await Task.Delay(1000, cancellationToken);
             }
@@ -200,13 +201,13 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
                 StartTime = DateTime.Now,
                 EndTime = DateTime.Now
             };
-            
+
             return failedResult.WithError($"SPRINT 8: All {relevantMappings.Count} dynamic ports failed for {bibId}.{uutId}");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, $"❌ SPRINT 8: Dynamic auto-port workflow failed for {bibId}.{uutId}");
-            
+
             var errorResult = new BibWorkflowResult
             {
                 WorkflowId = Guid.NewGuid().ToString(),
@@ -216,7 +217,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
                 StartTime = DateTime.Now,
                 EndTime = DateTime.Now
             };
-            
+
             return errorResult.WithError($"SPRINT 8: Dynamic auto-port workflow error: {ex.Message}");
         }
     }
@@ -295,7 +296,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
 
             // Use existing reservation service (ZERO TOUCH)
             var reservation = await _reservationService.ReservePortAsync(criteria, clientId);
-            
+
             return reservation;
         }
         catch (Exception ex)
@@ -402,17 +403,17 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
 
                 // Execute command via protocol handler
                 var protocolResponse = await protocolHandler.ExecuteCommandAsync(session, command, cancellationToken);
-                
+
                 // Convert ProtocolResponse to CommandResult
                 var commandResult = ConvertToCommandResult(command, protocolResponse);
                 sequenceResult.CommandResults.Add(commandResult);
 
                 // 🚀 SPRINT 9: Enhanced continue_on_failure logic
                 var shouldContinue = DetermineIfShouldContinue(
-                    commandResult, 
-                    protocolResponse, 
-                    commandSequence, 
-                    command, 
+                    commandResult,
+                    protocolResponse,
+                    commandSequence,
+                    command,
                     phaseName);
 
                 _logger.LogInformation($"📥 {phaseName} command result: {commandResult} | Continue: {shouldContinue}");
@@ -436,11 +437,11 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
         catch (Exception ex)
         {
             _logger.LogError(ex, $"❌ Error during {phaseName} phase execution");
-            
+
             // Create error result
             var errorResult = CommandResult.Failure($"{phaseName}_PHASE_ERROR", ex.Message, DateTime.Now - sequenceStartTime);
             sequenceResult.CommandResults.Add(errorResult);
-            
+
             return sequenceResult;
         }
     }
@@ -536,10 +537,10 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
             try
             {
                 var uutConfig = bibConfig.GetUut(uutId);
-                
+
                 // Check if port exists in UUT
                 var portConfig = uutConfig.GetPort(portNumber);
-                
+
                 // ✨ SPRINT 8: Check if dynamic or legacy port mapping exists
                 var physicalPort = await FindPhysicalPortDynamicAsync(bibId, uutId, portNumber);
                 if (string.IsNullOrEmpty(physicalPort))
@@ -578,7 +579,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
     {
         // This would be implemented with proper workflow tracking in a production system
         await Task.CompletedTask;
-        
+
         return new BibWorkflowStatistics
         {
             TotalWorkflows = 0,
@@ -608,13 +609,13 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
                 validationObj is EnhancedValidationResult enhancedResult)
             {
                 _logger.LogDebug($"🎯 {phaseName}: Enhanced validation detected - Level: {enhancedResult.Level}");
-                
+
                 return ProcessEnhancedValidationResult(enhancedResult, commandSequence, command, phaseName);
             }
-            
+
             // 🔄 LEGACY: Fall back to basic success/failure logic
             _logger.LogDebug($"📊 {phaseName}: Legacy validation mode - Success: {commandResult.IsSuccess}");
-            
+
             return ProcessLegacyValidationResult(commandResult, commandSequence, phaseName);
         }
         catch (Exception ex)
@@ -635,28 +636,28 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
     {
         var level = enhancedResult.Level;
         var sequenceSetting = commandSequence.ContinueOnFailure;
-        
+
         // 🚨 CRITICAL: Always stop
         if (level == ValidationLevel.CRITICAL)
         {
             _logger.LogCritical($"🚨 {phaseName}: CRITICAL validation - EMERGENCY STOP");
             return false;
         }
-        
+
         // ❌ FAIL: Check continue_on_failure setting
         if (level == ValidationLevel.FAIL)
         {
             _logger.LogWarning($"❌ {phaseName}: FAIL validation - continue_on_failure: {sequenceSetting}");
             return sequenceSetting;
         }
-        
+
         // ⚠️ WARN: Continue with alert
         if (level == ValidationLevel.WARN)
         {
             _logger.LogWarning($"⚠️ {phaseName}: WARN validation - CONTINUING with alert");
             return true;
         }
-        
+
         // ✅ PASS: Always continue
         return true;
     }
@@ -673,7 +674,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
         {
             return true;
         }
-        
+
         // Command failed - check continue_on_failure
         if (commandSequence.ContinueOnFailure)
         {
@@ -704,7 +705,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
         CancellationToken cancellationToken = default)
     {
         var results = new List<BibWorkflowResult>();
-        
+
         try
         {
             _logger.LogInformation($"🚀 SPRINT 10: Starting Multi-Port workflow: {bibId}.{uutId} (ALL PORTS)");
@@ -720,7 +721,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
 
             var uut = bibConfig.GetUut(uutId);
             var totalPorts = uut.Ports.Count;
-            
+
             _logger.LogInformation($"📊 Multi-Port execution: {totalPorts} ports discovered in {bibId}.{uutId}");
 
             // 🔄 OPTION 1: Sequential execution reusing existing method
@@ -728,7 +729,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
             {
                 var port = uut.Ports[i];
                 var portNumber = port.PortNumber;
-                
+
                 if (cancellationToken.IsCancellationRequested)
                 {
                     _logger.LogWarning($"⚠️ Multi-Port workflow cancelled at port {i + 1}/{totalPorts}");
@@ -755,7 +756,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
             // 📊 Final summary
             var successCount = results.Count(r => r.Success);
             var totalTime = results.Sum(r => r.Duration.TotalSeconds);
-            
+
             _logger.LogInformation($"🎯 Multi-Port workflow completed: {successCount}/{results.Count} ports successful in {totalTime:F1}s");
 
             return results;
@@ -763,7 +764,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
         catch (Exception ex)
         {
             _logger.LogError(ex, $"💥 Multi-Port workflow failed for {bibId}.{uutId}");
-            
+
             var errorResult = CreateErrorResult(bibId, uutId, 0, clientId, $"Multi-Port workflow error: {ex.Message}");
             results.Add(errorResult);
             return results;
@@ -776,7 +777,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
     /// </summary>
     public async Task<List<BibWorkflowResult>> ExecuteBibWorkflowAllUutsAsync(
         string bibId,
-        string clientId = "MultiUutWorkflow", 
+        string clientId = "MultiUutWorkflow",
         CancellationToken cancellationToken = default)
     {
         var results = new List<BibWorkflowResult>();
@@ -801,7 +802,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
             for (int i = 0; i < bibConfig.Uuts.Count; i++)
             {
                 var uut = bibConfig.Uuts[i];
-                
+
                 if (cancellationToken.IsCancellationRequested)
                 {
                     _logger.LogWarning($"⚠️ Multi-UUT workflow cancelled at UUT {i + 1}/{totalUuts}");
@@ -817,7 +818,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
                 // UUT-level summary
                 var uutSuccessCount = uutResults.Count(r => r.Success);
                 var uutStatus = uutSuccessCount == uutResults.Count ? "✅ SUCCESS" : "⚠️ PARTIAL";
-                
+
                 _logger.LogInformation($"{uutStatus} UUT {uut.UutId}: {uutSuccessCount}/{uutResults.Count} ports successful");
 
                 // Delay between UUTs for system stability
@@ -830,7 +831,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
             // 📊 Final BIB-level summary
             var totalSuccessCount = results.Count(r => r.Success);
             var totalExecutionTime = results.Sum(r => r.Duration.TotalSeconds);
-            
+
             _logger.LogInformation($"🎯 Multi-UUT workflow completed: {totalSuccessCount}/{results.Count} total ports successful in {totalExecutionTime:F1}s");
 
             return results;
@@ -838,7 +839,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
         catch (Exception ex)
         {
             _logger.LogError(ex, $"💥 Multi-UUT workflow failed for {bibId}");
-            
+
             var errorResult = CreateErrorResult(bibId, "unknown", 0, clientId, $"Multi-UUT workflow error: {ex.Message}");
             results.Add(errorResult);
             return results;
@@ -855,14 +856,14 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
         CancellationToken cancellationToken = default)
     {
         var startTime = DateTime.Now;
-        
+
         try
         {
             _logger.LogInformation($"🚀 SPRINT 10: Starting COMPLETE BIB workflow: {bibId}");
 
             // ✅ REUSE: Use Multi-UUT method
             var allResults = await ExecuteBibWorkflowAllUutsAsync(bibId, clientId, cancellationToken);
-            
+
             // 📊 Create aggregated summary
             var aggregated = new AggregatedWorkflowResult
             {
@@ -877,7 +878,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
 
             // Enhanced statistics
             aggregated.UniqueUuts = allResults.Select(r => r.UutId).Distinct().Count();
-            aggregated.AverageWorkflowDuration = allResults.Any() ? 
+            aggregated.AverageWorkflowDuration = allResults.Any() ?
                 TimeSpan.FromTicks((long)allResults.Average(r => r.Duration.Ticks)) : TimeSpan.Zero;
 
             _logger.LogInformation($"🎉 COMPLETE BIB workflow finished: {aggregated.GetDetailedSummary()}");
@@ -887,7 +888,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
         catch (Exception ex)
         {
             _logger.LogError(ex, $"💥 Complete BIB workflow failed for {bibId}");
-            
+
             return new AggregatedWorkflowResult
             {
                 BibId = bibId,
@@ -924,7 +925,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
             _logger.LogInformation($"📊 Success Rate: {result.SuccessRate:F1}%");
             _logger.LogInformation($"📊 Execution Time: {result.TotalExecutionTime.TotalMinutes:F1} minutes");
             _logger.LogInformation($"📊 Average per Workflow: {result.AverageWorkflowDuration.TotalSeconds:F1} seconds");
-            
+
             // Group by UUT for detailed breakdown
             var uutGroups = result.Results.GroupBy(r => r.UutId).ToList();
             foreach (var uutGroup in uutGroups)
@@ -933,7 +934,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
                 var uutTotal = uutGroup.Count();
                 _logger.LogInformation($"📊   UUT {uutGroup.Key}: {uutSuccess}/{uutTotal} successful");
             }
-            
+
             _logger.LogInformation($"📊 ═══ END SUMMARY REPORT ═══");
         }
 
@@ -994,7 +995,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
             for (int i = 0; i < bibIds.Count; i++)
             {
                 var bibId = bibIds[i];
-                
+
                 if (cancellationToken.IsCancellationRequested)
                 {
                     _logger.LogWarning($"⚠️ Multi-BIB workflow cancelled at BIB {i + 1}/{bibIds.Count}");
@@ -1010,7 +1011,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
                 // BIB-level summary
                 var bibSuccessCount = bibResult.Results.Count(r => r.Success);
                 var bibStatus = bibResult.AllSuccessful ? "✅ SUCCESS" : "⚠️ PARTIAL";
-                
+
                 _logger.LogInformation($"{bibStatus} BIB {bibId}: {bibSuccessCount}/{bibResult.TotalWorkflows} workflows successful " +
                                      $"in {bibResult.TotalExecutionTime.TotalSeconds:F1}s");
 
@@ -1025,7 +1026,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
             var totalSuccessCount = allResults.Count(r => r.Success);
             var totalExecutionTime = allResults.Sum(r => r.Duration.TotalSeconds);
             var uniqueBibs = allResults.Select(r => r.BibId).Distinct().Count();
-            
+
             _logger.LogInformation($"🎉 Multi-BIB workflow completed: {totalSuccessCount}/{allResults.Count} workflows successful " +
                                  $"across {uniqueBibs} BIB_IDs in {totalExecutionTime:F1}s");
 
@@ -1034,7 +1035,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
         catch (Exception ex)
         {
             _logger.LogError(ex, $"💥 Multi-BIB workflow failed for BIB_IDs: {string.Join(", ", bibIds)}");
-            
+
             var errorResult = CreateErrorResult("MULTI_BIB_ERROR", "unknown", 0, clientId, $"Multi-BIB workflow error: {ex.Message}");
             allResults.Add(errorResult);
             return allResults;
@@ -1071,7 +1072,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
         catch (Exception ex)
         {
             _logger.LogError(ex, "💥 All-BIBs workflow failed during BIB discovery");
-            
+
             var errorResult = CreateErrorResult("ALL_BIBS_ERROR", "unknown", 0, clientId, $"All-BIBs workflow error: {ex.Message}");
             return new List<BibWorkflowResult> { errorResult };
         }
@@ -1088,7 +1089,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
         CancellationToken cancellationToken = default)
     {
         var startTime = DateTime.Now;
-        
+
         try
         {
             if (includeDetailedLogs)
@@ -1099,7 +1100,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
 
             // ✅ REUSE: Use Multi-BIB sequential method
             var allResults = await ExecuteMultipleBibsAsync(bibIds, clientId, cancellationToken);
-            
+
             // 📊 Create Multi-BIB aggregated summary
             var multiBibResult = new MultiBibWorkflowResult
             {
@@ -1117,7 +1118,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
 
             // Enhanced Multi-BIB statistics
             multiBibResult.UniqueUuts = allResults.Select(r => $"{r.BibId}.{r.UutId}").Distinct().Count();
-            multiBibResult.AverageWorkflowDuration = allResults.Any() ? 
+            multiBibResult.AverageWorkflowDuration = allResults.Any() ?
                 TimeSpan.FromTicks((long)allResults.Average(r => r.Duration.Ticks)) : TimeSpan.Zero;
 
             if (includeDetailedLogs)
@@ -1132,7 +1133,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
         catch (Exception ex)
         {
             _logger.LogError(ex, $"💥 Multi-BIB summary workflow failed for BIB_IDs: {string.Join(", ", bibIds)}");
-            
+
             return new MultiBibWorkflowResult
             {
                 TargetBibIds = bibIds,
@@ -1163,7 +1164,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
             if (!configuredBibIds.Any())
             {
                 _logger.LogWarning("⚠️ No configured BIB_IDs found for Complete System workflow");
-                
+
                 return new MultiBibWorkflowResult
                 {
                     TargetBibIds = new List<string>(),
@@ -1180,7 +1181,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
         catch (Exception ex)
         {
             _logger.LogError(ex, "💥 Complete BIB System workflow failed");
-            
+
             return new MultiBibWorkflowResult
             {
                 TargetBibIds = new List<string>(),
@@ -1197,7 +1198,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
     /// </summary>
     private int CountSuccessfulBibs(List<BibWorkflowResult> allResults, List<string> bibIds)
     {
-        return bibIds.Count(bibId => 
+        return bibIds.Count(bibId =>
             allResults.Any(r => r.BibId.Equals(bibId, StringComparison.OrdinalIgnoreCase) && r.Success));
     }
 
@@ -1206,7 +1207,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
     /// </summary>
     private int CountFailedBibs(List<BibWorkflowResult> allResults, List<string> bibIds)
     {
-        return bibIds.Count(bibId => 
+        return bibIds.Count(bibId =>
             !allResults.Any(r => r.BibId.Equals(bibId, StringComparison.OrdinalIgnoreCase) && r.Success));
     }
 
@@ -1222,7 +1223,7 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
         _logger.LogInformation($"📊 Workflow Success Rate: {result.WorkflowSuccessRate:F1}%");
         _logger.LogInformation($"📊 Execution Time: {result.TotalExecutionTime.TotalMinutes:F1} minutes");
         _logger.LogInformation($"📊 Average per Workflow: {result.AverageWorkflowDuration.TotalSeconds:F1} seconds");
-        
+
         // Group by BIB for detailed breakdown
         var bibGroups = result.AllResults.GroupBy(r => r.BibId).ToList();
         foreach (var bibGroup in bibGroups)
@@ -1232,11 +1233,391 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
             var bibStatus = bibSuccess == bibTotal ? "✅" : bibSuccess > 0 ? "⚠️" : "❌";
             _logger.LogInformation($"📊   {bibStatus} BIB {bibGroup.Key}: {bibSuccess}/{bibTotal} workflows successful");
         }
-        
+
         _logger.LogInformation($"📊 ═══ END MULTI-BIB REPORT ═══");
     }
 
+    #region SPRINT 14: Production Mode Phase Exposure (NOUVEAU)
+
+    /// <summary>
+    /// SPRINT 14: Active sessions pour production mode (per UUT_ID)
+    /// Thread-safe pour multi-UUT simultané
+    /// </summary>
+    private readonly ConcurrentDictionary<string, ActiveProductionSession> _activeProductionSessions = new();
+
+    /// <summary>
+    /// SPRINT 14: Execute START phase only for production mode (per UUT_ID)
+    /// Garde la session ouverte pour les phases suivantes
+    /// </summary>
+    public async Task<ProductionPhaseResult> ExecuteStartPhaseOnlyAsync(
+        string bibId, 
+        string uutId, 
+        int portNumber = 1, 
+        string clientId = "ProductionMode", 
+        CancellationToken cancellationToken = default)
+    {
+        var sessionKey = GetProductionSessionKey(bibId, uutId, portNumber);
+        
+        _logger.LogInformation($"🚀 START phase beginning: {bibId}.{uutId}.{portNumber}");
+        
+        try
+        {
+            // 1. Load configuration (REUSE existing method)
+            var portConfig = await LoadPortConfigurationAsync(bibId, uutId, portNumber);
+            
+            // 2. Find physical port (REUSE existing method)  
+            var physicalPort = await FindPhysicalPortDynamicAsync(bibId, uutId, portNumber);
+            if (string.IsNullOrEmpty(physicalPort))
+            {
+                return ProductionPhaseResult.Failure("START", $"No physical port found for {bibId}.{uutId}.{portNumber}");
+            }
+
+            // 3. Reserve port (REUSE existing method)
+            var reservation = await ReservePortAsync(physicalPort, clientId);
+            if (reservation == null)
+            {
+                return ProductionPhaseResult.Failure("START", $"Port reservation failed for {physicalPort}");
+            }
+
+            // 4. Open protocol session (REUSE existing method)
+            var protocolHandler = _protocolFactory.GetHandler(portConfig.Protocol);
+            var protocolConfig = CreateProtocolConfiguration(physicalPort, portConfig);
+            var session = await protocolHandler.OpenSessionAsync(protocolConfig, cancellationToken);
+
+            // 5. Execute START commands (REUSE existing method)
+            var startResult = await ExecuteCommandSequenceAsync(
+                protocolHandler, session, portConfig.StartCommands, "START", cancellationToken);
+
+            // 6. Store active session for production mode (NOUVEAU)
+            var activeSession = new ActiveProductionSession
+            {
+                SessionKey = sessionKey,
+                BibId = bibId,
+                UutId = uutId,
+                PortNumber = portNumber,
+                PhysicalPort = physicalPort,
+                Session = session,
+                Reservation = reservation,
+                PortConfig = portConfig,
+                ProtocolHandler = protocolHandler,
+                StartedAt = DateTime.Now,
+                LastActivity = DateTime.Now,
+                ClientId = clientId
+            };
+
+            _activeProductionSessions[sessionKey] = activeSession;
+            
+            _logger.LogInformation($"✅ START phase completed, session kept open: {bibId}.{uutId}.{portNumber} → {physicalPort}");
+            
+            return ProductionPhaseResult.Success("START", startResult);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"❌ START phase failed: {bibId}.{uutId}.{portNumber}");
+            
+            // Cleanup any partially created resources
+            await CleanupPartialProductionSessionAsync(sessionKey);
+            
+            return ProductionPhaseResult.Failure("START", $"START phase exception: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// SPRINT 14: Execute TEST phase only for production mode (per UUT_ID)
+    /// Utilise la session active du START phase
+    /// </summary>
+    public async Task<ProductionPhaseResult> ExecuteTestPhaseOnlyAsync(
+        string bibId, 
+        string uutId, 
+        int portNumber = 1, 
+        CancellationToken cancellationToken = default)
+    {
+        var sessionKey = GetProductionSessionKey(bibId, uutId, portNumber);
+        
+        _logger.LogDebug($"🧪 TEST phase executing: {bibId}.{uutId}.{portNumber}");
+        
+        try
+        {
+            // 1. Get active session
+            if (!_activeProductionSessions.TryGetValue(sessionKey, out var activeSession))
+            {
+                var errorMsg = $"No active production session for {bibId}.{uutId}.{portNumber} - START phase must be called first";
+                _logger.LogError($"❌ {errorMsg}");
+                return ProductionPhaseResult.Failure("TEST", errorMsg);
+            }
+
+            // 2. Validate session is still active
+            if (!activeSession.Session.IsActive)
+            {
+                _logger.LogWarning($"⚠️ Production session no longer active: {sessionKey}");
+                await CleanupProductionSessionAsync(sessionKey);
+                return ProductionPhaseResult.Failure("TEST", "Session no longer active");
+            }
+
+            // 3. Execute TEST commands (REUSE existing method)
+            var testResult = await ExecuteCommandSequenceAsync(
+                activeSession.ProtocolHandler,
+                activeSession.Session, 
+                activeSession.PortConfig.TestCommands, 
+                "TEST", 
+                cancellationToken);
+
+            // 4. Update session activity
+            activeSession.LastActivity = DateTime.Now;
+            activeSession.TestExecutions++;
+
+            _logger.LogDebug($"✅ TEST phase completed: {bibId}.{uutId}.{portNumber} (execution #{activeSession.TestExecutions})");
+            
+            return ProductionPhaseResult.Success("TEST", testResult);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"❌ TEST phase failed: {bibId}.{uutId}.{portNumber}");
+            return ProductionPhaseResult.Failure("TEST", $"TEST phase exception: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// SPRINT 14: Execute STOP phase only for production mode (per UUT_ID)
+    /// Ferme et nettoie la session active
+    /// </summary>
+    public async Task<ProductionPhaseResult> ExecuteStopPhaseOnlyAsync(
+        string bibId, 
+        string uutId, 
+        int portNumber = 1, 
+        CancellationToken cancellationToken = default)
+    {
+        var sessionKey = GetProductionSessionKey(bibId, uutId, portNumber);
+        
+        _logger.LogInformation($"🛑 STOP phase beginning: {bibId}.{uutId}.{portNumber}");
+        
+        try
+        {
+            ProductionPhaseResult result;
+
+            // 1. Execute STOP commands if session exists
+            if (_activeProductionSessions.TryGetValue(sessionKey, out var activeSession))
+            {
+                try
+                {
+                    // Execute STOP commands (REUSE existing method)
+                    var stopResult = await ExecuteCommandSequenceAsync(
+                        activeSession.ProtocolHandler,
+                        activeSession.Session, 
+                        activeSession.PortConfig.StopCommands, 
+                        "STOP", 
+                        cancellationToken);
+
+                    var sessionDuration = DateTime.Now - activeSession.StartedAt;
+                    _logger.LogInformation($"✅ STOP phase completed: {bibId}.{uutId}.{portNumber} " +
+                                         $"(Session duration: {sessionDuration.TotalMinutes:F1}m, TEST executions: {activeSession.TestExecutions})");
+                    
+                    result = ProductionPhaseResult.Success("STOP", stopResult);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, $"⚠️ STOP commands failed: {bibId}.{uutId}.{portNumber}");
+                    result = ProductionPhaseResult.Failure("STOP", $"STOP commands failed: {ex.Message}");
+                }
+            }
+            else
+            {
+                _logger.LogWarning($"⚠️ No active production session for STOP phase: {bibId}.{uutId}.{portNumber}");
+                result = ProductionPhaseResult.Success("STOP", new CommandSequenceResult()); // Empty but not failure
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"❌ STOP phase exception: {bibId}.{uutId}.{portNumber}");
+            return ProductionPhaseResult.Failure("STOP", $"STOP phase exception: {ex.Message}");
+        }
+        finally
+        {
+            // Always cleanup session (per UUT_ID)
+            await CleanupProductionSessionAsync(sessionKey);
+        }
+    }
+
+    /// <summary>
+    /// SPRINT 14: Get status of active production sessions
+    /// Pour monitoring et debugging
+    /// </summary>
+    public Dictionary<string, ProductionSessionStatus> GetActiveProductionSessions()
+    {
+        var statusDict = new Dictionary<string, ProductionSessionStatus>();
+        
+        foreach (var kvp in _activeProductionSessions)
+        {
+            var session = kvp.Value;
+            var status = new ProductionSessionStatus
+            {
+                SessionKey = session.SessionKey,
+                BibId = session.BibId,
+                UutId = session.UutId,
+                PortNumber = session.PortNumber,
+                PhysicalPort = session.PhysicalPort,
+                StartedAt = session.StartedAt,
+                LastActivity = session.LastActivity,
+                TestExecutions = session.TestExecutions,
+                SessionDuration = DateTime.Now - session.StartedAt,
+                IsActive = session.Session?.IsActive ?? false,
+                ClientId = session.ClientId
+            };
+            
+            statusDict[kvp.Key] = status;
+        }
+        
+        return statusDict;
+    }
+
+    /// <summary>
+    /// SPRINT 14: Force cleanup of production session (emergency)
+    /// </summary>
+    public async Task<bool> ForceCleanupProductionSessionAsync(string bibId, string uutId, int portNumber = 1)
+    {
+        var sessionKey = GetProductionSessionKey(bibId, uutId, portNumber);
+        _logger.LogWarning($"🧹 Force cleanup requested: {sessionKey}");
+        
+        await CleanupProductionSessionAsync(sessionKey);
+        return true;
+    }
+
+    #region Production Session Management Helpers
+
+    /// <summary>
+    /// Generate session key for production mode (per UUT_ID)
+    /// </summary>
+    private string GetProductionSessionKey(string bibId, string uutId, int portNumber) 
+        => $"PROD_{bibId}_{uutId}_{portNumber}";
+
+    /// <summary>
+    /// Cleanup production session (thread-safe)
+    /// </summary>
+    private async Task CleanupProductionSessionAsync(string sessionKey)
+    {
+        if (_activeProductionSessions.TryRemove(sessionKey, out var activeSession))
+        {
+            _logger.LogDebug($"🧹 Cleaning up production session: {sessionKey}");
+            
+            try
+            {
+                // Close protocol session
+                if (activeSession.Session?.IsActive == true)
+                {
+                    await activeSession.ProtocolHandler.CloseSessionAsync(activeSession.Session, CancellationToken.None);
+                    _logger.LogDebug($"📡 Protocol session closed: {activeSession.Session.SessionId}");
+                }
+                
+                // Release port reservation
+                if (activeSession.Reservation?.IsActive == true && !activeSession.Reservation.IsExpired)
+                {
+                    await _reservationService.ReleaseReservationAsync(
+                        activeSession.Reservation.ReservationId, 
+                        activeSession.Reservation.ClientId);
+                    _logger.LogDebug($"🔓 Port reservation released: {activeSession.Reservation.ReservationId}");
+                }
+                
+                var sessionDuration = DateTime.Now - activeSession.StartedAt;
+                _logger.LogDebug($"✅ Production session cleanup completed: {sessionKey} " +
+                               $"(Duration: {sessionDuration.TotalMinutes:F1}m, TEST executions: {activeSession.TestExecutions})");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, $"⚠️ Error during production session cleanup: {sessionKey}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Cleanup partial session on START phase failure
+    /// </summary>
+    private async Task CleanupPartialProductionSessionAsync(string sessionKey)
+    {
+        _logger.LogDebug($"🧹 Cleaning up partial production session: {sessionKey}");
+        
+        // Remove from active sessions if it was added
+        _activeProductionSessions.TryRemove(sessionKey, out var session);
+        
+        if (session != null)
+        {
+            await CleanupProductionSessionAsync(sessionKey);
+        }
+    }
+
+      #endregion
+
+    #endregion
     #endregion
 
     #endregion
+
+    /// <summary>
+/// SPRINT 14: Active production session data (per UUT_ID)
+/// </summary>
+public class ActiveProductionSession
+{
+    public string SessionKey { get; set; } = string.Empty;
+    public string BibId { get; set; } = string.Empty;
+    public string UutId { get; set; } = string.Empty;
+    public int PortNumber { get; set; }
+    public string PhysicalPort { get; set; } = string.Empty;
+    public string ClientId { get; set; } = string.Empty;
+    
+    public ProtocolSession Session { get; set; } = null!;
+    public PortReservation Reservation { get; set; } = null!;
+    public PortConfiguration PortConfig { get; set; } = null!;
+    public IProtocolHandler ProtocolHandler { get; set; } = null!;
+    
+    public DateTime StartedAt { get; set; } = DateTime.Now;
+    public DateTime LastActivity { get; set; } = DateTime.Now;
+    public int TestExecutions { get; set; } = 0;
+    
+    public override string ToString() =>
+        $"{BibId}.{UutId}.{PortNumber} → {PhysicalPort} (Tests: {TestExecutions}, Duration: {(DateTime.Now - StartedAt).TotalMinutes:F1}m)";
+}
+
+/// <summary>
+/// SPRINT 14: Production phase result
+/// </summary>
+public class ProductionPhaseResult
+{
+    public string PhaseName { get; set; } = string.Empty;
+    public bool IsSuccess { get; set; }
+    public string? ErrorMessage { get; set; }
+    public CommandSequenceResult? CommandResult { get; set; }
+    public DateTime ExecutedAt { get; set; } = DateTime.Now;
+    
+    public static ProductionPhaseResult Success(string phaseName, CommandSequenceResult commandResult) =>
+        new() { PhaseName = phaseName, IsSuccess = true, CommandResult = commandResult };
+        
+    public static ProductionPhaseResult Failure(string phaseName, string errorMessage) =>
+        new() { PhaseName = phaseName, IsSuccess = false, ErrorMessage = errorMessage };
+        
+    public override string ToString() =>
+        IsSuccess ? $"✅ {PhaseName}" : $"❌ {PhaseName}: {ErrorMessage}";
+}
+
+/// <summary>
+/// SPRINT 14: Production session status (for monitoring)
+/// </summary>
+public class ProductionSessionStatus
+{
+    public string SessionKey { get; set; } = string.Empty;
+    public string BibId { get; set; } = string.Empty;
+    public string UutId { get; set; } = string.Empty;
+    public int PortNumber { get; set; }
+    public string PhysicalPort { get; set; } = string.Empty;
+    public string ClientId { get; set; } = string.Empty;
+    
+    public DateTime StartedAt { get; set; }
+    public DateTime LastActivity { get; set; }
+    public TimeSpan SessionDuration { get; set; }
+    public int TestExecutions { get; set; }
+    public bool IsActive { get; set; }
+    
+    public override string ToString() =>
+        $"{BibId}.{UutId}.{PortNumber} → {PhysicalPort} ({SessionDuration.TotalMinutes:F1}m, {TestExecutions} tests, {(IsActive ? "Active" : "Inactive")})";
+}
 }
