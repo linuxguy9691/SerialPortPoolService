@@ -47,57 +47,77 @@ public class MultiBibWorkflowService : IHostedService
     /// Start Multi-BIB service
     /// </summary>
     public async Task StartAsync(CancellationToken cancellationToken)
+{
+    _logger.LogCritical($"🚨 DEBUG: MultiBibWorkflowService starting with mode: {_config.ExecutionMode}");
+    _logger.LogInformation("🚀 Multi-BIB Workflow Service Starting...");
+    _logger.LogInformation($"📋 Mode: {_config.ExecutionMode}");
+
+    _cancellationTokenSource = new CancellationTokenSource();
+
+    try
     {
-        _logger.LogInformation("🚀 Multi-BIB Workflow Service Starting...");
-        _logger.LogInformation($"📋 Mode: {_config.ExecutionMode}");
-
-        _cancellationTokenSource = new CancellationTokenSource();
-
-        try
+        // Initialize configuration loader
+        if (!string.IsNullOrEmpty(_config.DefaultConfigurationPath))
         {
-            // Initialize configuration loader
-            if (!string.IsNullOrEmpty(_config.DefaultConfigurationPath))
-            {
-                _configLoader.SetDefaultConfigurationPath(_config.DefaultConfigurationPath);
-                _logger.LogInformation($"📄 Configuration path: {_config.DefaultConfigurationPath}");
-            }
-
-            // Start based on execution mode
-            switch (_config.ExecutionMode)
-            {
-                case MultiBibExecutionMode.SingleRun:
-                    _ = Task.Run(() => ExecuteSingleRunAsync(_cancellationTokenSource.Token), cancellationToken);
-                    break;
-
-                case MultiBibExecutionMode.Scheduled:
-                    StartScheduledExecution();
-                    break;
-
-                case MultiBibExecutionMode.Continuous:
-                    _ = Task.Run(() => ExecuteContinuousAsync(_cancellationTokenSource.Token), cancellationToken);
-                    break;
-
-                case MultiBibExecutionMode.OnDemand:
-                    _logger.LogInformation("📡 On-demand mode - waiting for execution requests");
-                    break;
-
-                case MultiBibExecutionMode.Production:  // ← SPRINT 14: Production mode
-                    _logger.LogInformation("🏭 Production BitBang mode - starting hardware-driven execution...");
-                    _ = Task.Run(() => ExecuteProductionModeAsync(_cancellationTokenSource.Token), cancellationToken);
-                    break;
-
-                default:
-                    throw new InvalidOperationException($"Unknown execution mode: {_config.ExecutionMode}");
-            }
-
-            _logger.LogInformation("✅ Multi-BIB Workflow Service Started Successfully");
+            _configLoader.SetDefaultConfigurationPath(_config.DefaultConfigurationPath);
+            _logger.LogInformation($"📄 Configuration path: {_config.DefaultConfigurationPath}");
         }
-        catch (Exception ex)
+
+        // 🏭 SPRINT 14: Handle production mode specially
+        if (_config.ExecutionMode == MultiBibExecutionMode.Production)
         {
-            _logger.LogError(ex, "❌ Failed to start Multi-BIB Workflow Service");
-            throw;
+            _logger.LogCritical("🚨 DEBUG: Production case REACHED!");
+            _logger.LogInformation("🏭 Production BitBang mode - taking direct control...");
+
+                // Add a delay to let other services initialize
+            // Change: NO delay - start immediately to beat DynamicBibConfigurationService
+            //FIXME: await Task.Delay(3000, cancellationToken);
+
+                // Start production mode
+                _ = Task.Run(() => ExecuteProductionModeAsync(_cancellationTokenSource.Token), cancellationToken);
+            
+            _logger.LogInformation("✅ Production mode started - bypassing standard workflow orchestration");
+            return; // Exit early
         }
+
+        // Start based on execution mode (existing logic)
+        switch (_config.ExecutionMode)
+        {
+            case MultiBibExecutionMode.SingleRun:
+                _ = Task.Run(() => ExecuteSingleRunAsync(_cancellationTokenSource.Token), cancellationToken);
+                break;
+
+            case MultiBibExecutionMode.Scheduled:
+                StartScheduledExecution();
+                break;
+
+            case MultiBibExecutionMode.Continuous:
+                _ = Task.Run(() => ExecuteContinuousAsync(_cancellationTokenSource.Token), cancellationToken);
+                break;
+
+            case MultiBibExecutionMode.OnDemand:
+                _logger.LogInformation("📡 On-demand mode - waiting for execution requests");
+                break;
+
+            case MultiBibExecutionMode.Production:  
+                _logger.LogCritical("🎯 DEBUG: Production case REACHED!");
+                _logger.LogInformation("🏭 Production BitBang mode - taking direct control...");
+                _ = Task.Run(() => ExecuteProductionModeAsync(_cancellationTokenSource.Token), cancellationToken);
+                _logger.LogInformation("✅ Production mode started - bypassing standard workflow orchestration");
+                break;
+
+            default:
+                throw new InvalidOperationException($"Unknown execution mode: {_config.ExecutionMode}");
+        }
+
+        _logger.LogInformation("✅ Multi-BIB Workflow Service Started Successfully");
     }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "❌ Failed to start Multi-BIB Workflow Service");
+        throw;
+    }
+}
 
     /// <summary>
     /// Stop Multi-BIB service gracefully
@@ -598,73 +618,118 @@ public class MultiBibWorkflowService : IHostedService
         }
     }
 
-    /// <summary>
-    /// Execute START phase for UUT (simplified - will use orchestrator in Bouchée #4)
-    /// </summary>
-    private async Task<bool> ExecuteStartPhaseAsync(string bibId, string uutId)
-    {
-        try
-        {
-            // TODO Bouchée #4: Use _orchestrator.ExecuteStartPhaseOnlyAsync(bibId, uutId)
-            _logger.LogInformation($"🚀 START phase placeholder: {bibId}.{uutId}");
-            
-            // Simulate START phase execution
-            await Task.Delay(1000); // Simulate START commands
-            
-            _logger.LogInformation($"✅ START phase completed: {bibId}.{uutId}");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"❌ START phase failed: {bibId}.{uutId}");
-            return false;
-        }
-    }
+    // REMPLACER les 3 méthodes placeholder dans MultiBibWorkflowService.cs par :
 
-    /// <summary>
-    /// Execute TEST phase for UUT (simplified - will use orchestrator in Bouchée #4)
-    /// </summary>
-    private async Task<bool> ExecuteTestPhaseAsync(string bibId, string uutId)
+/// <summary>
+/// Execute START phase for UUT - CLEAN VERSION using orchestrator phases
+/// </summary>
+private async Task<bool> ExecuteStartPhaseAsync(string bibId, string uutId)
+{
+    try
     {
-        try
+        _logger.LogInformation($"🚀 START phase execution: {bibId}.{uutId}");
+        
+        // CLEAN: Use the new orchestrator phase method
+        var result = await _orchestrator.ExecuteStartPhaseOnlyAsync(
+            bibId, 
+            uutId, 
+            1, // Port 1
+            $"Production_START_{bibId}_{uutId}",
+            _cancellationTokenSource?.Token ?? CancellationToken.None);
+        
+        var success = result.IsSuccess;
+        
+        if (success)
         {
-            // TODO Bouchée #4: Use _orchestrator.ExecuteTestPhaseOnlyAsync(bibId, uutId)
-            _logger.LogDebug($"🧪 TEST phase placeholder: {bibId}.{uutId}");
-            
-            // Simulate TEST phase execution
-            await Task.Delay(500); // Simulate TEST commands
-            
-            return true; // Assume success for now
+            _logger.LogInformation($"✅ START phase completed: {bibId}.{uutId} - {result.SuccessfulCommands}/{result.TotalCommands} commands successful");
         }
-        catch (Exception ex)
+        else
         {
-            _logger.LogError(ex, $"❌ TEST phase failed: {bibId}.{uutId}");
-            return false;
+            _logger.LogError($"❌ START phase failed: {bibId}.{uutId} - {result.ErrorMessage}");
         }
+        
+        return success;
     }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"❌ START phase failed: {bibId}.{uutId}");
+        return false;
+    }
+}
 
-    /// <summary>
-    /// Execute STOP phase for UUT (simplified - will use orchestrator in Bouchée #4)
-    /// </summary>
-    private async Task<bool> ExecuteStopPhaseAsync(string bibId, string uutId)
+/// <summary>
+/// Execute TEST phase for UUT - CLEAN VERSION using orchestrator phases
+/// </summary>
+private async Task<bool> ExecuteTestPhaseAsync(string bibId, string uutId)
+{
+    try
     {
-        try
+        _logger.LogDebug($"🧪 TEST phase execution: {bibId}.{uutId}");
+        
+        // CLEAN: Use the new orchestrator phase method
+        var result = await _orchestrator.ExecuteTestPhaseOnlyAsync(
+            bibId, 
+            uutId, 
+            1, // Port 1
+            $"Production_TEST_{bibId}_{uutId}",
+            _cancellationTokenSource?.Token ?? CancellationToken.None);
+        
+        var success = result.IsSuccess;
+        
+        if (success)
         {
-            // TODO Bouchée #4: Use _orchestrator.ExecuteStopPhaseOnlyAsync(bibId, uutId)
-            _logger.LogInformation($"🛑 STOP phase placeholder: {bibId}.{uutId}");
-            
-            // Simulate STOP phase execution
-            await Task.Delay(500); // Simulate STOP commands
-            
-            _logger.LogInformation($"✅ STOP phase completed: {bibId}.{uutId}");
-            return true;
+            _logger.LogDebug($"✅ TEST phase success: {bibId}.{uutId} - {result.SuccessfulCommands}/{result.TotalCommands} commands");
         }
-        catch (Exception ex)
+        else
         {
-            _logger.LogError(ex, $"❌ STOP phase failed: {bibId}.{uutId}");
-            return false;
+            _logger.LogWarning($"⚠️ TEST phase failed: {bibId}.{uutId} - {result.ErrorMessage}");
         }
+        
+        return success;
     }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"❌ TEST phase exception: {bibId}.{uutId}");
+        return false;
+    }
+}
+
+/// <summary>
+/// Execute STOP phase for UUT - CLEAN VERSION using orchestrator phases
+/// </summary>
+private async Task<bool> ExecuteStopPhaseAsync(string bibId, string uutId)
+{
+    try
+    {
+        _logger.LogInformation($"🛑 STOP phase execution: {bibId}.{uutId}");
+        
+        // CLEAN: Use the new orchestrator phase method
+        var result = await _orchestrator.ExecuteStopPhaseOnlyAsync(
+            bibId, 
+            uutId, 
+            1, // Port 1
+            $"Production_STOP_{bibId}_{uutId}",
+            _cancellationTokenSource?.Token ?? CancellationToken.None);
+        
+        var success = result.IsSuccess;
+        
+        if (success)
+        {
+            _logger.LogInformation($"✅ STOP phase completed: {bibId}.{uutId} - {result.SuccessfulCommands}/{result.TotalCommands} commands successful");
+        }
+        else
+        {
+            _logger.LogWarning($"⚠️ STOP phase failed: {bibId}.{uutId} - {result.ErrorMessage}");
+        }
+        
+        return success;
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"❌ STOP phase failed: {bibId}.{uutId}");
+        return false;
+    }
+}
 
     /// <summary>
     /// Helper: Discover configured BIB IDs
