@@ -1243,25 +1243,69 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
     #endregion
 
     // ===================================================================
-    // SPRINT 14: Production Phase Methods - Clean Individual Phases
+    // SPRINT 14: Production Phase Methods - Interface Compliance Fix
+    // Replaces the verbose methods at the end with clean interface-compliant versions
     // ===================================================================
 
-    #region SPRINT 14: Production Phase Methods
+    #region SPRINT 14: Production Phase Methods - Interface Compliant
 
     /// <summary>
-    /// SPRINT 14: Execute START phase only - for Production Mode
-    /// REUSES: All existing infrastructure (port discovery, reservation, session management)
+    /// Execute START phase only - for Production Mode (Interface compliant)
+    /// CLEAN: Reuses existing infrastructure with single phase execution
     /// </summary>
-    public async Task<CommandSequenceResult> ExecuteProductionStartPhaseAsync(
+    public async Task<CommandSequenceResult> ExecuteStartPhaseOnlyAsync(
         string bibId,
         string uutId,
         int portNumber = 1,
         string clientId = "ProductionMode",
         CancellationToken cancellationToken = default)
     {
+        return await ExecuteSinglePhaseAsync(bibId, uutId, portNumber, "START", clientId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Execute TEST phase only - for Production Mode continuous loop (Interface compliant)
+    /// CLEAN: Reuses existing infrastructure with single phase execution
+    /// </summary>
+    public async Task<CommandSequenceResult> ExecuteTestPhaseOnlyAsync(
+        string bibId,
+        string uutId,
+        int portNumber = 1,
+        string clientId = "ProductionMode",
+        CancellationToken cancellationToken = default)
+    {
+        return await ExecuteSinglePhaseAsync(bibId, uutId, portNumber, "TEST", clientId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Execute STOP phase only - for Production Mode (Interface compliant)
+    /// CLEAN: Reuses existing infrastructure with single phase execution
+    /// </summary>
+    public async Task<CommandSequenceResult> ExecuteStopPhaseOnlyAsync(
+        string bibId,
+        string uutId,
+        int portNumber = 1,
+        string clientId = "ProductionMode",
+        CancellationToken cancellationToken = default)
+    {
+        return await ExecuteSinglePhaseAsync(bibId, uutId, portNumber, "STOP", clientId, cancellationToken);
+    }
+
+    /// <summary>
+    /// CLEAN HELPER: Execute single phase (START/TEST/STOP) - eliminates code duplication
+    /// REUSES: All existing infrastructure (port discovery, reservation, session management)
+    /// </summary>
+    private async Task<CommandSequenceResult> ExecuteSinglePhaseAsync(
+        string bibId,
+        string uutId,
+        int portNumber,
+        string phaseName,
+        string clientId,
+        CancellationToken cancellationToken)
+    {
         try
         {
-            _logger.LogInformation($"🚀 Production START phase: {bibId}.{uutId}.{portNumber}");
+            _logger.LogDebug($"⚡ Production {phaseName} phase: {bibId}.{uutId}.{portNumber}");
 
             // REUSE: Existing configuration loading
             var portConfig = await LoadPortConfigurationAsync(bibId, uutId, portNumber);
@@ -1270,180 +1314,58 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
             var physicalPort = await FindPhysicalPortDynamicAsync(bibId, uutId, portNumber);
             if (string.IsNullOrEmpty(physicalPort))
             {
-                var errorResult = new CommandSequenceResult();
-                errorResult.CommandResults.Add(CommandResult.Failure("PORT_DISCOVERY_ERROR", "Dynamic port discovery failed", TimeSpan.Zero));
-                return errorResult;
+                return CreateErrorCommandSequenceResult("PORT_DISCOVERY_ERROR", "Dynamic port discovery failed");
             }
 
-            // REUSE: Existing port reservation
+            // REUSE: Existing port reservation and protocol session
             var reservation = await ReservePortAsync(physicalPort, clientId);
             if (reservation == null)
             {
-                var errorResult = new CommandSequenceResult();
-                errorResult.CommandResults.Add(CommandResult.Failure("PORT_RESERVATION_ERROR", $"Port reservation failed for {physicalPort}", TimeSpan.Zero));
-                return errorResult;
+                return CreateErrorCommandSequenceResult("PORT_RESERVATION_ERROR", $"Port reservation failed for {physicalPort}");
             }
 
-            // REUSE: Existing protocol session opening
             var protocolHandler = _protocolFactory.GetHandler(portConfig.Protocol);
             var protocolConfig = CreateProtocolConfiguration(physicalPort, portConfig);
             var session = await protocolHandler.OpenSessionAsync(protocolConfig, cancellationToken);
 
             try
             {
-                // EXECUTE: START commands only
+                // EXECUTE: Single phase using existing method
+                var commandSequence = phaseName switch
+                {
+                    "START" => portConfig.StartCommands,
+                    "TEST" => portConfig.TestCommands,
+                    "STOP" => portConfig.StopCommands,
+                    _ => throw new ArgumentException($"Unknown phase: {phaseName}")
+                };
+
                 var result = await ExecuteCommandSequenceAsync(
-                    protocolHandler, session, portConfig.StartCommands, "START", cancellationToken);
+                    protocolHandler, session, commandSequence, phaseName, cancellationToken);
 
-                _logger.LogInformation($"✅ Production START phase completed: {bibId}.{uutId}.{portNumber} - {result.SuccessfulCommands}/{result.TotalCommands} commands successful");
-
+                _logger.LogDebug($"✅ Production {phaseName} phase completed: {result.SuccessfulCommands}/{result.TotalCommands} commands successful");
                 return result;
             }
             finally
             {
-                // CLEANUP: Close session and release reservation (START is one-shot)
-                await CleanupWorkflowAsync(session, reservation, $"PRODUCTION_START_{bibId}_{uutId}_{portNumber}");
+                // CLEANUP: Close session and release reservation (single-shot)
+                await CleanupWorkflowAsync(session, reservation, $"PRODUCTION_{phaseName}_{bibId}_{uutId}_{portNumber}");
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"❌ Production START phase failed: {bibId}.{uutId}.{portNumber}");
-            var errorResult = new CommandSequenceResult();
-            errorResult.CommandResults.Add(CommandResult.Failure("START_PHASE_ERROR", $"START phase exception: {ex.Message}", TimeSpan.Zero));
-            return errorResult;
+            _logger.LogError(ex, $"❌ Production {phaseName} phase failed: {bibId}.{uutId}.{portNumber}");
+            return CreateErrorCommandSequenceResult($"{phaseName}_PHASE_ERROR", $"{phaseName} phase exception: {ex.Message}");
         }
     }
 
     /// <summary>
-    /// SPRINT 14: Execute TEST phase only - for Production Mode continuous loop
-    /// REUSES: All existing infrastructure (port discovery, reservation, session management)
+    /// Helper: Create error CommandSequenceResult
     /// </summary>
-    public async Task<CommandSequenceResult> ExecuteProductionTestPhaseAsync(
-        string bibId,
-        string uutId,
-        int portNumber = 1,
-        string clientId = "ProductionMode",
-        CancellationToken cancellationToken = default)
+    private CommandSequenceResult CreateErrorCommandSequenceResult(string errorCode, string errorMessage)
     {
-        try
-        {
-            _logger.LogDebug($"🧪 Production TEST phase: {bibId}.{uutId}.{portNumber}");
-
-            // REUSE: Existing configuration loading
-            var portConfig = await LoadPortConfigurationAsync(bibId, uutId, portNumber);
-            
-            // REUSE: Existing dynamic port discovery
-            var physicalPort = await FindPhysicalPortDynamicAsync(bibId, uutId, portNumber);
-            if (string.IsNullOrEmpty(physicalPort))
-            {
-                var errorResult = new CommandSequenceResult();
-                errorResult.CommandResults.Add(CommandResult.Failure("PORT_DISCOVERY_ERROR", "Dynamic port discovery failed", TimeSpan.Zero));
-                return errorResult;
-            }
-
-            // REUSE: Existing port reservation
-            var reservation = await ReservePortAsync(physicalPort, clientId);
-            if (reservation == null)
-            {
-                var errorResult = new CommandSequenceResult();
-                errorResult.CommandResults.Add(CommandResult.Failure("PORT_RESERVATION_ERROR", $"Port reservation failed for {physicalPort}", TimeSpan.Zero));
-                return errorResult;
-            }
-
-            // REUSE: Existing protocol session opening
-            var protocolHandler = _protocolFactory.GetHandler(portConfig.Protocol);
-            var protocolConfig = CreateProtocolConfiguration(physicalPort, portConfig);
-            var session = await protocolHandler.OpenSessionAsync(protocolConfig, cancellationToken);
-
-            try
-            {
-                // EXECUTE: TEST commands only
-                var result = await ExecuteCommandSequenceAsync(
-                    protocolHandler, session, portConfig.TestCommands, "TEST", cancellationToken);
-
-                _logger.LogDebug($"✅ Production TEST phase completed: {bibId}.{uutId}.{portNumber} - {result.SuccessfulCommands}/{result.TotalCommands} commands successful");
-
-                return result;
-            }
-            finally
-            {
-                // CLEANUP: Close session and release reservation (TEST is per-cycle)
-                await CleanupWorkflowAsync(session, reservation, $"PRODUCTION_TEST_{bibId}_{uutId}_{portNumber}");
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"❌ Production TEST phase failed: {bibId}.{uutId}.{portNumber}");
-            var errorResult = new CommandSequenceResult();
-            errorResult.CommandResults.Add(CommandResult.Failure("TEST_PHASE_ERROR", $"TEST phase exception: {ex.Message}", TimeSpan.Zero));
-            return errorResult;
-        }
-    }
-
-    /// <summary>
-    /// SPRINT 14: Execute STOP phase only - for Production Mode
-    /// REUSES: All existing infrastructure (port discovery, reservation, session management)
-    /// </summary>
-    public async Task<CommandSequenceResult> ExecuteProductionStopPhaseAsync(
-        string bibId,
-        string uutId,
-        int portNumber = 1,
-        string clientId = "ProductionMode",
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            _logger.LogInformation($"🛑 Production STOP phase: {bibId}.{uutId}.{portNumber}");
-
-            // REUSE: Existing configuration loading
-            var portConfig = await LoadPortConfigurationAsync(bibId, uutId, portNumber);
-            
-            // REUSE: Existing dynamic port discovery
-            var physicalPort = await FindPhysicalPortDynamicAsync(bibId, uutId, portNumber);
-            if (string.IsNullOrEmpty(physicalPort))
-            {
-                var errorResult = new CommandSequenceResult();
-                errorResult.CommandResults.Add(CommandResult.Failure("PORT_DISCOVERY_ERROR", "Dynamic port discovery failed", TimeSpan.Zero));
-                return errorResult;
-            }
-
-            // REUSE: Existing port reservation
-            var reservation = await ReservePortAsync(physicalPort, clientId);
-            if (reservation == null)
-            {
-                var errorResult = new CommandSequenceResult();
-                errorResult.CommandResults.Add(CommandResult.Failure("PORT_RESERVATION_ERROR", $"Port reservation failed for {physicalPort}", TimeSpan.Zero));
-                return errorResult;
-            }
-
-            // REUSE: Existing protocol session opening
-            var protocolHandler = _protocolFactory.GetHandler(portConfig.Protocol);
-            var protocolConfig = CreateProtocolConfiguration(physicalPort, portConfig);
-            var session = await protocolHandler.OpenSessionAsync(protocolConfig, cancellationToken);
-
-            try
-            {
-                // EXECUTE: STOP commands only
-                var result = await ExecuteCommandSequenceAsync(
-                    protocolHandler, session, portConfig.StopCommands, "STOP", cancellationToken);
-
-                _logger.LogInformation($"✅ Production STOP phase completed: {bibId}.{uutId}.{portNumber} - {result.SuccessfulCommands}/{result.TotalCommands} commands successful");
-
-                return result;
-            }
-            finally
-            {
-                // CLEANUP: Close session and release reservation (STOP is one-shot)
-                await CleanupWorkflowAsync(session, reservation, $"PRODUCTION_STOP_{bibId}_{uutId}_{portNumber}");
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"❌ Production STOP phase failed: {bibId}.{uutId}.{portNumber}");
-            var errorResult = new CommandSequenceResult();
-            errorResult.CommandResults.Add(CommandResult.Failure("STOP_PHASE_ERROR", $"STOP phase exception: {ex.Message}", TimeSpan.Zero));
-            return errorResult;
-        }
+        var errorResult = new CommandSequenceResult();
+        errorResult.CommandResults.Add(CommandResult.Failure(errorCode, errorMessage, TimeSpan.Zero));
+        return errorResult;
     }
 
     #endregion

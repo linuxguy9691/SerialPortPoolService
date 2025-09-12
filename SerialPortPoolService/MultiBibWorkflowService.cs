@@ -536,8 +536,9 @@ public class MultiBibWorkflowService : IHostedService
     }
 
     /// <summary>
-    /// Continuous TEST loop - NEW PRODUCTION PATTERN
+    /// Continuous TEST loop - FIXED PRODUCTION PATTERN
     /// Runs until STOP signal or critical failure per UUT_ID
+    /// FIX: Execute TEST first, THEN check STOP conditions
     /// </summary>
     private async Task ExecuteContinuousTestLoopAsync(string bibId, string uutId, 
         HardwareSimulationConfig simConfig, CancellationToken cancellationToken)
@@ -549,15 +550,7 @@ public class MultiBibWorkflowService : IHostedService
         {
             cycleCount++;
             
-            // Check for STOP signal or critical fail (PER UUT_ID)
-            var shouldStop = await CheckStopConditionsAsync(uutId, simConfig);
-            if (shouldStop) 
-            {
-                _logger.LogInformation($"🛑 STOP condition detected after {cycleCount} cycles: {bibId}.{uutId}");
-                break;
-            }
-
-            // Execute TEST phase (PER UUT_ID) - REUSE existing orchestrator
+            // FIX: Execute TEST phase FIRST (PER UUT_ID) - REUSE existing orchestrator
             _logger.LogDebug($"🧪 TEST cycle #{cycleCount}: {bibId}.{uutId}");
             var testResult = await ExecuteTestPhaseAsync(bibId, uutId);
             
@@ -581,11 +574,18 @@ public class MultiBibWorkflowService : IHostedService
             // Test interval (from config or default)
             var testInterval = GetTestInterval(simConfig);
             await Task.Delay(testInterval, cancellationToken);
+
+            // FIX: Check for STOP signal AFTER executing TEST (PER UUT_ID)
+            var shouldStop = await CheckStopConditionsAsync(uutId, simConfig);
+            if (shouldStop) 
+            {
+                _logger.LogInformation($"🛑 STOP condition detected after {cycleCount} cycles: {bibId}.{uutId}");
+                break;
+            }
         }
         
         _logger.LogInformation($"📊 Continuous TEST loop completed: {cycleCount} cycles executed for {bibId}.{uutId}");
     }
-
     /// <summary>
     /// Check STOP conditions per UUT_ID: BitBang signal or critical failure
     /// </summary>
@@ -645,7 +645,9 @@ private async Task<bool> ExecuteStartPhaseAsync(string bibId, string uutId)
         }
         else
         {
-            _logger.LogError($"❌ START phase failed: {bibId}.{uutId} - {result.ErrorMessage}");
+            // FIX: Get error message from failed command results
+            var errorMessage = GetErrorMessageFromResult(result);
+            _logger.LogError($"❌ START phase failed: {bibId}.{uutId} - {errorMessage}");
         }
         
         return success;
@@ -682,7 +684,9 @@ private async Task<bool> ExecuteTestPhaseAsync(string bibId, string uutId)
         }
         else
         {
-            _logger.LogWarning($"⚠️ TEST phase failed: {bibId}.{uutId} - {result.ErrorMessage}");
+            // FIX: Get error message from failed command results
+            var errorMessage = GetErrorMessageFromResult(result);
+            _logger.LogWarning($"⚠️ TEST phase failed: {bibId}.{uutId} - {errorMessage}");
         }
         
         return success;
@@ -719,7 +723,9 @@ private async Task<bool> ExecuteStopPhaseAsync(string bibId, string uutId)
         }
         else
         {
-            _logger.LogWarning($"⚠️ STOP phase failed: {bibId}.{uutId} - {result.ErrorMessage}");
+            // FIX: Get error message from failed command results
+            var errorMessage = GetErrorMessageFromResult(result);
+            _logger.LogWarning($"⚠️ STOP phase failed: {bibId}.{uutId} - {errorMessage}");
         }
         
         return success;
@@ -729,6 +735,28 @@ private async Task<bool> ExecuteStopPhaseAsync(string bibId, string uutId)
         _logger.LogError(ex, $"❌ STOP phase failed: {bibId}.{uutId}");
         return false;
     }
+}
+
+/// <summary>
+/// Helper: Extract error message from CommandSequenceResult
+/// </summary>
+private string GetErrorMessageFromResult(CommandSequenceResult result)
+{
+    if (result.CommandResults?.Any() == true)
+    {
+        // Find first failed command with error message
+        var failedCommand = result.CommandResults.FirstOrDefault(cr => !cr.IsSuccess && !string.IsNullOrEmpty(cr.ErrorMessage));
+        if (failedCommand != null)
+        {
+            return failedCommand.ErrorMessage ?? "Unknown error";
+        }
+        
+        // If no specific error message, return general failure info
+        var failedCount = result.CommandResults.Count(cr => !cr.IsSuccess);
+        return $"{failedCount} command(s) failed";
+    }
+    
+    return "No command results available";
 }
 
     /// <summary>

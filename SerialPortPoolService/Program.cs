@@ -271,7 +271,7 @@ class Program
     }
 
     /// <summary>
-    /// SPRINT 13: Enhanced service discovery phase
+    /// SPRINT 14: PRODUCTION-READY discovery - no automatic file creation
     /// </summary>
     static async Task PerformSprint13Discovery(MultiBibServiceConfiguration config)
     {
@@ -286,39 +286,45 @@ class Program
                 return;
             }
 
-            Console.WriteLine("🔍 SPRINT 13: Performing BIB Discovery...");
+            Console.WriteLine("🔍 SPRINT 14: Production BIB Discovery...");
             Console.WriteLine("=".PadRight(60, '='));
 
             var configDir = config.Metadata?.GetValueOrDefault("ConfigurationDirectory", "Configuration/") as string ?? "Configuration/";
             
-            // Ensure configuration directory exists
+            // Ensure configuration directory exists (but don't create sample files)
             if (!Directory.Exists(configDir))
             {
                 Console.WriteLine($"📁 Creating configuration directory: {configDir}");
                 Directory.CreateDirectory(configDir);
                 
-                // Create sample individual BIB files for testing
-                await CreateSampleIndividualBibFiles(configDir);
+                // PRODUCTION CHANGE: Do NOT create sample files automatically
+                Console.WriteLine($"⚠️ PRODUCTION MODE: No BIB files found in {configDir}");
+                Console.WriteLine($"📋 Expected file pattern: bib_*.xml");
+                Console.WriteLine($"🔍 Hot-add system will monitor for real BIB files...");
             }
-
-            // Discovery phase
-            if (performDiscovery)
+            else
             {
-                Console.WriteLine($"🔍 Scanning for individual BIB files in: {configDir}");
-                
-                var bibFiles = Directory.GetFiles(configDir, "bib_*.xml");
-                
-                Console.WriteLine($"📄 Found {bibFiles.Length} individual BIB files:");
-                foreach (var file in bibFiles)
+                // Discovery phase for existing files
+                if (performDiscovery)
                 {
-                    var fileName = Path.GetFileName(file);
-                    var bibId = ExtractBibIdFromFileName(fileName);
-                    Console.WriteLine($"   ✅ {fileName} → BIB_ID: {bibId}");
-                }
-                
-                if (bibFiles.Length == 0)
-                {
-                    Console.WriteLine("⚠️ No individual BIB files found - will use legacy mode");
+                    Console.WriteLine($"🔍 Scanning for BIB files in: {configDir}");
+                    
+                    var bibFiles = Directory.GetFiles(configDir, "bib_*.xml");
+                    
+                    Console.WriteLine($"📄 Found {bibFiles.Length} BIB files:");
+                    foreach (var file in bibFiles)
+                    {
+                        var fileName = Path.GetFileName(file);
+                        var bibId = ExtractBibIdFromFileName(fileName);
+                        var fileSize = new FileInfo(file).Length;
+                        Console.WriteLine($"   ✅ {fileName} → BIB_ID: {bibId} ({fileSize} bytes)");
+                    }
+                    
+                    if (bibFiles.Length == 0)
+                    {
+                        Console.WriteLine("📋 No BIB files found - system will wait for hot-add files");
+                        Console.WriteLine("🔍 Place real BIB files in format: bib_[BIB_ID].xml");
+                    }
                 }
             }
 
@@ -327,10 +333,10 @@ class Program
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"⚠️ Discovery error (continuing with legacy mode): {ex.Message}");
+            Console.WriteLine($"⚠️ Discovery error: {ex.Message}");
         }
     }
-
+    
     /// <summary>
     /// SPRINT 13: Configure services using Sprint13ServiceExtensions (SIMPLIFIED)
     /// CHANGEMENT MINIMAL: Remplace toute la logique complexe par une ligne
@@ -338,12 +344,12 @@ class Program
     static void ConfigureEnhancedMultiBibServices(IServiceCollection services, MultiBibServiceConfiguration config)
     {
         Console.WriteLine("⚙️ Configuring SPRINT 13 Enhanced Multi-BIB Services...");
-        
+
         try
         {
             // 🎯 SPRINT 13: Une seule ligne remplace tout le code précédent!
             services.AddSprint13DemoServices();
-            
+
             // Configure the BIB configuration loader with the default path
             if (!string.IsNullOrEmpty(config.DefaultConfigurationPath))
             {
@@ -365,103 +371,18 @@ class Program
     }
 
     /// <summary>
-    /// SPRINT 13: Create sample individual BIB files for testing
+    /// PRODUCTION CHANGE: Remove automatic sample file creation
+    /// This method is now DISABLED in production builds
     /// </summary>
     static async Task CreateSampleIndividualBibFiles(string configDir)
     {
-        try
-        {
-            Console.WriteLine("📝 Creating sample individual BIB files for SPRINT 13 testing...");
-
-            // Sample BIB 1: client_demo
-            var clientDemoBib = $@"<?xml version=""1.0"" encoding=""UTF-8""?>
-<bib id=""client_demo"" description=""SPRINT 13: Individual BIB File - Client Demo"">
-  <metadata>
-    <board_type>demo</board_type>
-    <sprint>13</sprint>
-    <file_type>individual</file_type>
-    <created_date>{DateTime.Now:yyyy-MM-dd}</created_date>
-  </metadata>
-  
-  <uut id=""production_uut"" description=""Production UUT for Individual File Testing"">
-    <port number=""1"">
-      <protocol>rs232</protocol>
-      <speed>115200</speed>
-      <data_pattern>n81</data_pattern>
-      
-      <start>
-        <command>INIT</command>
-        <expected_response>READY</expected_response>
-        <timeout_ms>3000</timeout_ms>
-      </start>
-      
-      <test>
-        <command>TEST</command>
-        <expected_response>PASS</expected_response>
-        <timeout_ms>5000</timeout_ms>
-      </test>
-      
-      <stop>
-        <command>QUIT</command>
-        <expected_response>BYE</expected_response>
-        <timeout_ms>2000</timeout_ms>
-      </stop>
-    </port>
-  </uut>
-</bib>";
-
-            // Sample BIB 2: production_line_1
-            var productionLine1Bib = $@"<?xml version=""1.0"" encoding=""UTF-8""?>
-<bib id=""production_line_1"" description=""SPRINT 13: Production Line 1 - Isolated Configuration"">
-  <metadata>
-    <board_type>production</board_type>
-    <sprint>13</sprint>
-    <file_type>individual</file_type>
-    <line_number>1</line_number>
-    <created_date>{DateTime.Now:yyyy-MM-dd}</created_date>
-  </metadata>
-  
-  <uut id=""line1_uut"" description=""Production Line 1 UUT"">
-    <port number=""1"">
-      <protocol>rs232</protocol>
-      <speed>115200</speed>
-      <data_pattern>n81</data_pattern>
-      
-      <start>
-        <command>INIT_LINE1</command>
-        <expected_response>READY_LINE1</expected_response>
-        <timeout_ms>3000</timeout_ms>
-      </start>
-      
-      <test>
-        <command>TEST_LINE1</command>
-        <expected_response>PASS_LINE1</expected_response>
-        <timeout_ms>5000</timeout_ms>
-      </test>
-      
-      <stop>
-        <command>QUIT_LINE1</command>
-        <expected_response>BYE_LINE1</expected_response>
-        <timeout_ms>2000</timeout_ms>
-      </stop>
-    </port>
-  </uut>
-</bib>";
-
-            // Write individual BIB files
-            var clientDemoPath = Path.Combine(configDir, "bib_client_demo.xml");
-            var productionLine1Path = Path.Combine(configDir, "bib_production_line_1.xml");
-
-            await File.WriteAllTextAsync(clientDemoPath, clientDemoBib);
-            await File.WriteAllTextAsync(productionLine1Path, productionLine1Bib);
-
-            Console.WriteLine($"✅ Created: {Path.GetFileName(clientDemoPath)}");
-            Console.WriteLine($"✅ Created: {Path.GetFileName(productionLine1Path)}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"⚠️ Could not create sample BIB files: {ex.Message}");
-        }
+        // PRODUCTION CHANGE: Completely disable sample file creation
+        Console.WriteLine($"🏭 PRODUCTION MODE: Sample file creation disabled");
+        Console.WriteLine($"📋 Production systems must provide real BIB configuration files");
+        Console.WriteLine($"📁 Place your BIB files in: {configDir}");
+        Console.WriteLine($"📝 File format: bib_[BIB_ID].xml (e.g., bib_line1.xml, bib_line2.xml)");
+        
+        await Task.CompletedTask; // Keep method signature for compatibility
     }
 
     /// <summary>
@@ -480,7 +401,8 @@ class Program
     }
 
     /// <summary>
-    /// SPRINT 13: Enhanced configuration path resolution
+    /// SPRINT 14: PRODUCTION-READY configuration path resolution
+    /// CHANGE: No automatic file creation in production mode
     /// </summary>
     static string ResolveConfigPath(string xmlFileName, string configDir = "Configuration/")
     {
@@ -502,10 +424,14 @@ class Program
         // Create configuration directory if it doesn't exist
         Directory.CreateDirectory(fullConfigDir);
         
-        // Create default configuration if file doesn't exist
+        // PRODUCTION CHANGE: Do NOT create default files automatically
+        // Production systems must provide their own configuration files
         if (!File.Exists(fullPath))
         {
-            CreateDefaultMultiBibConfiguration(fullPath);
+            Console.WriteLine($"📋 PRODUCTION MODE: Configuration file not found: {Path.GetFileName(fullPath)}");
+            Console.WriteLine($"📁 Expected location: {fullPath}");
+            Console.WriteLine($"⚠️ Production systems must provide real BIB configuration files");
+            Console.WriteLine($"🔍 System will wait for hot-add file discovery...");
         }
         
         return fullPath;
@@ -523,65 +449,17 @@ class Program
         return fileName;
     }
 
-    /// <summary>
-    /// Create default Multi-BIB configuration (legacy compatibility)
+   /// <summary>
+    /// PRODUCTION CHANGE: Disable automatic default configuration creation
     /// </summary>
     static void CreateDefaultMultiBibConfiguration(string configPath)
     {
-        Console.WriteLine($"📄 Creating default Multi-BIB configuration: {Path.GetFileName(configPath)}");
+        // PRODUCTION CHANGE: Do NOT create default files
+        Console.WriteLine($"🏭 PRODUCTION MODE: Automatic configuration creation disabled");
+        Console.WriteLine($"📋 Missing configuration file: {Path.GetFileName(configPath)}");
+        Console.WriteLine($"📁 Expected location: {configPath}");
+        Console.WriteLine($"⚠️ Production systems require real configuration files");
+        Console.WriteLine($"🔍 System will continue and wait for hot-add discovery...");
         
-        var multiBibXml = $@"<?xml version=""1.0"" encoding=""UTF-8""?>
-<root>
-  <!-- ✅ SPRINT 13: Legacy Multi-BIB Configuration Example -->
-  
-  <bib id=""client_demo"" description=""Legacy Client Demo BIB - Multi-BIB Example"">
-    <metadata>
-      <board_type>demo</board_type>
-      <multi_bib_group>client_demo</multi_bib_group>
-      <sprint>13</sprint>
-      <config_type>legacy</config_type>
-      <created_date>{DateTime.Now:yyyy-MM-dd}</created_date>
-    </metadata>
-    
-    <uut id=""production_uut"" description=""Legacy Production UUT"">
-      <port number=""1"">
-        <protocol>rs232</protocol>
-        <speed>115200</speed>
-        <data_pattern>n81</data_pattern>
-        
-        <start>
-          <command>INIT</command>
-          <expected_response>READY</expected_response>
-          <timeout_ms>3000</timeout_ms>
-        </start>
-        
-        <test>
-          <command>TEST</command>
-          <expected_response>PASS</expected_response>
-          <timeout_ms>5000</timeout_ms>
-        </test>
-        
-        <stop>
-          <command>QUIT</command>
-          <expected_response>BYE</expected_response>
-          <timeout_ms>2000</timeout_ms>
-        </stop>
-      </port>
-    </uut>
-  </bib>
-
-  <!-- Additional BIBs can be added here for backward compatibility -->
-  
-</root>";
-
-        try
-        {
-            File.WriteAllText(configPath, multiBibXml);
-            Console.WriteLine($"✅ Multi-BIB configuration created: {configPath}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"⚠️ Could not create Multi-BIB config: {ex.Message}");
-        }
-    }
-}
+        // Do NOT create any files automatically in production
+    }}
