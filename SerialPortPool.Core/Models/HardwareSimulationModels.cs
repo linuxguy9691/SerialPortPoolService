@@ -37,7 +37,7 @@ public class HardwareSimulationConfig
     /// <summary>
     /// Stop trigger configuration - when to end hardware simulation  
     /// </summary>
-    public StopTriggerConfig StopTrigger { get; set; } = new();
+    public StopTriggerConfig? StopTrigger { get; set; } = null;
 
     /// <summary>
     /// Critical trigger configuration - emergency scenarios
@@ -74,7 +74,7 @@ public class HardwareSimulationConfig
     public string GetSimulationSummary()
     {
         return $"Hardware Simulation: {Mode} mode, Speed: {SpeedMultiplier:F1}x, " +
-               $"Start: {StartTrigger.DelaySeconds}s, Stop: {StopTrigger.DelaySeconds}s, " +
+               $"Start: {StartTrigger.DelaySeconds}s, Stop: {(StopTrigger?.DelaySeconds.ToString() ?? "Infinite")}s, " +
                $"Critical: {(CriticalTrigger.Enabled ? "Enabled" : "Disabled")}";
     }
 

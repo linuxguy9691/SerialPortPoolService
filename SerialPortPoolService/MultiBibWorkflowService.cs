@@ -392,49 +392,55 @@ public class MultiBibWorkflowService : IHostedService
     /// Pattern: START-once → TEST(loop) → STOP-once per UUT_ID
     /// </summary>
     private async Task ExecuteProductionModeAsync(CancellationToken cancellationToken)
+{
+    try
     {
-        try
+        _logger.LogCritical("🚨 DEBUG: ExecuteProductionModeAsync STARTED");
+        _logger.LogInformation("🏭 PRODUCTION MODE: Per UUT_ID BitBang-driven execution starting...");
+        
+        // Initialize BitBang service if not already created
+        if (_bitBangService == null)
         {
-            _logger.LogInformation("🏭 PRODUCTION MODE: Per UUT_ID BitBang-driven execution starting...");
+            _logger.LogCritical("🚨 DEBUG: Creating BitBangProductionService...");
+            _bitBangService = new BitBangProductionService(
+                _loggerFactory.CreateLogger<BitBangProductionService>());
+            _logger.LogInformation("🔌 BitBang Production Service initialized");
+        }
+
+        // Use existing DynamicBibConfigurationService for BIB discovery
+        _logger.LogCritical("🚨 DEBUG: About to discover BIBs...");
+        var discoveredBibs = await DiscoverConfiguredBibsAsync();
+        _logger.LogCritical($"🚨 DEBUG: Discovered {discoveredBibs.Count} BIBs: {string.Join(", ", discoveredBibs)}");
+        
+        if (!discoveredBibs.Any())
+        {
+            _logger.LogCritical("🚨 DEBUG: No BIBs discovered - method will return");
+            _logger.LogWarning("⚠️ No BIBs discovered for production mode");
+            return;
+        }
+
+        _logger.LogCritical("🚨 DEBUG: About to execute BIBs...");
+        // Execute all BIBs in parallel (each BIB manages its own UUTs)
+        var bibTasks = discoveredBibs.Select(bibId => 
+            ExecuteSingleBibProductionAsync(bibId, cancellationToken));
             
-            // Initialize BitBang service if not already created
-            // ✅ SPRINT 14 FIX: Use ILoggerFactory to create correct logger type
-            if (_bitBangService == null)
-            {
-                _bitBangService = new BitBangProductionService(
-                    _loggerFactory.CreateLogger<BitBangProductionService>());
-                _logger.LogInformation("🔌 BitBang Production Service initialized");
-            }
-
-            // Use existing DynamicBibConfigurationService for BIB discovery
-            var discoveredBibs = await DiscoverConfiguredBibsAsync();
-            _logger.LogInformation($"📋 Discovered BIBs for production: {string.Join(", ", discoveredBibs)}");
-
-            if (!discoveredBibs.Any())
-            {
-                _logger.LogWarning("⚠️ No BIBs discovered for production mode");
-                return;
-            }
-
-            // Execute all BIBs in parallel (each BIB manages its own UUTs)
-            var bibTasks = discoveredBibs.Select(bibId => 
-                ExecuteSingleBibProductionAsync(bibId, cancellationToken));
-                
-            await Task.WhenAll(bibTasks);
-            
-            _logger.LogInformation("🏁 Production mode execution completed for all BIBs");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "💥 Production mode execution failed");
-        }
-        finally
-        {
-            // Cleanup BitBang service
-            _bitBangService?.Dispose();
-            _bitBangService = null;
-        }
+        await Task.WhenAll(bibTasks);
+        
+        _logger.LogInformation("🏁 Production mode execution completed for all BIBs");
     }
+    catch (Exception ex)
+    {
+        _logger.LogCritical(ex, "🚨 DEBUG: EXCEPTION in ExecuteProductionModeAsync");
+        _logger.LogError(ex, "💥 Production mode execution failed");
+    }
+    finally
+    {
+        _logger.LogCritical("🚨 DEBUG: ExecuteProductionModeAsync ENDED");
+        // Cleanup BitBang service
+        _bitBangService?.Dispose();
+        _bitBangService = null;
+    }
+}
 
     /// <summary>
     /// Execute production workflow for a single BIB with all its UUTs
@@ -540,52 +546,44 @@ public class MultiBibWorkflowService : IHostedService
     /// Runs until STOP signal or critical failure per UUT_ID
     /// FIX: Execute TEST first, THEN check STOP conditions
     /// </summary>
+    /// <summary>
+    /// FIXED: Continuous TEST loop with proper phase timing
+    /// </summary>
     private async Task ExecuteContinuousTestLoopAsync(string bibId, string uutId, 
-        HardwareSimulationConfig simConfig, CancellationToken cancellationToken)
+    HardwareSimulationConfig simConfig, CancellationToken cancellationToken)
+{
+    var cycleCount = 0;
+    _logger.LogInformation($"🔄 Continuous TEST loop started: {bibId}.{uutId}");
+    
+    while (!cancellationToken.IsCancellationRequested)
     {
-        var cycleCount = 0;
-        _logger.LogInformation($"🔄 Continuous TEST loop started: {bibId}.{uutId}");
+        cycleCount++;
+        _logger.LogInformation($"🧪 TEST cycle #{cycleCount}: {bibId}.{uutId}"); // ← Change to LogInformation
         
-        while (!cancellationToken.IsCancellationRequested)
+        var testResult = await ExecuteTestPhaseAsync(bibId, uutId);
+        
+        _logger.LogInformation($"📊 TEST cycle #{cycleCount} result: {testResult}"); // ← Add this
+        
+        // Test interval
+        var testInterval = GetTestInterval(simConfig);
+        _logger.LogInformation($"⏱️ Waiting {testInterval.TotalSeconds}s before next cycle..."); // ← Add this
+        await Task.Delay(testInterval, cancellationToken);
+
+        // Check for STOP
+        _logger.LogInformation($"🔍 Checking stop conditions for cycle #{cycleCount}..."); // ← Add this
+        var shouldStop = await CheckStopConditionsAsync(uutId, simConfig);
+        _logger.LogInformation($"🛑 Should stop after cycle #{cycleCount}: {shouldStop}"); // ← Add this
+        
+        if (shouldStop) 
         {
-            cycleCount++;
-            
-            // FIX: Execute TEST phase FIRST (PER UUT_ID) - REUSE existing orchestrator
-            _logger.LogDebug($"🧪 TEST cycle #{cycleCount}: {bibId}.{uutId}");
-            var testResult = await ExecuteTestPhaseAsync(bibId, uutId);
-            
-            // Handle critical failures (PER UUT_ID)
-            if (IsCriticalFailure(testResult))
-            {
-                _logger.LogCritical($"🚨 Critical failure on cycle #{cycleCount}: {bibId}.{uutId} - emergency stop");
-                break;
-            }
-
-            // Log test result
-            if (testResult)
-            {
-                _logger.LogDebug($"✅ TEST cycle #{cycleCount} success: {bibId}.{uutId}");
-            }
-            else
-            {
-                _logger.LogWarning($"⚠️ TEST cycle #{cycleCount} failed: {bibId}.{uutId} - continuing");
-            }
-
-            // Test interval (from config or default)
-            var testInterval = GetTestInterval(simConfig);
-            await Task.Delay(testInterval, cancellationToken);
-
-            // FIX: Check for STOP signal AFTER executing TEST (PER UUT_ID)
-            var shouldStop = await CheckStopConditionsAsync(uutId, simConfig);
-            if (shouldStop) 
-            {
-                _logger.LogInformation($"🛑 STOP condition detected after {cycleCount} cycles: {bibId}.{uutId}");
-                break;
-            }
+            _logger.LogInformation($"🛑 STOP condition detected after {cycleCount} cycles: {bibId}.{uutId}");
+            break;
         }
         
-        _logger.LogInformation($"📊 Continuous TEST loop completed: {cycleCount} cycles executed for {bibId}.{uutId}");
+        _logger.LogInformation($"✅ Continuing to cycle #{cycleCount + 1}..."); // ← Add this
     }
+}
+    
     /// <summary>
     /// Check STOP conditions per UUT_ID: BitBang signal or critical failure
     /// </summary>
@@ -600,7 +598,7 @@ public class MultiBibWorkflowService : IHostedService
                 _logger.LogInformation($"🛑 BitBang STOP signal received: {uutId}");
                 return true;
             }
-            
+
             // Check critical failure (per UUT_ID)
             var criticalFailure = await _bitBangService.CheckCriticalFailureAsync(uutId, simConfig);
             if (criticalFailure)
@@ -608,7 +606,7 @@ public class MultiBibWorkflowService : IHostedService
                 _logger.LogCritical($"🚨 Critical failure detected: {uutId}");
                 return true;
             }
-            
+
             return false;
         }
         catch (Exception ex)

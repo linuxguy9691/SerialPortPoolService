@@ -2,7 +2,7 @@
 // SPRINT 14 BOUCHÉE #2: BitBang Production Service
 // File: SerialPortPoolService/BitBangProductionService.cs
 // Purpose: Per UUT_ID BitBang signal management with simulation transparency
-// Strategy: XML simulation now, physical hardware future (transparent interface)
+// FIX: Respecter l'absence de StopTrigger dans XML = boucle infinie
 // ===================================================================
 
 using Microsoft.Extensions.Logging;
@@ -15,6 +15,7 @@ namespace SerialPortPoolService.Services;
 /// SPRINT 14: BitBang Production Service for per UUT_ID signal management
 /// TRANSPARENT: Works with XML simulation (current) and physical hardware (future)
 /// PER UUT_ID: Each UUT has independent START/LOOP/STOP cycle
+/// FIX: Respecte l'absence de StopTrigger = boucle infinie
 /// </summary>
 public class BitBangProductionService
 {
@@ -40,13 +41,11 @@ public class BitBangProductionService
         {
             if (IsSimulationMode(config))
             {
-                // XML SIMULATION (Sprint 13): Use DelaySeconds + trigger config
                 _logger.LogDebug($"🎭 Using XML simulation for START: {uutId}");
                 return await SimulateStartTrigger(uutId, config.StartTrigger);
             }
             else
             {
-                // PHYSICAL HARDWARE (Future): Use real BitBang GPIO
                 _logger.LogDebug($"🔌 Using physical BitBang for START: {uutId}");
                 var provider = await GetOrCreateBitBangProviderAsync(uutId, config);
                 return await WaitForPhysicalBitBangStart(provider, uutId, config.StartTrigger);
@@ -61,6 +60,7 @@ public class BitBangProductionService
 
     /// <summary>
     /// TRANSPARENT: Wait for STOP signal per UUT_ID (simulation or physical)
+    /// FIX: Si aucun StopTrigger défini, ne jamais s'arrêter (boucle infinie)
     /// </summary>
     public async Task<bool> WaitForStopSignalAsync(string uutId, HardwareSimulationConfig config)
     {
@@ -70,12 +70,17 @@ public class BitBangProductionService
         {
             if (IsSimulationMode(config))
             {
-                // XML SIMULATION: Check for stop trigger or critical conditions
+                // ✅ FIX: Vérifier si un StopTrigger est réellement défini
+                if (config.StopTrigger == null || !IsStopTriggerDefined(config.StopTrigger))
+                {
+                    _logger.LogDebug($"🔄 No StopTrigger defined for {uutId} - continuing infinite loop");
+                    return false; // Pas de STOP = continue la boucle
+                }
+                
                 return await SimulateStopTrigger(uutId, config.StopTrigger, config.CriticalTrigger);
             }
             else
             {
-                // PHYSICAL HARDWARE: Read real BitBang GPIO status
                 var provider = await GetOrCreateBitBangProviderAsync(uutId, config);
                 return await CheckPhysicalBitBangStop(provider, uutId, config.StopTrigger);
             }
@@ -98,12 +103,10 @@ public class BitBangProductionService
         {
             if (IsSimulationMode(config))
             {
-                // XML SIMULATION: Use probability and scenario type
                 return await SimulateCriticalFailure(uutId, config.CriticalTrigger);
             }
             else
             {
-                // PHYSICAL HARDWARE: Read critical status from GPIO
                 var provider = await GetOrCreateBitBangProviderAsync(uutId, config);
                 return await ReadPhysicalCriticalStatus(provider, uutId, config.CriticalTrigger);
             }
@@ -124,6 +127,26 @@ public class BitBangProductionService
         config?.Enabled == true;
 
     /// <summary>
+    /// ✅ FIX: Vérifier si un StopTrigger est réellement défini dans le XML
+    /// </summary>
+    private bool IsStopTriggerDefined(StopTriggerConfig stopTrigger)
+    {
+        if (stopTrigger == null) return false;
+        
+        // Si DelaySeconds est 0 ou très petit, considérer comme non défini
+        // Cela évite les valeurs par défaut artificielles
+        if (stopTrigger.DelaySeconds <= 0) return false;
+        
+        // Si aucun signal ou condition n'est défini, considérer comme non défini
+        if (string.IsNullOrEmpty(stopTrigger.SuccessResponse) && stopTrigger.DelaySeconds < 1)
+        {
+            return false;
+        }
+        
+        return true; // StopTrigger valide trouvé
+    }
+
+    /// <summary>
     /// Simulate START trigger with realistic delays and UUT_ID tracking
     /// </summary>
     private async Task<bool> SimulateStartTrigger(string uutId, StartTriggerConfig trigger)
@@ -131,12 +154,10 @@ public class BitBangProductionService
         var adjustedDelay = TimeSpan.FromSeconds(trigger.DelaySeconds);
         _logger.LogDebug($"🎭 Simulating START delay: {adjustedDelay.TotalSeconds}s for {uutId}");
         
-        // Update UUT state
         UpdateUutState(uutId, UutSignalPhase.WaitingForStart);
         
         await Task.Delay(adjustedDelay);
         
-        // Mark UUT as started
         UpdateUutState(uutId, UutSignalPhase.Started);
         
         _logger.LogInformation($"✅ Simulated START trigger activated: {uutId} → {trigger.SuccessResponse}");
@@ -145,35 +166,45 @@ public class BitBangProductionService
 
     /// <summary>
     /// Simulate STOP trigger with various stop conditions per UUT_ID
+    /// ✅ FIX: Seulement si un StopTrigger est vraiment défini
     /// </summary>
     private async Task<bool> SimulateStopTrigger(string uutId, StopTriggerConfig stopTrigger, CriticalTriggerConfig criticalTrigger)
     {
-        // Check if this UUT should stop based on various conditions
         var uutState = GetUutState(uutId);
-        
-        // Simple simulation: Random chance to stop based on how long UUT has been running
         var runningDuration = DateTime.Now - uutState.LastStateChange;
+        
+        _logger.LogInformation($"🔍 STOP CHECK DETAILS: {uutId}");
+        _logger.LogInformation($"         Current Time: {DateTime.Now:HH:mm:ss.fff}");
+        _logger.LogInformation($"         Test Start Time: {uutState.LastStateChange:HH:mm:ss.fff}");
+        _logger.LogInformation($"         Running Duration: {runningDuration.TotalSeconds:F1}s");
+        _logger.LogInformation($"         Configured Delay: {stopTrigger.DelaySeconds}s");
+        
         var shouldStop = false;
         
-        // Stop conditions:
-        // 1. Been running for configured duration
-        if (runningDuration.TotalSeconds >= stopTrigger.DelaySeconds)
+        // ✅ FIX: Seulement arrêter si la durée configurée est atteinte ET valide
+        if (stopTrigger.DelaySeconds > 0 && runningDuration.TotalSeconds >= stopTrigger.DelaySeconds)
         {
             shouldStop = true;
+            _logger.LogInformation($"         Should Stop: True");
             _logger.LogInformation($"🛑 Simulated STOP trigger (duration): {uutId} after {runningDuration.TotalSeconds:F1}s");
         }
-        
-        // 2. Random stop chance (for realistic simulation)
-        else if (new Random().NextDouble() < 0.1) // 10% chance per check
+        else
         {
-            shouldStop = true;
-            _logger.LogInformation($"🛑 Simulated STOP trigger (random): {uutId}");
+            _logger.LogInformation($"         Should Stop: False");
+            _logger.LogDebug($"🔄 Duration condition not met: {runningDuration.TotalSeconds:F1}s < {stopTrigger.DelaySeconds}s");
         }
+        
+        // ✅ REMOVE: Suppression de la logique de STOP aléatoire qui était problématique
+        // else if (new Random().NextDouble() < 0.1) // 10% chance per check
         
         if (shouldStop)
         {
             UpdateUutState(uutId, UutSignalPhase.Stopping);
-            await Task.Delay(100); // Brief stop processing delay
+            
+            // Graceful shutdown delay
+            _logger.LogDebug($"🛑 Graceful shutdown delay: 5s for {uutId}");
+            await Task.Delay(5000); // Graceful stop delay
+            
             UpdateUutState(uutId, UutSignalPhase.Stopped);
         }
         
@@ -187,7 +218,6 @@ public class BitBangProductionService
     {
         if (!trigger.Enabled) return false;
         
-        // Use activation probability from XML config
         var random = new Random();
         var shouldFail = random.NextDouble() < trigger.ActivationProbability;
         
@@ -198,7 +228,6 @@ public class BitBangProductionService
             _logger.LogCritical($"🚨 Simulated CRITICAL failure: {uutId} - {trigger.ErrorMessage}");
             _logger.LogCritical($"🚨 Scenario: {trigger.ScenarioType}, Recovery: {(trigger.RecoveryPossible ? "Possible" : "Not possible")}");
             
-            // Brief delay for critical failure processing
             await Task.Delay(200);
         }
         
@@ -222,11 +251,7 @@ public class BitBangProductionService
                 return existingProvider;
             }
             
-            // Future Sprint 15+: Create real BitBang provider for physical hardware
-            // Will reuse Sprint 9 FtdiBitBangProtocolProvider infrastructure
             _logger.LogDebug($"🔌 Creating BitBang provider for UUT: {uutId}");
-            
-            // For now, throw to indicate not implemented
             throw new NotImplementedException($"Physical BitBang provider for UUT {uutId} - Sprint 15+");
         }
         finally
@@ -240,7 +265,6 @@ public class BitBangProductionService
     /// </summary>
     private async Task<bool> WaitForPhysicalBitBangStart(IBitBangProtocolProvider provider, string uutId, StartTriggerConfig trigger)
     {
-        // Future: Read real GPIO pins for START signal per UUT_ID
         await Task.CompletedTask;
         _logger.LogWarning($"🔌 Physical BitBang START not implemented: {uutId}");
         throw new NotImplementedException("Physical BitBang hardware - Sprint 15+");
@@ -251,7 +275,6 @@ public class BitBangProductionService
     /// </summary>
     private async Task<bool> CheckPhysicalBitBangStop(IBitBangProtocolProvider provider, string uutId, StopTriggerConfig trigger)
     {
-        // Future: Read real GPIO pins for STOP signal per UUT_ID
         await Task.CompletedTask;
         _logger.LogWarning($"🔌 Physical BitBang STOP not implemented: {uutId}");
         throw new NotImplementedException("Physical BitBang hardware - Sprint 15+");
@@ -262,7 +285,6 @@ public class BitBangProductionService
     /// </summary>
     private async Task<bool> ReadPhysicalCriticalStatus(IBitBangProtocolProvider provider, string uutId, CriticalTriggerConfig trigger)
     {
-        // Future: Read real GPIO pins for critical status per UUT_ID
         await Task.CompletedTask;
         _logger.LogWarning($"🔌 Physical BitBang CRITICAL not implemented: {uutId}");
         throw new NotImplementedException("Physical BitBang hardware - Sprint 15+");
@@ -297,7 +319,6 @@ public class BitBangProductionService
             return state;
         }
         
-        // Create default state for new UUT
         var defaultState = new UutSignalState
         {
             UutId = uutId,
@@ -339,14 +360,12 @@ public class BitBangProductionService
         
         try
         {
-            // Dispose all BitBang providers
             foreach (var provider in _bitBangProviders.Values)
             {
                 provider?.Dispose();
             }
             _bitBangProviders.Clear();
             
-            // Clear UUT states
             _uutStates.Clear();
             
             _providerLock?.Dispose();
@@ -383,38 +402,11 @@ public class UutSignalState
 /// </summary>
 public enum UutSignalPhase
 {
-    /// <summary>
-    /// UUT not started yet
-    /// </summary>
     NotStarted,
-    
-    /// <summary>
-    /// Waiting for START signal
-    /// </summary>
     WaitingForStart,
-    
-    /// <summary>
-    /// START signal received, UUT started
-    /// </summary>
     Started,
-    
-    /// <summary>
-    /// UUT in TEST loop phase
-    /// </summary>
     Testing,
-    
-    /// <summary>
-    /// STOP signal received, stopping
-    /// </summary>
     Stopping,
-    
-    /// <summary>
-    /// UUT stopped normally
-    /// </summary>
     Stopped,
-    
-    /// <summary>
-    /// Critical failure detected
-    /// </summary>
     CriticalFailure
 }

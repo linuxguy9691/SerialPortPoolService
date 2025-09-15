@@ -866,61 +866,201 @@ public class XmlBibConfigurationLoader : IBibConfigurationLoader
     }
 
     /// <summary>
-    /// SPRINT 13: Parse hardware simulation configuration from XML
-    /// </summary>
-    private void ParseHardwareSimulation(XmlNode bibNode, BibConfiguration bib)
+/// SPRINT 13: Parse hardware simulation configuration from XML
+/// FIX: Ne pas créer de StopTrigger par défaut - seulement si défini dans XML
+/// </summary>
+private void ParseHardwareSimulation(XmlNode bibNode, BibConfiguration bib)
+{
+    try
     {
-        try
+        var simNode = bibNode.SelectSingleNode("hardware_simulation");
+        if (simNode == null)
         {
-            var simNode = bibNode.SelectSingleNode("hardware_simulation");
-            if (simNode == null)
-            {
-                return; // No simulation config - normal
-            }
+            return; // No simulation config - normal
+        }
 
-            _logger.LogDebug($"🎭 Parsing hardware simulation for BIB: {bib.BibId}");
+        _logger.LogDebug($"🎭 Parsing hardware simulation for BIB: {bib.BibId}");
 
-            var config = new HardwareSimulationConfig();
+        var config = new HardwareSimulationConfig();
 
-            // Parse enabled flag
-            var enabledNode = simNode.SelectSingleNode("Enabled");
-            config.Enabled = bool.Parse(enabledNode?.InnerText ?? "False");
+        // Parse enabled flag
+        var enabledNode = simNode.SelectSingleNode("Enabled");
+        config.Enabled = bool.Parse(enabledNode?.InnerText ?? "false");
 
-            if (!config.Enabled)
-            {
-                bib.HardwareSimulation = config;
-                return;
-            }
-
-            // Parse mode
-            var modeNode = simNode.SelectSingleNode("mode");
-            if (modeNode != null && Enum.TryParse<SimulationMode>(modeNode.InnerText, true, out var mode))
-            {
-                config.Mode = mode;
-            }
-
-            // Parse speed multiplier
-            var speedNode = simNode.SelectSingleNode("speed_multiplier");
-            if (speedNode != null && double.TryParse(speedNode.InnerText, out var speedMultiplier))
-            {
-                config.SpeedMultiplier = speedMultiplier;
-            }
-
-            // Parse triggers (simplified)
-            config.StartTrigger = new StartTriggerConfig();
-            config.StopTrigger = new StopTriggerConfig();
-            config.CriticalTrigger = new CriticalTriggerConfig();
-            config.RandomBehavior = new RandomBehaviorConfig();
-
+        if (!config.Enabled)
+        {
             bib.HardwareSimulation = config;
-            
-            _logger.LogInformation($"✅ Hardware simulation configured for BIB {bib.BibId}");
+            return;
         }
-        catch (Exception ex)
+
+        // Parse mode
+        var modeNode = simNode.SelectSingleNode("Mode");
+        if (modeNode != null && Enum.TryParse<SimulationMode>(modeNode.InnerText, true, out var mode))
         {
-            _logger.LogWarning(ex, $"⚠️ Could not parse hardware simulation for BIB {bib.BibId}");
+            config.Mode = mode;
         }
+
+        // Parse speed multiplier
+        var speedNode = simNode.SelectSingleNode("SpeedMultiplier");
+        if (speedNode != null && double.TryParse(speedNode.InnerText, out var speedMultiplier))
+        {
+            config.SpeedMultiplier = speedMultiplier;
+        }
+
+        // ✅ FIX: Parse triggers SEULEMENT s'ils existent dans le XML
+        
+        // Parse StartTrigger (toujours créer car généralement requis)
+        var startTriggerNode = simNode.SelectSingleNode("StartTrigger");
+        if (startTriggerNode != null)
+        {
+            config.StartTrigger = ParseStartTrigger(startTriggerNode);
+        }
+        else
+        {
+            // Fallback : StartTrigger par défaut minimal
+            config.StartTrigger = new StartTriggerConfig
+            {
+                DelaySeconds = 1.0,
+                SuccessResponse = "START_DEFAULT"
+            };
+        }
+
+        // ✅ FIX PRINCIPAL: Parse StopTrigger SEULEMENT s'il existe
+        var stopTriggerNode = simNode.SelectSingleNode("StopTrigger");
+        if (stopTriggerNode != null)
+        {
+            config.StopTrigger = ParseStopTrigger(stopTriggerNode);
+            _logger.LogDebug($"🛑 StopTrigger found in XML for BIB: {bib.BibId}");
+        }
+        else
+        {
+            // ✅ PAS de StopTrigger par défaut = null = boucle infinie
+            config.StopTrigger = null;
+            _logger.LogDebug($"🔄 No StopTrigger in XML for BIB: {bib.BibId} - infinite loop mode");
+        }
+
+        // Parse CriticalTrigger SEULEMENT s'il existe
+        var criticalTriggerNode = simNode.SelectSingleNode("CriticalTrigger");
+        if (criticalTriggerNode != null)
+        {
+            config.CriticalTrigger = ParseCriticalTrigger(criticalTriggerNode);
+        }
+        else
+        {
+            config.CriticalTrigger = new CriticalTriggerConfig { Enabled = false };
+        }
+
+        // Parse RandomBehavior SEULEMENT s'il existe
+        var randomBehaviorNode = simNode.SelectSingleNode("RandomBehavior");
+        if (randomBehaviorNode != null)
+        {
+            config.RandomBehavior = ParseRandomBehavior(randomBehaviorNode);
+        }
+        else
+        {
+            config.RandomBehavior = new RandomBehaviorConfig { Enabled = false };
+        }
+
+        bib.HardwareSimulation = config;
+        
+        _logger.LogInformation($"✅ Hardware simulation configured for BIB {bib.BibId}");
     }
+    catch (Exception ex)
+    {
+        _logger.LogWarning(ex, $"⚠️ Could not parse hardware simulation for BIB {bib.BibId}");
+    }
+}
+
+/// <summary>
+/// Parse StartTrigger from XML node
+/// </summary>
+private StartTriggerConfig ParseStartTrigger(XmlNode startTriggerNode)
+{
+    var config = new StartTriggerConfig();
+    
+    var delayNode = startTriggerNode.SelectSingleNode("DelaySeconds");
+    if (delayNode != null && double.TryParse(delayNode.InnerText, out var delay))
+    {
+        config.DelaySeconds = delay;
+    }
+    
+    var responseNode = startTriggerNode.SelectSingleNode("SuccessResponse");
+    if (responseNode != null)
+    {
+        config.SuccessResponse = responseNode.InnerText;
+    }
+    
+    var diagnosticsNode = startTriggerNode.SelectSingleNode("EnableDiagnostics");
+    if (diagnosticsNode != null && bool.TryParse(diagnosticsNode.InnerText, out var diagnostics))
+    {
+        config.EnableDiagnostics = diagnostics;
+    }
+    
+    return config;
+}
+
+/// <summary>
+/// Parse StopTrigger from XML node
+/// <summary>
+/// Parse StopTrigger from XML node
+/// ✅ FIX: Version simplifiée sans propriété Enabled
+/// </summary>
+private StopTriggerConfig ParseStopTrigger(XmlNode stopTriggerNode)
+{
+    var config = new StopTriggerConfig();
+    
+    var delayNode = stopTriggerNode.SelectSingleNode("DelaySeconds");
+    if (delayNode != null && double.TryParse(delayNode.InnerText, out var delay))
+    {
+        config.DelaySeconds = delay;
+    }
+    
+    var responseNode = stopTriggerNode.SelectSingleNode("SuccessResponse");
+    if (responseNode != null)
+    {
+        config.SuccessResponse = responseNode.InnerText;
+    }
+    
+    // Supprimé : la propriété Enabled n'existe pas dans StopTriggerConfig
+    
+    return config;
+}
+
+/// <summary>
+/// Parse CriticalTrigger from XML node
+/// </summary>
+private CriticalTriggerConfig ParseCriticalTrigger(XmlNode criticalTriggerNode)
+{
+    var config = new CriticalTriggerConfig();
+    
+    var enabledNode = criticalTriggerNode.SelectSingleNode("Enabled");
+    if (enabledNode != null && bool.TryParse(enabledNode.InnerText, out var enabled))
+    {
+        config.Enabled = enabled;
+    }
+    
+    // Parse autres propriétés si nécessaire
+    
+    return config;
+}
+
+/// <summary>
+/// Parse RandomBehavior from XML node
+/// </summary>
+private RandomBehaviorConfig ParseRandomBehavior(XmlNode randomBehaviorNode)
+{
+    var config = new RandomBehaviorConfig();
+    
+    var enabledNode = randomBehaviorNode.SelectSingleNode("Enabled");
+    if (enabledNode != null && bool.TryParse(enabledNode.InnerText, out var enabled))
+    {
+        config.Enabled = enabled;
+    }
+    
+    // Parse autres propriétés si nécessaire
+    
+    return config;
+}
 
     // [Placeholder for remaining parsing methods - include all existing methods unchanged]
     // This includes ParseMultipleStartCommands, ParseMultipleTestCommands, ParseMultipleStopCommands, etc.

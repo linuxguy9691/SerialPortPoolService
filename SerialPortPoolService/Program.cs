@@ -1,7 +1,7 @@
 // ===================================================================
 // SPRINT 13 INTEGRATION: Enhanced Program.cs with Sprint 13 Services
 // File: SerialPortPoolService/Program.cs
-// CHANGEMENT MINIMAL: Seulement ConfigureEnhancedMultiBibServices modifiée
+// FIX: Mode production pur sans configuration legacy
 // ===================================================================
 
 using Microsoft.Extensions.DependencyInjection;
@@ -11,7 +11,7 @@ using NLog.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
 using SerialPortPool.Core.Models;
 using SerialPortPool.Core.Services;
-using SerialPortPool.Core.Extensions;  // ← AJOUTÉ pour Sprint13ServiceExtensions
+using SerialPortPool.Core.Extensions;
 using SerialPortPoolService.Services;
 using SerialPortPool.Core.Protocols;
 using System.CommandLine;
@@ -39,7 +39,6 @@ class Program
         Console.WriteLine("=".PadRight(80, '='));
         Console.WriteLine();
 
-        // ✅ SPRINT 13: Enhanced Command Line Interface with multi-file options
         var rootCommand = CreateEnhancedMultiBibCommandLine();
         return await rootCommand.InvokeAsync(args);
     }
@@ -86,8 +85,8 @@ class Program
         // Execution mode options
         var modeOption = new Option<string>(
             "--mode",
-            getDefaultValue: () => "production",  // ← NEW (CHANGE 1/2)
-            description: "Execution mode: production, single, continuous, scheduled, on-demand");
+            getDefaultValue: () => "production",
+            description: "Execution mode: production, single, continuous, scheduled, on-demand, legacy");
 
         var intervalOption = new Option<int>(
             "--interval",
@@ -113,11 +112,11 @@ class Program
         var rootCommand = new RootCommand("SerialPortPool Multi-BIB Production Service - SPRINT 13")
         {
             xmlConfigOption,
-            configDirOption,        // 🆕 SPRINT 13
+            configDirOption,
             bibIdsOption,
             allBibsOption,
-            discoverBibsOption,     // 🆕 SPRINT 13
-            enableMultiFileOption,  // 🆕 SPRINT 13
+            discoverBibsOption,
+            enableMultiFileOption,
             modeOption,
             intervalOption,
             detailedLogsOption,
@@ -125,12 +124,10 @@ class Program
             serviceDemoOption
         };
 
-        // 🎯 OPTION 1: InvocationContext - PAS DE LIMITE DE PARAMÈTRES!
         rootCommand.SetHandler(async (InvocationContext context) =>
         {
             try
             {
-                // ✅ Récupérer TOUS les paramètres via ParseResult
                 var parseResult = context.ParseResult;
                 
                 var xmlConfig = parseResult.GetValueForOption(xmlConfigOption)!;
@@ -145,7 +142,7 @@ class Program
                 var legacyLoop = parseResult.GetValueForOption(legacyLoopOption);
                 var serviceDemo = parseResult.GetValueForOption(serviceDemoOption);
 
-                // ✅ SPRINT 13: Configuration complète avec TOUTES les options
+                // ✅ FIX: Configuration complète avec mode detection
                 var config = CreateEnhancedMultiBibConfiguration(
                     xmlConfig, configDir, bibIds, allBibs, discoverBibs, enableMultiFile, 
                     mode, interval, detailedLogs, legacyLoop, serviceDemo);
@@ -165,47 +162,62 @@ class Program
 
     /// <summary>
     /// SPRINT 13: Create enhanced configuration with multi-file support
+    /// FIX: Mode production pur sans configuration legacy
     /// </summary>
     static MultiBibServiceConfiguration CreateEnhancedMultiBibConfiguration(
         string xmlConfig, string configDir, string[] bibIds, bool allBibs, bool discoverBibs, 
         bool enableMultiFile, string mode, int interval, bool detailedLogs, bool legacyLoop, bool serviceDemo)
     {
-        // Handle legacy options
+        // Handle legacy options first
         if (legacyLoop) mode = "continuous";
         if (serviceDemo) return CreateServiceDemoConfiguration();
 
         // Parse execution mode
         var executionMode = mode.ToLowerInvariant() switch
         {
-            "production" => MultiBibExecutionMode.Production,  // ← NEW (CHANGE 2/2)
+            "production" => MultiBibExecutionMode.Production,
             "single" => MultiBibExecutionMode.SingleRun,
             "continuous" => MultiBibExecutionMode.Continuous,
             "scheduled" => MultiBibExecutionMode.Scheduled,
             "on-demand" => MultiBibExecutionMode.OnDemand,
-            _ => MultiBibExecutionMode.Production  // ← NEW default fallback
+            "legacy" => MultiBibExecutionMode.SingleRun, // Force legacy to single run
+            _ => MultiBibExecutionMode.Production
         };
 
-        // 🆕 SPRINT 13: Enhanced configuration path resolution
-        var configPath = ResolveConfigPath(xmlConfig, configDir);
+        // ✅ FIX: Mode-specific configuration path resolution
+        string? configPath = null;
+        
+        // Only set DefaultConfigurationPath for legacy modes
+        if (executionMode != MultiBibExecutionMode.Production || mode.ToLowerInvariant() == "legacy")
+        {
+            configPath = ResolveConfigPath(xmlConfig, configDir);
+            Console.WriteLine($"📄 Legacy mode detected - using XML config: {Path.GetFileName(configPath)}");
+        }
+        else
+        {
+            Console.WriteLine($"🏭 Production mode detected - using BIB file discovery only");
+        }
 
         // Create enhanced configuration
         var config = new MultiBibServiceConfiguration
         {
             ExecutionMode = executionMode,
             TargetBibIds = bibIds?.Any() == true ? bibIds.ToList() : null,
-            DefaultConfigurationPath = configPath,
+            DefaultConfigurationPath = configPath, // ✅ FIX: Null en mode production
             IncludeDetailedLogs = detailedLogs,
             ContinuousInterval = TimeSpan.FromMinutes(interval),
             ScheduleInterval = TimeSpan.FromMinutes(interval * 4)
         };
 
-        // 🆕 SPRINT 13: Add multi-file configuration
+        // ✅ FIX: Enhanced metadata with mode detection
         config.Metadata = new Dictionary<string, object>
         {
             ["ConfigurationDirectory"] = configDir,
-            ["EnableMultiFileDiscovery"] = enableMultiFile,
-            ["DiscoverBibs"] = discoverBibs,
-            ["Sprint13Enhanced"] = true
+            ["EnableMultiFileDiscovery"] = enableMultiFile || executionMode == MultiBibExecutionMode.Production,
+            ["DiscoverBibs"] = discoverBibs || executionMode == MultiBibExecutionMode.Production,
+            ["Sprint13Enhanced"] = true,
+            ["PureProductionMode"] = executionMode == MultiBibExecutionMode.Production,
+            ["UseLegacyXml"] = configPath != null
         };
 
         return config;
@@ -213,31 +225,39 @@ class Program
 
     /// <summary>
     /// SPRINT 13: Run enhanced Multi-BIB service with discovery
+    /// FIX: Detection du mode production pur
     /// </summary>
     static async Task RunEnhancedMultiBibService(MultiBibServiceConfiguration config)
     {
+        var isPureProduction = config.ExecutionMode == MultiBibExecutionMode.Production && 
+                              config.DefaultConfigurationPath == null;
+
         Console.WriteLine("🎬 Starting SPRINT 13 Enhanced Multi-BIB Service...");
         Console.WriteLine($"📋 Configuration Summary:");
-        Console.WriteLine($"   📄 XML Config: {Path.GetFileName(config.DefaultConfigurationPath ?? "default")}");
-        Console.WriteLine($"   📁 Config Directory: {config.Metadata?["ConfigurationDirectory"]}");
-        Console.WriteLine($"   🔍 Multi-File Discovery: {config.Metadata?["EnableMultiFileDiscovery"]}");
+        
+        if (isPureProduction)
+        {
+            Console.WriteLine($"   🏭 Mode: PURE PRODUCTION (BIB Discovery Only)");
+            Console.WriteLine($"   📁 Config Directory: {config.Metadata?["ConfigurationDirectory"]}");
+            Console.WriteLine($"   🔍 Multi-File Discovery: ENABLED");
+        }
+        else
+        {
+            Console.WriteLine($"   📄 XML Config: {Path.GetFileName(config.DefaultConfigurationPath ?? "default")}");
+            Console.WriteLine($"   📁 Config Directory: {config.Metadata?["ConfigurationDirectory"]}");
+            Console.WriteLine($"   🔍 Multi-File Discovery: {config.Metadata?["EnableMultiFileDiscovery"]}");
+        }
+        
         Console.WriteLine($"   🎯 Execution Mode: {config.ExecutionMode}");
         Console.WriteLine($"   📋 Target BIBs: {(config.TargetBibIds?.Any() == true ? string.Join(", ", config.TargetBibIds) : "AUTO-DISCOVER")}");
         Console.WriteLine($"   📊 Detailed Logs: {(config.IncludeDetailedLogs ? "ENABLED" : "DISABLED")}");
-        
-        if (config.ExecutionMode == MultiBibExecutionMode.Continuous)
-        {
-            Console.WriteLine($"   ⏱️ Continuous Interval: {config.ContinuousInterval.TotalMinutes:F0} minutes");
-        }
-        
         Console.WriteLine();
 
-        // ✅ SPRINT 13: Enhanced service discovery phase
+        // ✅ FIX: Enhanced service discovery phase
         await PerformSprint13Discovery(config);
 
         var builder = Host.CreateApplicationBuilder();
         
-        // 🎯 SPRINT 13: Configure services using new Sprint13ServiceExtensions
         ConfigureEnhancedMultiBibServices(builder.Services, config);
         
         // Register Multi-BIB service
@@ -248,7 +268,7 @@ class Program
         
         Console.WriteLine("✅ SPRINT 13 Enhanced Multi-BIB Service configured and starting...");
         
-        // 🎯 SPRINT 13: Validate services
+        // Validate services
         try
         {
             using var scope = host.Services.CreateScope();
@@ -271,7 +291,8 @@ class Program
     }
 
     /// <summary>
-    /// SPRINT 14: PRODUCTION-READY discovery - no automatic file creation
+    /// SPRINT 14: PRODUCTION-READY discovery
+    /// FIX: Différenciation claire entre modes
     /// </summary>
     static async Task PerformSprint13Discovery(MultiBibServiceConfiguration config)
     {
@@ -279,33 +300,41 @@ class Program
         {
             var enableDiscovery = config.Metadata?.GetValueOrDefault("EnableMultiFileDiscovery", true) as bool? ?? true;
             var performDiscovery = config.Metadata?.GetValueOrDefault("DiscoverBibs", false) as bool? ?? false;
+            var isPureProduction = config.Metadata?.GetValueOrDefault("PureProductionMode", false) as bool? ?? false;
             
-            if (!enableDiscovery && !performDiscovery)
+            if (isPureProduction)
+            {
+                Console.WriteLine("🏭 SPRINT 14: Production BIB Discovery...");
+                Console.WriteLine("=".PadRight(60, '='));
+                Console.WriteLine($"📋 Production systems must provide real BIB configuration files");
+                Console.WriteLine($"🔍 System will wait for hot-add file discovery...");
+            }
+            else if (!enableDiscovery && !performDiscovery)
             {
                 Console.WriteLine("📄 Using legacy single-file configuration mode");
                 return;
             }
 
-            Console.WriteLine("🔍 SPRINT 14: Production BIB Discovery...");
-            Console.WriteLine("=".PadRight(60, '='));
-
             var configDir = config.Metadata?.GetValueOrDefault("ConfigurationDirectory", "Configuration/") as string ?? "Configuration/";
             
-            // Ensure configuration directory exists (but don't create sample files)
+            // Ensure configuration directory exists
             if (!Directory.Exists(configDir))
             {
                 Console.WriteLine($"📁 Creating configuration directory: {configDir}");
                 Directory.CreateDirectory(configDir);
                 
-                // PRODUCTION CHANGE: Do NOT create sample files automatically
-                Console.WriteLine($"⚠️ PRODUCTION MODE: No BIB files found in {configDir}");
-                Console.WriteLine($"📋 Expected file pattern: bib_*.xml");
-                Console.WriteLine($"🔍 Hot-add system will monitor for real BIB files...");
+                if (isPureProduction)
+                {
+                    Console.WriteLine($"⚠️ PRODUCTION MODE: Configuration file not found: client-demo.xml");
+                    Console.WriteLine($"📁 Expected location: {Path.Combine(AppDomain.CurrentDomain.BaseDirectory, configDir, "client-demo.xml")}");
+                    Console.WriteLine($"🔍 Production systems must provide real BIB configuration files");
+                    Console.WriteLine($"🔍 System will wait for hot-add file discovery...");
+                }
             }
             else
             {
                 // Discovery phase for existing files
-                if (performDiscovery)
+                if (performDiscovery || isPureProduction)
                 {
                     Console.WriteLine($"🔍 Scanning for BIB files in: {configDir}");
                     
@@ -320,7 +349,7 @@ class Program
                         Console.WriteLine($"   ✅ {fileName} → BIB_ID: {bibId} ({fileSize} bytes)");
                     }
                     
-                    if (bibFiles.Length == 0)
+                    if (bibFiles.Length == 0 && isPureProduction)
                     {
                         Console.WriteLine("📋 No BIB files found - system will wait for hot-add files");
                         Console.WriteLine("🔍 Place real BIB files in format: bib_[BIB_ID].xml");
@@ -338,8 +367,8 @@ class Program
     }
     
     /// <summary>
-    /// SPRINT 13: Configure services using Sprint13ServiceExtensions (SIMPLIFIED)
-    /// CHANGEMENT MINIMAL: Remplace toute la logique complexe par une ligne
+    /// SPRINT 13: Configure services using Sprint13ServiceExtensions
+    /// FIX: Configuration conditionnelle pour mode production
     /// </summary>
     static void ConfigureEnhancedMultiBibServices(IServiceCollection services, MultiBibServiceConfiguration config)
     {
@@ -347,18 +376,24 @@ class Program
 
         try
         {
-            // 🎯 SPRINT 13: Une seule ligne remplace tout le code précédent!
             services.AddSprint13DemoServices();
 
-            // Configure the BIB configuration loader with the default path
-            if (!string.IsNullOrEmpty(config.DefaultConfigurationPath))
+            // ✅ FIX: Only configure XML loader for non-production modes
+            var isPureProduction = config.Metadata?.GetValueOrDefault("PureProductionMode", false) as bool? ?? false;
+            
+            if (!isPureProduction && !string.IsNullOrEmpty(config.DefaultConfigurationPath))
             {
+                Console.WriteLine($"📄 Configuring XML loader for path: {config.DefaultConfigurationPath}");
                 services.AddSingleton<IBibConfigurationLoader>(provider =>
                 {
                     var loader = provider.GetRequiredService<XmlBibConfigurationLoader>();
                     loader.SetDefaultConfigurationPath(config.DefaultConfigurationPath);
                     return loader;
                 });
+            }
+            else
+            {
+                Console.WriteLine($"🏭 Production mode: Using discovery-only configuration");
             }
 
             Console.WriteLine("✅ SPRINT 13 Enhanced Services configured successfully");
@@ -368,21 +403,6 @@ class Program
             Console.WriteLine($"❌ ERROR configuring SPRINT 13 services: {ex.Message}");
             throw;
         }
-    }
-
-    /// <summary>
-    /// PRODUCTION CHANGE: Remove automatic sample file creation
-    /// This method is now DISABLED in production builds
-    /// </summary>
-    static async Task CreateSampleIndividualBibFiles(string configDir)
-    {
-        // PRODUCTION CHANGE: Completely disable sample file creation
-        Console.WriteLine($"🏭 PRODUCTION MODE: Sample file creation disabled");
-        Console.WriteLine($"📋 Production systems must provide real BIB configuration files");
-        Console.WriteLine($"📁 Place your BIB files in: {configDir}");
-        Console.WriteLine($"📝 File format: bib_[BIB_ID].xml (e.g., bib_line1.xml, bib_line2.xml)");
-        
-        await Task.CompletedTask; // Keep method signature for compatibility
     }
 
     /// <summary>
@@ -401,8 +421,7 @@ class Program
     }
 
     /// <summary>
-    /// SPRINT 14: PRODUCTION-READY configuration path resolution
-    /// CHANGE: No automatic file creation in production mode
+    /// SPRINT 14: Configuration path resolution (legacy mode only)
     /// </summary>
     static string ResolveConfigPath(string xmlFileName, string configDir = "Configuration/")
     {
@@ -424,16 +443,6 @@ class Program
         // Create configuration directory if it doesn't exist
         Directory.CreateDirectory(fullConfigDir);
         
-        // PRODUCTION CHANGE: Do NOT create default files automatically
-        // Production systems must provide their own configuration files
-        if (!File.Exists(fullPath))
-        {
-            Console.WriteLine($"📋 PRODUCTION MODE: Configuration file not found: {Path.GetFileName(fullPath)}");
-            Console.WriteLine($"📁 Expected location: {fullPath}");
-            Console.WriteLine($"⚠️ Production systems must provide real BIB configuration files");
-            Console.WriteLine($"🔍 System will wait for hot-add file discovery...");
-        }
-        
         return fullPath;
     }
 
@@ -448,18 +457,4 @@ class Program
         }
         return fileName;
     }
-
-   /// <summary>
-    /// PRODUCTION CHANGE: Disable automatic default configuration creation
-    /// </summary>
-    static void CreateDefaultMultiBibConfiguration(string configPath)
-    {
-        // PRODUCTION CHANGE: Do NOT create default files
-        Console.WriteLine($"🏭 PRODUCTION MODE: Automatic configuration creation disabled");
-        Console.WriteLine($"📋 Missing configuration file: {Path.GetFileName(configPath)}");
-        Console.WriteLine($"📁 Expected location: {configPath}");
-        Console.WriteLine($"⚠️ Production systems require real configuration files");
-        Console.WriteLine($"🔍 System will continue and wait for hot-add discovery...");
-        
-        // Do NOT create any files automatically in production
-    }}
+}

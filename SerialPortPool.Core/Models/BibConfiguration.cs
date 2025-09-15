@@ -95,7 +95,7 @@ public class BibConfiguration
             return "Real Hardware Mode";
 
         return $"Simulation Mode: Start={HardwareSimulation!.StartTrigger.DelaySeconds}s, " +
-               $"Stop={HardwareSimulation.StopTrigger.DelaySeconds}s, " +
+               $"Stop={(HardwareSimulation.StopTrigger != null ? $"{HardwareSimulation.StopTrigger.DelaySeconds}s" : "Infinite")}, " +
                $"Critical={HardwareSimulation.CriticalTrigger.Enabled}";
     }
 
