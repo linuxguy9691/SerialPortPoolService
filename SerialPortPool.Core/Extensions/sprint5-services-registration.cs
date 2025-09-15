@@ -27,7 +27,7 @@ public static class Sprint5ServiceExtensions
 
         // Protocol services
         services.AddScoped<IProtocolHandlerFactory, ProtocolHandlerFactory>();
-        services.AddScoped<RS232ProtocolHandler>();  // ← FIXED: Now found with proper using
+        services.AddTransient<RS232ProtocolHandler>();  // ← FIXED: Now found with proper using
 
         // Future Sprint 6 protocol handlers (commented for now):
         // services.AddScoped<RS485ProtocolHandler>();

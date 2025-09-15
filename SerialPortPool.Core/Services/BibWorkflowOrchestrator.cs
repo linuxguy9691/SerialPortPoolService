@@ -283,54 +283,78 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
     /// <summary>
     /// Reserve port using existing foundation (ZERO TOUCH composition)
     /// </summary>
-    private async Task<PortReservation?> ReservePortAsync(string physicalPort, string clientId)
+   private async Task<PortReservation?> ReservePortAsync(string physicalPort, string clientId)
+{
+    try
     {
-        try
-        {
-            // Create reservation criteria for specific port
-            var criteria = new PortReservationCriteria
-            {
-                ValidationConfig = PortValidationConfiguration.CreateDevelopmentDefault(),
-                DefaultReservationDuration = TimeSpan.FromMinutes(10),
-                PreferredDeviceId = physicalPort // Use port name as device preference
-            };
+        _logger.LogInformation($"Reserving port {physicalPort} for {clientId}");
 
-            // Use existing reservation service (ZERO TOUCH)
-            var reservation = await _reservationService.ReservePortAsync(criteria, clientId);
-            
+        // SOLUTION DIRECTE: Créer des critères qui préfèrent fortement le port spécifique
+        var criteria = new PortReservationCriteria
+        {
+            ValidationConfig = PortValidationConfiguration.CreateDevelopmentDefault(),
+            DefaultReservationDuration = TimeSpan.FromMinutes(10),
+            PreferredDeviceId = physicalPort
+        };
+
+        // Essayer la réservation normale
+        var reservation = await _reservationService.ReservePortAsync(criteria, clientId);
+        
+        // Vérifier si on a bien eu le port demandé
+        if (reservation != null && reservation.PortName == physicalPort)
+        {
+            _logger.LogInformation($"Successfully reserved specific port {physicalPort}");
             return reservation;
         }
-        catch (Exception ex)
+        
+        // Si on n'a pas eu le bon port, libérer et échouer
+        if (reservation != null)
         {
-            _logger.LogError(ex, $"❌ Error reserving port {physicalPort}");
-            return null;
+            _logger.LogWarning($"Got port {reservation.PortName} instead of {physicalPort}, releasing");
+            await _reservationService.ReleaseReservationAsync(reservation.ReservationId, clientId);
         }
+        
+        _logger.LogError($"Could not reserve specific port {physicalPort}");
+        return null;
     }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"Error reserving port {physicalPort}");
+        return null;
+    }
+}
 
     /// <summary>
     /// Create protocol configuration from port configuration
     /// </summary>
     private static ProtocolConfiguration CreateProtocolConfiguration(string physicalPort, PortConfiguration portConfig)
+{
+    var protocolConfig = new ProtocolConfiguration
     {
-        var protocolConfig = new ProtocolConfiguration
-        {
-            PortName = physicalPort,
-            Protocol = portConfig.Protocol,
-            Speed = portConfig.Speed,
-            DataPattern = portConfig.DataPattern,
-            BibId = portConfig.ParentBibId,
-            UutId = portConfig.ParentUutId,
-            PortNumber = portConfig.PortNumber
-        };
+        PortName = physicalPort,
+        Protocol = portConfig.Protocol,
+        Speed = portConfig.Speed,
+        DataPattern = portConfig.DataPattern,
+        BibId = portConfig.ParentBibId,
+        UutId = portConfig.ParentUutId,
+        PortNumber = portConfig.PortNumber
+    };
 
-        // Copy protocol-specific settings
-        foreach (var setting in portConfig.Settings)
-        {
-            protocolConfig.Settings[setting.Key] = setting.Value;
-        }
+    // CORRECTION : Convertir les enums en string si nécessaire
+    if (portConfig.GetParity() != null)
+        protocolConfig.Settings["Parity"] = portConfig.GetParity().ToString();
+    
+    if (portConfig.GetStopBits() != null)
+        protocolConfig.Settings["StopBits"] = portConfig.GetStopBits().ToString();
 
-        return protocolConfig;
+    // Copy protocol-specific settings
+    foreach (var setting in portConfig.Settings)
+    {
+        protocolConfig.Settings[setting.Key] = setting.Value;
     }
+
+    return protocolConfig;
+}
 
     /// <summary>
     /// Execute 3-phase workflow (Start → Test → Stop)
@@ -1237,6 +1261,70 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
         
         _logger.LogInformation($"📊 ═══ END MULTI-BIB REPORT ═══");
     }
+
+    /// <summary>
+/// Execute a specific phase using a pre-reserved port (for workflow port stickiness)
+/// </summary>
+public async Task<CommandSequenceResult> ExecutePhaseWithFixedPortAsync(
+    string phase, 
+    string bibId, 
+    string uutId, 
+    int portNumber, 
+    string fixedPortName, 
+    string clientId,
+    CancellationToken cancellationToken = default)
+{
+    _logger.LogInformation($"🎯 Executing {phase} phase with FIXED PORT {fixedPortName}");
+    
+    try
+    {
+        // SKIP port reservation - use the fixed port directly
+        var portConfig = await LoadPortConfigurationAsync(bibId, uutId, portNumber);
+        var protocolHandler = _protocolFactory.GetHandler(portConfig.Protocol);
+        
+        // Create protocol configuration with FIXED port
+        var protocolConfig = new ProtocolConfiguration
+        {
+            PortName = fixedPortName,
+            BaudRate = portConfig.GetBaudRate(),
+            Parity = portConfig.GetParity().ToString(),
+            DataBits = portConfig.GetDataBits(),
+            StopBits = portConfig.GetStopBits().ToString(),
+            ReadTimeout = portConfig.GetReadTimeout(),
+            WriteTimeout = portConfig.GetWriteTimeout()
+        };
+        
+        // Open session on FIXED port
+        var session = await protocolHandler.OpenSessionAsync(protocolConfig, cancellationToken);
+        
+        try
+        {
+            // Execute the phase commands
+            var commands = phase.ToUpper() switch
+            {
+                "START" => portConfig.StartCommands,
+                "TEST" => portConfig.TestCommands,
+                "STOP" => portConfig.StopCommands,
+                _ => throw new ArgumentException($"Unknown phase: {phase}")
+            };
+            
+            return await ExecuteCommandSequenceAsync(protocolHandler, session, commands, phase, cancellationToken);
+        }
+        finally
+        {
+            await protocolHandler.CloseSessionAsync(session, cancellationToken);
+        }
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"❌ Fixed port phase execution failed: {phase} on {fixedPortName}");
+        
+        var errorResult = new CommandSequenceResult();
+        errorResult.CommandResults.Add(
+            CommandResult.Failure($"{phase}_PHASE_ERROR", ex.Message, TimeSpan.Zero));
+        return errorResult;
+    }
+}
 
     #endregion
 

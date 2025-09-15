@@ -85,6 +85,15 @@ public interface IBibWorkflowOrchestrator
         string clientId = "SummaryWorkflow",
         CancellationToken cancellationToken = default);
 
+    Task<CommandSequenceResult> ExecutePhaseWithFixedPortAsync(
+        string phase,
+        string bibId,
+        string uutId,
+        int portNumber,
+        string fixedPortName,
+        string clientId,
+        CancellationToken cancellationToken = default);
+
     // ===================================================================
     // SPRINT 10: IBibWorkflowOrchestrator Interface Update - Multi-BIB Methods
     // ADD to IBibWorkflowOrchestrator.cs (after existing methods)

@@ -34,7 +34,7 @@ public static class Sprint6ServiceExtensions
 
         // 3️⃣ Protocol Handler Services  
         services.AddScoped<IProtocolHandlerFactory, ProtocolHandlerFactory>();
-        services.AddScoped<RS232ProtocolHandler>();
+        services.AddTransient<RS232ProtocolHandler>();
 
         // 4️⃣ Essential Supporting Services - FIXED namespace conflict
         services.AddScoped<ISerialPortDiscovery, EnhancedSerialPortDiscoveryService>();

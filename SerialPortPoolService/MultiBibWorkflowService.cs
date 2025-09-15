@@ -23,6 +23,7 @@ public class MultiBibWorkflowService : IHostedService
     private readonly IBibConfigurationLoader _configLoader;
     private readonly ILogger<MultiBibWorkflowService> _logger;
     private readonly ILoggerFactory _loggerFactory;  // ← SPRINT 14: Logger factory for BitBang service
+    private readonly IPortReservationService _portReservationService;
     private readonly MultiBibServiceConfiguration _config;
 
     private Timer? _scheduledExecutionTimer;
@@ -34,12 +35,14 @@ public class MultiBibWorkflowService : IHostedService
         IBibConfigurationLoader configLoader,
         ILogger<MultiBibWorkflowService> logger,
         ILoggerFactory loggerFactory,  // ← SPRINT 14: Added for BitBang service creation
+        IPortReservationService portReservationService,
         MultiBibServiceConfiguration config)
     {
         _orchestrator = orchestrator;
         _configLoader = configLoader;
         _logger = logger;
         _loggerFactory = loggerFactory;  // ← SPRINT 14: Store logger factory
+        _portReservationService = portReservationService;
         _config = config;
     }
 
@@ -486,60 +489,50 @@ public class MultiBibWorkflowService : IHostedService
     /// <summary>
     /// Execute production cycle for a single UUT: START-once → TEST(loop) → STOP-once
     /// </summary>
-    private async Task ExecuteUutProductionCycleAsync(string bibId, UutConfiguration uut, 
-        HardwareSimulationConfig simConfig, CancellationToken cancellationToken)
+private async Task ExecuteUutProductionCycleAsync(string bibId, UutConfiguration uut, 
+    HardwareSimulationConfig simConfig, CancellationToken cancellationToken)
+{
+    var uutId = uut.UutId;
+    PortReservation? workflowReservation = null;
+    
+    try
     {
-        var uutId = uut.UutId;
-        _logger.LogInformation($"🔧 Starting independent production cycle: {bibId}.{uutId}");
-        
-        try
+        _logger.LogInformation($"🔧 Starting workflow with STICKY PORT for {bibId}.{uutId}");
+
+        // 1. Wait for START signal
+        var startReceived = await _bitBangService!.WaitForStartSignalAsync(uutId, simConfig);
+        if (!startReceived) return;
+
+        // 2. RESERVE PORT ONCE for entire workflow
+        workflowReservation = await ReserveWorkflowPortAsync(bibId, uutId);
+        if (workflowReservation == null)
         {
-            // 2. Wait for BitBang START signal (PER UUT_ID)
-            _logger.LogInformation($"⏳ Waiting for START signal: {bibId}.{uutId}");
-            var startReceived = await _bitBangService!.WaitForStartSignalAsync(uutId, simConfig);
-            
-            if (!startReceived)
-            {
-                _logger.LogWarning($"⚠️ START signal timeout or failure: {bibId}.{uutId}");
-                return;
-            }
-
-            // 3. Execute START phase ONCE (PER UUT_ID)
-            _logger.LogInformation($"🚀 Executing START phase: {bibId}.{uutId}");
-            var startResult = await ExecuteStartPhaseAsync(bibId, uutId);
-            
-            if (!startResult)
-            {
-                _logger.LogError($"❌ START phase failed: {bibId}.{uutId}");
-                return;
-            }
-
-            // 4. Continuous TEST loop (PER UUT_ID) - NEW PATTERN
-            _logger.LogInformation($"🔄 Starting continuous TEST loop: {bibId}.{uutId}");
-            await ExecuteContinuousTestLoopAsync(bibId, uutId, simConfig, cancellationToken);
-
-            // 5. Execute STOP phase ONCE (PER UUT_ID)
-            _logger.LogInformation($"🛑 Executing STOP phase: {bibId}.{uutId}");
-            var stopResult = await ExecuteStopPhaseAsync(bibId, uutId);
-            
-            if (stopResult)
-            {
-                _logger.LogInformation($"✅ Production cycle completed successfully: {bibId}.{uutId}");
-            }
-            else
-            {
-                _logger.LogWarning($"⚠️ STOP phase issues: {bibId}.{uutId}");
-            }
+            _logger.LogError("❌ Failed to reserve port for workflow {BibId}.{UutId}", bibId, uutId);
+            return;
         }
-        catch (OperationCanceledException)
+
+        _logger.LogInformation($"🔒 Reserved port {workflowReservation.PortName} for entire workflow {bibId}.{uutId}");
+
+        // 3. START phase with fixed port
+        var startResult = await ExecutePhaseWithFixedPortAsync("START", bibId, uutId, workflowReservation);
+        if (!startResult) return;
+
+        // 4. TEST LOOP with same fixed port
+        await ExecuteContinuousTestLoopWithFixedPortAsync(bibId, uutId, workflowReservation, simConfig, cancellationToken);
+
+        // 5. STOP phase with same fixed port
+        await ExecutePhaseWithFixedPortAsync("STOP", bibId, uutId, workflowReservation);
+    }
+    finally
+    {
+        // 6. RELEASE PORT only here
+        if (workflowReservation != null)
         {
-            _logger.LogInformation($"🛑 Production cycle cancelled: {bibId}.{uutId}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"💥 Production cycle exception: {bibId}.{uutId}");
+            await _portReservationService.ReleaseReservationAsync(workflowReservation.ReservationId, workflowReservation.ClientId);
+            _logger.LogInformation($"🔓 Released workflow port {workflowReservation.PortName} for {bibId}.{uutId}");
         }
     }
+}
 
     /// <summary>
     /// Continuous TEST loop - FIXED PRODUCTION PATTERN
@@ -733,53 +726,113 @@ private async Task<bool> ExecuteStopPhaseAsync(string bibId, string uutId)
         _logger.LogError(ex, $"❌ STOP phase failed: {bibId}.{uutId}");
         return false;
     }
+} 
+
+
+private async Task<PortReservation?> ReserveWorkflowPortAsync(string bibId, string uutId)
+{
+    var clientId = $"Production_WORKFLOW_{bibId}_{uutId}";
+    var criteria = new PortReservationCriteria 
+    { 
+        DefaultReservationDuration = TimeSpan.FromHours(1)
+    };
+    
+    return await _portReservationService.ReservePortAsync(criteria, clientId);
 }
 
-/// <summary>
-/// Helper: Extract error message from CommandSequenceResult
-/// </summary>
-private string GetErrorMessageFromResult(CommandSequenceResult result)
+private async Task<bool> ExecutePhaseWithFixedPortAsync(string phase, string bibId, string uutId, PortReservation reservation)
 {
-    if (result.CommandResults?.Any() == true)
+    try
     {
-        // Find first failed command with error message
-        var failedCommand = result.CommandResults.FirstOrDefault(cr => !cr.IsSuccess && !string.IsNullOrEmpty(cr.ErrorMessage));
-        if (failedCommand != null)
-        {
-            return failedCommand.ErrorMessage ?? "Unknown error";
-        }
+        _logger.LogInformation($"🎯 Executing {phase} phase with fixed port {reservation.PortName} for {bibId}.{uutId}");
         
-        // If no specific error message, return general failure info
-        var failedCount = result.CommandResults.Count(cr => !cr.IsSuccess);
-        return $"{failedCount} command(s) failed";
+        // Call orchestrator with SPECIFIC PORT instead of letting it reserve
+        var result = await _orchestrator.ExecutePhaseWithFixedPortAsync(
+            phase, bibId, uutId, 1, reservation.PortName, 
+            $"Production_{phase}_{bibId}_{uutId}",
+            _cancellationTokenSource?.Token ?? CancellationToken.None);
+        
+        var success = result.IsSuccess;
+        _logger.LogInformation($"✅ {phase} phase result: {success} - {result.SuccessfulCommands}/{result.TotalCommands} commands");
+        
+        return success;
     }
-    
-    return "No command results available";
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"❌ {phase} phase failed with fixed port {reservation.PortName}");
+        return false;
+    }
 }
+
+private async Task ExecuteContinuousTestLoopWithFixedPortAsync(string bibId, string uutId, 
+    PortReservation reservation, HardwareSimulationConfig simConfig, CancellationToken cancellationToken)
+{
+    var cycleCount = 0;
+    _logger.LogInformation($"🔄 Starting TEST loop with STICKY PORT {reservation.PortName} for {bibId}.{uutId}");
+    
+    while (!cancellationToken.IsCancellationRequested)
+    {
+        cycleCount++;
+        _logger.LogInformation($"🧪 TEST cycle #{cycleCount} with port {reservation.PortName}");
+        
+        // TEST with SAME fixed port
+        var testResult = await ExecutePhaseWithFixedPortAsync("TEST", bibId, uutId, reservation);
+        
+        // Check STOP conditions
+        var shouldStop = await CheckStopConditionsAsync(uutId, simConfig);
+        if (shouldStop) break;
+        
+        await Task.Delay(GetTestInterval(simConfig), cancellationToken);
+    }
+}
+
+    /// <summary>
+    /// Helper: Extract error message from CommandSequenceResult
+    /// </summary>
+    private string GetErrorMessageFromResult(CommandSequenceResult result)
+    {
+        if (result.CommandResults?.Any() == true)
+        {
+            // Find first failed command with error message
+            var failedCommand = result.CommandResults.FirstOrDefault(cr => !cr.IsSuccess && !string.IsNullOrEmpty(cr.ErrorMessage));
+            if (failedCommand != null)
+            {
+                return failedCommand.ErrorMessage ?? "Unknown error";
+            }
+
+            // If no specific error message, return general failure info
+            var failedCount = result.CommandResults.Count(cr => !cr.IsSuccess);
+            return $"{failedCount} command(s) failed";
+        }
+
+        return "No command results available";
+    }
 
     /// <summary>
     /// Helper: Discover configured BIB IDs
     /// </summary>
-    private async Task<List<string>> DiscoverConfiguredBibsAsync()
+  /// <summary>
+/// Helper: Discover configured BIB IDs - FIX: Use real multi-file discovery
+/// </summary>
+private async Task<List<string>> DiscoverConfiguredBibsAsync()
+{
+    try
     {
-        try
+        // FIX: Use the real XmlBibConfigurationLoader multi-file discovery
+        var configDir = "Configuration/"; // ou récupérer de _config.Metadata
+        var bibFiles = Directory.GetFiles(configDir, "bib_*.xml");
+        var discoveredBibs = new List<string>();
+        
+        foreach (var filePath in bibFiles)
         {
-            // TODO: Integrate with DynamicBibConfigurationService when available
-            // For now, use target BIB IDs from config or default
-            if (_config.TargetBibIds?.Any() == true)
-            {
-                _logger.LogInformation($"📋 Using configured target BIBs: {string.Join(", ", _config.TargetBibIds)}");
-                return _config.TargetBibIds;
-            }
+            var fileName = Path.GetFileName(filePath);
+            var bibId = ExtractBibIdFromFileName(fileName);
             
-            // Default discovery: try to load common BIB IDs
-            var defaultBibs = new[] { "client_demo", "production_line_1", "hardware_test" };
-            var discoveredBibs = new List<string>();
-            
-            foreach (var bibId in defaultBibs)
+            if (!string.IsNullOrEmpty(bibId))
             {
                 try
                 {
+                    // Valider que le BIB peut être chargé
                     var config = await _configLoader.LoadBibConfigurationAsync(bibId);
                     if (config != null)
                     {
@@ -787,20 +840,34 @@ private string GetErrorMessageFromResult(CommandSequenceResult result)
                         _logger.LogDebug($"📋 Discovered BIB: {bibId}");
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    _logger.LogDebug($"📋 BIB not found: {bibId}");
+                    _logger.LogWarning(ex, $"⚠️ Failed to load BIB: {bibId}");
                 }
             }
-            
-            return discoveredBibs;
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "❌ Error discovering BIBs");
-            return new List<string>();
-        }
+        
+        _logger.LogInformation($"📋 Multi-file discovery found {discoveredBibs.Count} BIBs: {string.Join(", ", discoveredBibs)}");
+        return discoveredBibs;
     }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "❌ Error discovering BIBs");
+        return new List<string>();
+    }
+}
+
+/// <summary>
+/// Extract BIB ID from filename (bib_xyz.xml → xyz)
+/// </summary>
+private string ExtractBibIdFromFileName(string fileName)
+{
+    if (fileName.StartsWith("bib_") && fileName.EndsWith(".xml"))
+    {
+        return fileName.Substring(4, fileName.Length - 8);
+    }
+    return string.Empty;
+}
 
     /// <summary>
     /// Helper: Check if result indicates critical failure
