@@ -365,7 +365,7 @@ class Program
             Console.WriteLine($"⚠️ Discovery error: {ex.Message}");
         }
     }
-    
+
     /// <summary>
     /// SPRINT 13: Configure services using Sprint13ServiceExtensions
     /// FIX: Configuration conditionnelle pour mode production
@@ -376,25 +376,22 @@ class Program
 
         try
         {
-            services.AddSprint13DemoServices();
-
-            // ✅ FIX: Only configure XML loader for non-production modes
+            // ✅ Variable existante - ne pas la redéclarer
             var isPureProduction = config.Metadata?.GetValueOrDefault("PureProductionMode", false) as bool? ?? false;
-            
-            if (!isPureProduction && !string.IsNullOrEmpty(config.DefaultConfigurationPath))
+
+            if (isPureProduction)
             {
-                Console.WriteLine($"📄 Configuring XML loader for path: {config.DefaultConfigurationPath}");
-                services.AddSingleton<IBibConfigurationLoader>(provider =>
-                {
-                    var loader = provider.GetRequiredService<XmlBibConfigurationLoader>();
-                    loader.SetDefaultConfigurationPath(config.DefaultConfigurationPath);
-                    return loader;
-                });
+                Console.WriteLine($"🏭 Production mode: Using Sprint 13 production-only services");
+                services.AddSprint13ProductionOnlyServices();
             }
             else
             {
-                Console.WriteLine($"🏭 Production mode: Using discovery-only configuration");
+                Console.WriteLine($"🔧 Demo mode: Using Sprint 13 demo services with auto-execution");
+                services.AddSprint13DemoServices();
             }
+
+            // Supprimer ou commenter la configuration XML loader conditionnelle existante
+            // car elle est maintenant gérée dans les méthodes d'extension
 
             Console.WriteLine("✅ SPRINT 13 Enhanced Services configured successfully");
         }

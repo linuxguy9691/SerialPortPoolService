@@ -33,30 +33,39 @@ public class BitBangProductionService
     /// <summary>
     /// TRANSPARENT: Wait for START signal per UUT_ID (simulation or physical)
     /// </summary>
-    public async Task<bool> WaitForStartSignalAsync(string uutId, HardwareSimulationConfig config)
+public async Task<bool> WaitForStartSignalAsync(string uutId, HardwareSimulationConfig config)
+{
+    _logger.LogInformation($"⏳ Waiting for START signal: UUT_ID={uutId}");
+    
+    try
     {
-        _logger.LogInformation($"⏳ Waiting for START signal: UUT_ID={uutId}");
-        
-        try
+        if (IsSimulationMode(config))
         {
-            if (IsSimulationMode(config))
+            // ✅ VÉRIFICATION NULL POUR START :
+            if (config.StartTrigger == null)
             {
-                _logger.LogDebug($"🎭 Using XML simulation for START: {uutId}");
-                return await SimulateStartTrigger(uutId, config.StartTrigger);
+                _logger.LogDebug($"🔄 No StartTrigger configured for {uutId} - waiting indefinitely");
+                // Attendre indéfiniment ou retourner false pour ne pas démarrer
+                await Task.Delay(Timeout.Infinite, CancellationToken.None);
+                return false;
             }
-            else
-            {
-                _logger.LogDebug($"🔌 Using physical BitBang for START: {uutId}");
-                var provider = await GetOrCreateBitBangProviderAsync(uutId, config);
-                return await WaitForPhysicalBitBangStart(provider, uutId, config.StartTrigger);
-            }
+            
+            _logger.LogDebug($"🎭 Using XML simulation for START: {uutId}");
+            return await SimulateStartTrigger(uutId, config.StartTrigger);
         }
-        catch (Exception ex)
+        else
         {
-            _logger.LogError(ex, $"❌ Error waiting for START signal: {uutId}");
-            return false;
+            _logger.LogDebug($"🔌 Using physical BitBang for START: {uutId}");
+            var provider = await GetOrCreateBitBangProviderAsync(uutId, config);
+            return await WaitForPhysicalBitBangStart(provider, uutId, config.StartTrigger);
         }
     }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"❌ Error waiting for START signal: {uutId}");
+        return false;
+    }
+}
 
     /// <summary>
     /// TRANSPARENT: Wait for STOP signal per UUT_ID (simulation or physical)
@@ -149,20 +158,26 @@ public class BitBangProductionService
     /// <summary>
     /// Simulate START trigger with realistic delays and UUT_ID tracking
     /// </summary>
-    private async Task<bool> SimulateStartTrigger(string uutId, StartTriggerConfig trigger)
+    private async Task<bool> SimulateStartTrigger(string uutId, StartTriggerConfig? trigger)
+{
+    if (trigger == null)
     {
-        var adjustedDelay = TimeSpan.FromSeconds(trigger.DelaySeconds);
-        _logger.LogDebug($"🎭 Simulating START delay: {adjustedDelay.TotalSeconds}s for {uutId}");
-        
-        UpdateUutState(uutId, UutSignalPhase.WaitingForStart);
-        
-        await Task.Delay(adjustedDelay);
-        
-        UpdateUutState(uutId, UutSignalPhase.Started);
-        
-        _logger.LogInformation($"✅ Simulated START trigger activated: {uutId} → {trigger.SuccessResponse}");
-        return true;
+        _logger.LogDebug($"🔄 No StartTrigger defined for {uutId} - skipping start simulation");
+        return true; // Pas de simulation = succès immédiat
     }
+    
+    var adjustedDelay = TimeSpan.FromSeconds(trigger.DelaySeconds);
+    _logger.LogDebug($"🎭 Simulating START delay: {adjustedDelay.TotalSeconds}s for {uutId}");
+    
+    UpdateUutState(uutId, UutSignalPhase.WaitingForStart);
+    
+    await Task.Delay(adjustedDelay);
+    
+    UpdateUutState(uutId, UutSignalPhase.Started);
+    
+    _logger.LogInformation($"✅ Simulated START trigger activated: {uutId} → {trigger.SuccessResponse}");
+    return true;
+}
 
     /// <summary>
     /// Simulate STOP trigger with various stop conditions per UUT_ID

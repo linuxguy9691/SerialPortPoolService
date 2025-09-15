@@ -910,20 +910,13 @@ private void ParseHardwareSimulation(XmlNode bibNode, BibConfiguration bib)
         // ✅ FIX: Parse triggers SEULEMENT s'ils existent dans le XML
         
         // Parse StartTrigger (toujours créer car généralement requis)
+        // Parse StartTrigger SEULEMENT s'il existe dans le XML
         var startTriggerNode = simNode.SelectSingleNode("StartTrigger");
         if (startTriggerNode != null)
         {
             config.StartTrigger = ParseStartTrigger(startTriggerNode);
         }
-        else
-        {
-            // Fallback : StartTrigger par défaut minimal
-            config.StartTrigger = new StartTriggerConfig
-            {
-                DelaySeconds = 1.0,
-                SuccessResponse = "START_DEFAULT"
-            };
-        }
+        // ✅ PAS de else - si pas de StartTrigger dans XML = reste null
 
         // ✅ FIX PRINCIPAL: Parse StopTrigger SEULEMENT s'il existe
         var stopTriggerNode = simNode.SelectSingleNode("StopTrigger");
@@ -999,32 +992,32 @@ private StartTriggerConfig ParseStartTrigger(XmlNode startTriggerNode)
     return config;
 }
 
-/// <summary>
-/// Parse StopTrigger from XML node
-/// <summary>
-/// Parse StopTrigger from XML node
-/// ✅ FIX: Version simplifiée sans propriété Enabled
-/// </summary>
-private StopTriggerConfig ParseStopTrigger(XmlNode stopTriggerNode)
-{
-    var config = new StopTriggerConfig();
-    
-    var delayNode = stopTriggerNode.SelectSingleNode("DelaySeconds");
-    if (delayNode != null && double.TryParse(delayNode.InnerText, out var delay))
+    /// <summary>
+    /// Parse StopTrigger from XML node
+    /// <summary>
+    /// Parse StopTrigger from XML node
+    /// ✅ FIX: Version simplifiée sans propriété Enabled
+    /// </summary>
+    private StopTriggerConfig ParseStopTrigger(XmlNode stopTriggerNode)
     {
-        config.DelaySeconds = delay;
+        var config = new StopTriggerConfig();
+
+        var delayNode = stopTriggerNode.SelectSingleNode("DelaySeconds");
+        if (delayNode != null && double.TryParse(delayNode.InnerText, out var delay))
+        {
+            config.DelaySeconds = delay;
+        }
+
+        var responseNode = stopTriggerNode.SelectSingleNode("SuccessResponse");
+        if (responseNode != null)
+        {
+            config.SuccessResponse = responseNode.InnerText;
+        }
+
+        // Supprimé : la propriété Enabled n'existe pas dans StopTriggerConfig
+
+        return config;
     }
-    
-    var responseNode = stopTriggerNode.SelectSingleNode("SuccessResponse");
-    if (responseNode != null)
-    {
-        config.SuccessResponse = responseNode.InnerText;
-    }
-    
-    // Supprimé : la propriété Enabled n'existe pas dans StopTriggerConfig
-    
-    return config;
-}
 
 /// <summary>
 /// Parse CriticalTrigger from XML node

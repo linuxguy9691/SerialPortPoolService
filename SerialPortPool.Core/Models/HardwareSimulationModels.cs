@@ -32,7 +32,7 @@ public class HardwareSimulationConfig
     /// <summary>
     /// Start trigger configuration - when to begin hardware simulation
     /// </summary>
-    public StartTriggerConfig StartTrigger { get; set; } = new();
+    public StartTriggerConfig StartTrigger { get; set; }
 
     /// <summary>
     /// Stop trigger configuration - when to end hardware simulation  
@@ -74,29 +74,28 @@ public class HardwareSimulationConfig
     public string GetSimulationSummary()
     {
         return $"Hardware Simulation: {Mode} mode, Speed: {SpeedMultiplier:F1}x, " +
-               $"Start: {StartTrigger.DelaySeconds}s, Stop: {(StopTrigger?.DelaySeconds.ToString() ?? "Infinite")}s, " +
-               $"Critical: {(CriticalTrigger.Enabled ? "Enabled" : "Disabled")}";
+            $"Start: {(StartTrigger?.DelaySeconds.ToString() ?? "None")}s, Stop: {(StopTrigger?.DelaySeconds.ToString() ?? "Infinite")}s, " +
+            $"Critical: {(CriticalTrigger.Enabled ? "Enabled" : "Disabled")}";
     }
 
     /// <summary>
     /// Validate simulation configuration
     /// </summary>
     public List<string> Validate()
-    {
-        var errors = new List<string>();
+{
+    var errors = new List<string>();
 
-        if (SpeedMultiplier <= 0 || SpeedMultiplier > 10)
-            errors.Add("Speed multiplier must be between 0.1 and 10.0");
+    if (SpeedMultiplier <= 0 || SpeedMultiplier > 10)
+        errors.Add("Speed multiplier must be between 0.1 and 10.0");
 
-        if (StartTrigger.DelaySeconds < 0)
-            errors.Add("Start trigger delay cannot be negative");
+    if (StartTrigger != null && StartTrigger.DelaySeconds < 0)
+        errors.Add("Start trigger delay cannot be negative");
 
-        if (StopTrigger.DelaySeconds < 0)
-            errors.Add("Stop trigger delay cannot be negative");
+    if (StopTrigger != null && StopTrigger.DelaySeconds < 0)
+        errors.Add("Stop trigger delay cannot be negative");
 
-        return errors;
-    }
-
+    return errors;
+}
     public override string ToString()
     {
         var status = Enabled ? "ENABLED" : "DISABLED";
