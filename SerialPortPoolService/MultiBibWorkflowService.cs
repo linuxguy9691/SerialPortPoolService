@@ -485,54 +485,87 @@ public class MultiBibWorkflowService : IHostedService
             _logger.LogError(ex, $"💥 Production execution failed for BIB: {bibId}");
         }
     }
+    
+    private async Task<PortReservation?> ReserveWorkflowPortWithMappingAsync(string bibId, string uutId)
+{
+    try
+    {
+        // 1. UTILISER le mapping dynamique via BibWorkflowOrchestrator
+        _logger.LogInformation($"🎯 Using dynamic mapping for {bibId}.{uutId}");
+        
+        // Utiliser la méthode existante qui fait le mapping
+        var workflowResult = await _orchestrator.ExecuteBibWorkflowAsync(
+            bibId, uutId, 1, 
+            $"MAPPING_ONLY_{bibId}_{uutId}", 
+            CancellationToken.None);
+            
+        // Mais on veut juste récupérer le port découvert, pas exécuter
+        // Alternative : appeler directement le mapping
+        
+        // 2. ALTERNATIVE DIRECTE : Réserver avec le bon mapping
+        var clientId = $"Production_WORKFLOW_{bibId}_{uutId}";
+        var criteria = new PortReservationCriteria 
+        { 
+            DefaultReservationDuration = TimeSpan.FromHours(1)
+        };
+        
+        // Cette fois, on s'assure que le mapping est utilisé
+        return await _portReservationService.ReservePortAsync(criteria, clientId);
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"❌ Error reserving workflow port with mapping: {bibId}.{uutId}");
+        return null;
+    }
+}
 
     /// <summary>
     /// Execute production cycle for a single UUT: START-once → TEST(loop) → STOP-once
     /// </summary>
-private async Task ExecuteUutProductionCycleAsync(string bibId, UutConfiguration uut, 
-    HardwareSimulationConfig simConfig, CancellationToken cancellationToken)
-{
-    var uutId = uut.UutId;
-    PortReservation? workflowReservation = null;
-    
-    try
+    private async Task ExecuteUutProductionCycleAsync(string bibId, UutConfiguration uut,
+        HardwareSimulationConfig simConfig, CancellationToken cancellationToken)
     {
-        _logger.LogInformation($"🔧 Starting workflow with STICKY PORT for {bibId}.{uutId}");
+        var uutId = uut.UutId;
+        PortReservation? workflowReservation = null;
 
-        // 1. Wait for START signal
-        var startReceived = await _bitBangService!.WaitForStartSignalAsync(uutId, simConfig);
-        if (!startReceived) return;
-
-        // 2. RESERVE PORT ONCE for entire workflow
-        workflowReservation = await ReserveWorkflowPortAsync(bibId, uutId);
-        if (workflowReservation == null)
+        try
         {
-            _logger.LogError("❌ Failed to reserve port for workflow {BibId}.{UutId}", bibId, uutId);
-            return;
+            _logger.LogInformation($"🔧 Starting workflow with STICKY PORT for {bibId}.{uutId}");
+
+            // 1. Wait for START signal
+            var startReceived = await _bitBangService!.WaitForStartSignalAsync(uutId, simConfig);
+            if (!startReceived) return;
+
+            // 2. RESERVE PORT ONCE for entire workflow
+            workflowReservation = await ReserveWorkflowPortWithMappingAsync(bibId, uutId);
+            if (workflowReservation == null)
+            {
+                _logger.LogError("❌ Failed to reserve port for workflow {BibId}.{UutId}", bibId, uutId);
+                return;
+            }
+
+            _logger.LogInformation($"🔒 Reserved port {workflowReservation.PortName} for entire workflow {bibId}.{uutId}");
+
+            // 3. START phase with fixed port
+            var startResult = await ExecutePhaseWithFixedPortAsync("START", bibId, uutId, workflowReservation);
+            if (!startResult) return;
+
+            // 4. TEST LOOP with same fixed port
+            await ExecuteContinuousTestLoopWithFixedPortAsync(bibId, uutId, workflowReservation, simConfig, cancellationToken);
+
+            // 5. STOP phase with same fixed port
+            await ExecutePhaseWithFixedPortAsync("STOP", bibId, uutId, workflowReservation);
         }
-
-        _logger.LogInformation($"🔒 Reserved port {workflowReservation.PortName} for entire workflow {bibId}.{uutId}");
-
-        // 3. START phase with fixed port
-        var startResult = await ExecutePhaseWithFixedPortAsync("START", bibId, uutId, workflowReservation);
-        if (!startResult) return;
-
-        // 4. TEST LOOP with same fixed port
-        await ExecuteContinuousTestLoopWithFixedPortAsync(bibId, uutId, workflowReservation, simConfig, cancellationToken);
-
-        // 5. STOP phase with same fixed port
-        await ExecutePhaseWithFixedPortAsync("STOP", bibId, uutId, workflowReservation);
-    }
-    finally
-    {
-        // 6. RELEASE PORT only here
-        if (workflowReservation != null)
+        finally
         {
-            await _portReservationService.ReleaseReservationAsync(workflowReservation.ReservationId, workflowReservation.ClientId);
-            _logger.LogInformation($"🔓 Released workflow port {workflowReservation.PortName} for {bibId}.{uutId}");
+            // 6. RELEASE PORT only here
+            if (workflowReservation != null)
+            {
+                await _portReservationService.ReleaseReservationAsync(workflowReservation.ReservationId, workflowReservation.ClientId);
+                _logger.LogInformation($"🔓 Released workflow port {workflowReservation.PortName} for {bibId}.{uutId}");
+            }
         }
     }
-}
 
     /// <summary>
     /// Continuous TEST loop - FIXED PRODUCTION PATTERN

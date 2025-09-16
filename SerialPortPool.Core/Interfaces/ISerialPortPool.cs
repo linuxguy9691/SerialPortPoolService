@@ -90,4 +90,9 @@ public interface ISerialPortPool
     /// </summary>
     /// <returns>Pool statistics</returns>
     Task<PoolStatistics> GetStatisticsAsync();
+
+    // <summary>
+    /// Allocate a specific port by name, or fail if not available
+    /// </summary>
+    Task<PortAllocation?> AllocateSpecificPortAsync(string portName, string? clientId = null);
 }

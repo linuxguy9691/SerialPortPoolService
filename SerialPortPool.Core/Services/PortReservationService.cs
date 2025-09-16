@@ -88,6 +88,56 @@ public class PortReservationService : IPortReservationService, IDisposable
     }
 
     /// <summary>
+/// Reserve a specific port by name, or fail if not available
+/// </summary>
+public async Task<PortReservation?> ReserveSpecificPortAsync(
+    string portName,
+    string clientId,
+    TimeSpan? reservationDuration = null)
+{
+    if (_disposed)
+    {
+        _logger.LogWarning("Cannot reserve specific port - service is disposed");
+        return null;
+    }
+
+    try
+    {
+        _logger.LogDebug("🎯 Attempting specific port reservation: {PortName} for client {ClientId}", portName, clientId);
+        
+        // Use the new AllocateSpecificPortAsync method
+        var allocation = await _existingPool.AllocateSpecificPortAsync(portName, clientId);
+            
+        if (allocation == null)
+        {
+            _logger.LogWarning("❌ Specific port {PortName} not available for client {ClientId}", portName, clientId);
+            return null;
+        }
+        
+        // Wrap in reservation using composition pattern
+        var duration = reservationDuration ?? TimeSpan.FromMinutes(30);
+        var reservation = PortReservation.CreateFromAllocation(allocation, duration);
+        
+        // Store reservation metadata
+        reservation.ReservationMetadata["ReservationType"] = "Specific";
+        reservation.ReservationMetadata["RequestedPort"] = portName;
+        
+        // Add to reservation tracking
+        _reservations[reservation.ReservationId] = reservation;
+        
+        _logger.LogInformation("✅ Specific port reserved - {PortName} → {ClientId} (ID: {ReservationId})", 
+            portName, clientId, reservation.ReservationId);
+            
+        return reservation;
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "💥 Specific port reservation failed: {PortName} for client {ClientId}", portName, clientId);
+        return null;
+    }
+}
+
+    /// <summary>
     /// POC: Release reservation using existing pool (ZERO TOUCH)
     /// </summary>
     public async Task<bool> ReleaseReservationAsync(string reservationId, string clientId)
@@ -103,29 +153,29 @@ public class PortReservationService : IPortReservationService, IDisposable
             _logger.LogWarning("❌ POC: Reservation not found - {ReservationId}", reservationId);
             return false;
         }
-        
+
         // Verify client ID for security
         if (reservation.ClientId != clientId)
         {
-            _logger.LogWarning("❌ POC: Client ID mismatch for reservation {ReservationId} (expected: {Expected}, got: {Actual})", 
+            _logger.LogWarning("❌ POC: Client ID mismatch for reservation {ReservationId} (expected: {Expected}, got: {Actual})",
                 reservationId, reservation.ClientId, clientId);
             return false;
         }
-            
+
         try
         {
             // Release using existing pool method (NO MODIFICATION)
             var released = await _existingPool.ReleasePortAsync(
-                reservation.PortName, 
+                reservation.PortName,
                 reservation.SessionId);
-                
+
             if (released)
             {
                 _reservations.TryRemove(reservationId, out _);
-                _logger.LogInformation("🔓 POC: Reservation released - {ReservationId} ({PortName})", 
+                _logger.LogInformation("🔓 POC: Reservation released - {ReservationId} ({PortName})",
                     reservationId, reservation.PortName);
             }
-            
+
             return released;
         }
         catch (Exception ex)

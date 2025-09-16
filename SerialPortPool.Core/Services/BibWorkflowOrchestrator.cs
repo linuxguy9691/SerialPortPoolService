@@ -283,43 +283,28 @@ public class BibWorkflowOrchestrator : IBibWorkflowOrchestrator
     /// <summary>
     /// Reserve port using existing foundation (ZERO TOUCH composition)
     /// </summary>
-   private async Task<PortReservation?> ReservePortAsync(string physicalPort, string clientId)
+  private async Task<PortReservation?> ReservePortAsync(string physicalPort, string clientId)
 {
     try
     {
-        _logger.LogInformation($"Reserving port {physicalPort} for {clientId}");
+        _logger.LogInformation($"🔒 Reserving SPECIFIC port: {physicalPort} for {clientId}");
 
-        // SOLUTION DIRECTE: Créer des critères qui préfèrent fortement le port spécifique
-        var criteria = new PortReservationCriteria
-        {
-            ValidationConfig = PortValidationConfiguration.CreateDevelopmentDefault(),
-            DefaultReservationDuration = TimeSpan.FromMinutes(10),
-            PreferredDeviceId = physicalPort
-        };
-
-        // Essayer la réservation normale
-        var reservation = await _reservationService.ReservePortAsync(criteria, clientId);
+        // Utiliser la nouvelle méthode de réservation spécifique
+        var reservation = await _reservationService.ReserveSpecificPortAsync(
+            physicalPort, clientId, TimeSpan.FromMinutes(50));
         
-        // Vérifier si on a bien eu le port demandé
-        if (reservation != null && reservation.PortName == physicalPort)
+        if (reservation != null)
         {
-            _logger.LogInformation($"Successfully reserved specific port {physicalPort}");
+            _logger.LogInformation($"✅ Successfully reserved specific port {physicalPort}");
             return reservation;
         }
         
-        // Si on n'a pas eu le bon port, libérer et échouer
-        if (reservation != null)
-        {
-            _logger.LogWarning($"Got port {reservation.PortName} instead of {physicalPort}, releasing");
-            await _reservationService.ReleaseReservationAsync(reservation.ReservationId, clientId);
-        }
-        
-        _logger.LogError($"Could not reserve specific port {physicalPort}");
+        _logger.LogError($"❌ Could not reserve specific port {physicalPort} - not available");
         return null;
     }
     catch (Exception ex)
     {
-        _logger.LogError(ex, $"Error reserving port {physicalPort}");
+        _logger.LogError(ex, $"💥 Error reserving specific port {physicalPort}");
         return null;
     }
 }

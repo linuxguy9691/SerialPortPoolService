@@ -26,7 +26,7 @@ public class SerialPortPool : ISerialPortPool, IDisposable
     /// Constructor with dependency injection - Phase 3 Enhanced with Smart Caching
     /// </summary>
     public SerialPortPool(
-        ISerialPortDiscovery discovery, 
+        ISerialPortDiscovery discovery,
         ISerialPortValidator validator,
         ISystemInfoCache systemInfoCache,  // ← PHASE 3: Interface parameter
         ILogger<SerialPortPool> logger)
@@ -35,7 +35,7 @@ public class SerialPortPool : ISerialPortPool, IDisposable
         _validator = validator ?? throw new ArgumentNullException(nameof(validator));
         _systemInfoCache = systemInfoCache ?? throw new ArgumentNullException(nameof(systemInfoCache));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        
+
         _logger.LogInformation("SerialPortPool initialized with enhanced validation support + smart caching (Phase 3)");
     }
 
@@ -59,7 +59,7 @@ public class SerialPortPool : ISerialPortPool, IDisposable
 
             // Phase 2: Discover ports with validation filtering
             var availablePorts = await _discovery.DiscoverPortsAsync();
-            
+
             // Phase 2: Apply validation filtering if config provided
             IEnumerable<SerialPortInfo> validPorts = availablePorts;
             if (config != null)
@@ -67,11 +67,11 @@ public class SerialPortPool : ISerialPortPool, IDisposable
                 validPorts = await _validator.GetValidPortsAsync(availablePorts, config);
                 _logger.LogDebug($"Validation filtered ports: {availablePorts.Count()} → {validPorts.Count()}");
             }
-            
+
             foreach (var portInfo in validPorts)
             {
                 // Check if port is already allocated AND ACTIVE (Phase 1 thread-safety)
-                if (_allocations.TryGetValue(portInfo.PortName, out var existingAllocation) 
+                if (_allocations.TryGetValue(portInfo.PortName, out var existingAllocation)
                     && existingAllocation.IsActive)
                 {
                     _logger.LogDebug($"Port {portInfo.PortName} already allocated and active, skipping");
@@ -80,7 +80,7 @@ public class SerialPortPool : ISerialPortPool, IDisposable
 
                 // Phase 2: Enhanced allocation with validation result logging
                 var allocation = PortAllocation.Create(portInfo.PortName, clientId);
-                
+
                 // Phase 2: Store validation metadata in allocation
                 if (portInfo.ValidationResult != null)
                 {
@@ -88,7 +88,7 @@ public class SerialPortPool : ISerialPortPool, IDisposable
                     allocation.Metadata["ValidationReason"] = portInfo.ValidationResult.Reason;
                     allocation.Metadata["IsFtdiDevice"] = portInfo.IsFtdiDevice.ToString();
                     allocation.Metadata["FtdiChipType"] = portInfo.FtdiChipType;
-                    
+
                     if (portInfo.FtdiInfo != null)
                     {
                         allocation.Metadata["FtdiVendorId"] = portInfo.FtdiInfo.VendorId;
@@ -97,7 +97,7 @@ public class SerialPortPool : ISerialPortPool, IDisposable
                         allocation.Metadata["Is4232H"] = portInfo.FtdiInfo.Is4232H.ToString();
                     }
                 }
-                
+
                 _allocations[portInfo.PortName] = allocation;
 
                 _logger.LogInformation($"Successfully allocated port {portInfo.PortName} to client {clientId ?? "Unknown"} (Session: {allocation.SessionId}, Validation: {portInfo.ValidationStatus})");
@@ -155,9 +155,9 @@ public class SerialPortPool : ISerialPortPool, IDisposable
 
             // Mark as released and update allocation
             allocation.Release();
-            
+
             _logger.LogInformation($"Successfully released port {portName} (Session: {allocation.SessionId}, Duration: {allocation.AllocationDuration.TotalMinutes:F1}min)");
-            
+
             return true;
         }
         catch (Exception ex)
@@ -181,10 +181,10 @@ public class SerialPortPool : ISerialPortPool, IDisposable
             return Enumerable.Empty<PortAllocation>();
         }
 
-        await Task.CompletedTask; 
-        
-        var allocations = _allocations.Values.ToList(); 
-        
+        await Task.CompletedTask;
+
+        var allocations = _allocations.Values.ToList();
+
         _logger.LogDebug($"Retrieved {allocations.Count} port allocations");
         return allocations;
     }
@@ -216,7 +216,7 @@ public class SerialPortPool : ISerialPortPool, IDisposable
 
             // Phase 3: Use smart caching system
             var systemInfo = await _systemInfoCache.GetSystemInfoAsync(portName, forceRefresh);
-            
+
             if (systemInfo != null && systemInfo.IsDataValid)
             {
                 _logger.LogInformation($"SystemInfo retrieved for {portName}: {systemInfo.GetSummary()}");
@@ -259,11 +259,11 @@ public class SerialPortPool : ISerialPortPool, IDisposable
         {
             // Phase 2: Enhanced count with validation support
             var availablePorts = await _discovery.DiscoverPortsAsync();
-            
+
             // Filter out already allocated ports
-            var unallocatedPorts = availablePorts.Where(p => 
+            var unallocatedPorts = availablePorts.Where(p =>
                 !_allocations.TryGetValue(p.PortName, out var allocation) || !allocation.IsActive);
-            
+
             // Phase 2: Apply validation if config provided
             if (config != null)
             {
@@ -335,7 +335,7 @@ public class SerialPortPool : ISerialPortPool, IDisposable
         // Phase 2: Enhanced refresh
         var discoveredPorts = await _discovery.DiscoverPortsAsync();
         var count = discoveredPorts.Count();
-        
+
         _logger.LogInformation($"Pool refresh discovered {count} ports");
         return count;
     }
@@ -350,12 +350,12 @@ public class SerialPortPool : ISerialPortPool, IDisposable
         var activeAllocations = allAllocations.Where(a => a.IsActive).ToList();
         var totalPorts = await RefreshPoolAsync();
         var allocatedPorts = activeAllocations.Count;
-        
+
         // Phase 2: Count FTDI devices in active allocations
-        var ftdiAllocations = activeAllocations.Where(a => 
-            a.Metadata.ContainsKey("IsFtdiDevice") && 
+        var ftdiAllocations = activeAllocations.Where(a =>
+            a.Metadata.ContainsKey("IsFtdiDevice") &&
             a.Metadata["IsFtdiDevice"] == "True").Count();
-        
+
         var stats = new PoolStatistics
         {
             TotalPorts = totalPorts,
@@ -364,11 +364,11 @@ public class SerialPortPool : ISerialPortPool, IDisposable
             ErrorPorts = 0, // Basic error tracking
             ActiveClients = activeAllocations.Select(a => a.AllocatedTo).Where(c => c != null).Distinct().Count(),
             TotalAllocations = allAllocations.Count(),
-            AverageAllocationDurationMinutes = allAllocations.Any() ? 
+            AverageAllocationDurationMinutes = allAllocations.Any() ?
                 allAllocations.Average(a => a.AllocationDuration.TotalMinutes) : 0,
             GeneratedAt = DateTime.Now
         };
-        
+
         // Phase 3: Add cache statistics to logging
         try
         {
@@ -379,7 +379,7 @@ public class SerialPortPool : ISerialPortPool, IDisposable
         {
             _logger.LogDebug(ex, "Could not get cache statistics");
         }
-        
+
         return stats;
     }
 
@@ -398,24 +398,58 @@ public class SerialPortPool : ISerialPortPool, IDisposable
         if (!_disposed && disposing)
         {
             _logger.LogInformation("Disposing SerialPortPool...");
-            
+
             try
             {
                 _allocationSemaphore.Dispose();
-                
+
                 // Phase 3: Dispose cache
                 _systemInfoCache?.Dispose();
-                
+
                 _logger.LogInformation("SerialPortPool disposed successfully");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during SerialPortPool disposal");
             }
-            
+
             _disposed = true;
         }
     }
 
+public async Task<PortAllocation?> AllocateSpecificPortAsync(string portName, string? clientId = null)
+{
+    await _allocationSemaphore.WaitAsync();
+    try
+    {
+        // Vérifier si le port spécifique est déjà alloué
+        if (_allocations.TryGetValue(portName, out var existingAllocation) && existingAllocation.IsActive)
+        {
+            _logger.LogWarning($"Port {portName} demandé mais déjà alloué - client {clientId} doit attendre");
+            return null;
+        }
+
+        // Découvrir et valider le port spécifique
+        var availablePorts = await _discovery.DiscoverPortsAsync();
+        var targetPort = availablePorts.FirstOrDefault(p => p.PortName == portName);
+        
+        if (targetPort == null)
+        {
+            _logger.LogWarning($"Port spécifique {portName} non trouvé pour client {clientId}");
+            return null;
+        }
+
+        // Allouer le port spécifique
+        var allocation = PortAllocation.Create(portName, clientId);
+        _allocations[portName] = allocation;
+        
+        _logger.LogInformation($"Port spécifique alloué: {portName} → {clientId}");
+        return allocation;
+    }
+    finally
+    {
+        _allocationSemaphore.Release();
+    }
+}
     #endregion
 }

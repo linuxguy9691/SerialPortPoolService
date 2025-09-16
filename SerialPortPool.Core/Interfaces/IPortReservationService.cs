@@ -76,4 +76,13 @@ public interface IPortReservationService : IDisposable
     /// </summary>
     /// <returns>Reservation statistics</returns>
     Task<ReservationStatistics> GetReservationStatisticsAsync();
+
+    // Ajouter cette méthode dans l'interface
+    /// <summary>
+    /// Reserve a specific port by name, or fail if not available
+    /// </summary>
+    Task<PortReservation?> ReserveSpecificPortAsync(
+        string portName,
+        string clientId,
+    TimeSpan? reservationDuration = null);  
 }
