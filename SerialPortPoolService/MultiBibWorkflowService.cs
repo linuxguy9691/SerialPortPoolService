@@ -49,76 +49,45 @@ public class MultiBibWorkflowService : IHostedService
     /// <summary>
     /// Start Multi-BIB service
     /// </summary>
-    public async Task StartAsync(CancellationToken cancellationToken)
+public async Task StartAsync(CancellationToken cancellationToken)
 {
     _logger.LogCritical($"🚨 DEBUG: MultiBibWorkflowService starting with mode: {_config.ExecutionMode}");
-    _logger.LogInformation("🚀 Multi-BIB Workflow Service Starting...");
-    _logger.LogInformation($"📋 Mode: {_config.ExecutionMode}");
+    // ... code existant ...
 
+    // 🏭 SPRINT 14 FIX: Handle production mode specially
+    if (_config.ExecutionMode == MultiBibExecutionMode.Production)
+{
+    _logger.LogCritical("🚨 DEBUG: Production case REACHED!");
+    _logger.LogInformation("🏭 Production BitBang mode - taking direct control...");
     _cancellationTokenSource = new CancellationTokenSource();
-
     try
     {
-        // Initialize configuration loader
-        if (!string.IsNullOrEmpty(_config.DefaultConfigurationPath))
+        _ = Task.Run(async () => 
         {
-            _configLoader.SetDefaultConfigurationPath(_config.DefaultConfigurationPath);
-            _logger.LogInformation($"📄 Configuration path: {_config.DefaultConfigurationPath}");
-        }
-
-        // 🏭 SPRINT 14: Handle production mode specially
-        if (_config.ExecutionMode == MultiBibExecutionMode.Production)
-        {
-            _logger.LogCritical("🚨 DEBUG: Production case REACHED!");
-            _logger.LogInformation("🏭 Production BitBang mode - taking direct control...");
-
-                // Add a delay to let other services initialize
-            // Change: NO delay - start immediately to beat DynamicBibConfigurationService
-            //FIXME: await Task.Delay(3000, cancellationToken);
-
-                // Start production mode
-                _ = Task.Run(() => ExecuteProductionModeAsync(_cancellationTokenSource.Token), cancellationToken);
-            
-            _logger.LogInformation("✅ Production mode started - bypassing standard workflow orchestration");
-            return; // Exit early
-        }
-
-        // Start based on execution mode (existing logic)
-        switch (_config.ExecutionMode)
-        {
-            case MultiBibExecutionMode.SingleRun:
-                _ = Task.Run(() => ExecuteSingleRunAsync(_cancellationTokenSource.Token), cancellationToken);
-                break;
-
-            case MultiBibExecutionMode.Scheduled:
-                StartScheduledExecution();
-                break;
-
-            case MultiBibExecutionMode.Continuous:
-                _ = Task.Run(() => ExecuteContinuousAsync(_cancellationTokenSource.Token), cancellationToken);
-                break;
-
-            case MultiBibExecutionMode.OnDemand:
-                _logger.LogInformation("📡 On-demand mode - waiting for execution requests");
-                break;
-
-            case MultiBibExecutionMode.Production:  
-                _logger.LogCritical("🎯 DEBUG: Production case REACHED!");
-                _logger.LogInformation("🏭 Production BitBang mode - taking direct control...");
-                _ = Task.Run(() => ExecuteProductionModeAsync(_cancellationTokenSource.Token), cancellationToken);
-                _logger.LogInformation("✅ Production mode started - bypassing standard workflow orchestration");
-                break;
-
-            default:
-                throw new InvalidOperationException($"Unknown execution mode: {_config.ExecutionMode}");
-        }
-
-        _logger.LogInformation("✅ Multi-BIB Workflow Service Started Successfully");
+            try
+            {
+                await ExecuteProductionModeAsync(_cancellationTokenSource.Token);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogCritical(ex, "🚨 FATAL: Exception in Task.Run ExecuteProductionModeAsync");
+            }
+        }, cancellationToken);
+        
+        _logger.LogInformation("✅ Production mode started - bypassing standard workflow orchestration");
     }
     catch (Exception ex)
     {
-        _logger.LogError(ex, "❌ Failed to start Multi-BIB Workflow Service");
-        throw;
+        _logger.LogCritical(ex, "🚨 FATAL: Exception creating Task.Run");
+    }
+    
+    return;
+}
+
+    // Continue avec le switch existant pour les autres modes...
+    switch (_config.ExecutionMode)
+    {
+        // ... existing cases unchanged
     }
 }
 
@@ -410,19 +379,17 @@ public class MultiBibWorkflowService : IHostedService
             _logger.LogInformation("🔌 BitBang Production Service initialized");
         }
 
-        // Use existing DynamicBibConfigurationService for BIB discovery
+        // Use existing discovery for BIB discovery
         _logger.LogCritical("🚨 DEBUG: About to discover BIBs...");
         var discoveredBibs = await DiscoverConfiguredBibsAsync();
         _logger.LogCritical($"🚨 DEBUG: Discovered {discoveredBibs.Count} BIBs: {string.Join(", ", discoveredBibs)}");
         
         if (!discoveredBibs.Any())
         {
-            _logger.LogCritical("🚨 DEBUG: No BIBs discovered - method will return");
             _logger.LogWarning("⚠️ No BIBs discovered for production mode");
             return;
         }
 
-        _logger.LogCritical("🚨 DEBUG: About to execute BIBs...");
         // Execute all BIBs in parallel (each BIB manages its own UUTs)
         var bibTasks = discoveredBibs.Select(bibId => 
             ExecuteSingleBibProductionAsync(bibId, cancellationToken));
@@ -433,13 +400,10 @@ public class MultiBibWorkflowService : IHostedService
     }
     catch (Exception ex)
     {
-        _logger.LogCritical(ex, "🚨 DEBUG: EXCEPTION in ExecuteProductionModeAsync");
         _logger.LogError(ex, "💥 Production mode execution failed");
     }
     finally
     {
-        _logger.LogCritical("🚨 DEBUG: ExecuteProductionModeAsync ENDED");
-        // Cleanup BitBang service
         _bitBangService?.Dispose();
         _bitBangService = null;
     }
@@ -449,73 +413,38 @@ public class MultiBibWorkflowService : IHostedService
     /// Execute production workflow for a single BIB with all its UUTs
     /// </summary>
     private async Task ExecuteSingleBibProductionAsync(string bibId, CancellationToken cancellationToken)
-    {
-        _logger.LogInformation($"🏭 Starting production execution for BIB: {bibId}");
-        
-        try
-        {
-            // 1. Load BIB configuration (REUSE existing)
-            var bibConfig = await _configLoader.LoadBibConfigurationAsync(bibId);
-            if (bibConfig == null)
-            {
-                _logger.LogError($"❌ Could not load BIB configuration: {bibId}");
-                return;
-            }
-
-            var simConfig = bibConfig.HardwareSimulation;
-            if (simConfig == null)
-            {
-                _logger.LogWarning($"⚠️ No hardware simulation config for BIB: {bibId} - using defaults");
-                simConfig = new HardwareSimulationConfig { Enabled = true };
-            }
-            
-            _logger.LogInformation($"📊 BIB {bibId}: {bibConfig.Uuts.Count} UUTs detected for production");
-            _logger.LogInformation($"🎭 Simulation: {simConfig.GetSimulationSummary()}");
-
-            // Execute all UUTs in parallel (each UUT independent cycle)
-            var uutTasks = bibConfig.Uuts.Select(uut => 
-                ExecuteUutProductionCycleAsync(bibId, uut, simConfig, cancellationToken));
-                
-            await Task.WhenAll(uutTasks);
-            
-            _logger.LogInformation($"✅ Production execution completed for BIB: {bibId}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"💥 Production execution failed for BIB: {bibId}");
-        }
-    }
-    
-    private async Task<PortReservation?> ReserveWorkflowPortWithMappingAsync(string bibId, string uutId)
 {
+    _logger.LogInformation($"🏭 Starting production execution for BIB: {bibId}");
+    
     try
     {
-        // 1. UTILISER le mapping dynamique via BibWorkflowOrchestrator
-        _logger.LogInformation($"🎯 Using dynamic mapping for {bibId}.{uutId}");
+        var bibConfig = await _configLoader.LoadBibConfigurationAsync(bibId);
+        if (bibConfig == null)
+        {
+            _logger.LogError($"❌ Could not load BIB configuration: {bibId}");
+            return;
+        }
+
+        var simConfig = bibConfig.HardwareSimulation;
+        if (simConfig == null)
+        {
+            _logger.LogWarning($"⚠️ No hardware simulation config for BIB: {bibId} - using defaults");
+            simConfig = new HardwareSimulationConfig { Enabled = true };
+        }
         
-        // Utiliser la méthode existante qui fait le mapping
-        var workflowResult = await _orchestrator.ExecuteBibWorkflowAsync(
-            bibId, uutId, 1, 
-            $"MAPPING_ONLY_{bibId}_{uutId}", 
-            CancellationToken.None);
+        _logger.LogInformation($"📊 BIB {bibId}: {bibConfig.Uuts.Count} UUTs detected for production");
+        _logger.LogInformation($"🎭 Simulation: {simConfig.GetSimulationSummary()}");
+
+        var uutTasks = bibConfig.Uuts.Select(uut => 
+            ExecuteUutProductionCycleAsync(bibId, uut, simConfig, cancellationToken));
             
-        // Mais on veut juste récupérer le port découvert, pas exécuter
-        // Alternative : appeler directement le mapping
+        await Task.WhenAll(uutTasks);
         
-        // 2. ALTERNATIVE DIRECTE : Réserver avec le bon mapping
-        var clientId = $"Production_WORKFLOW_{bibId}_{uutId}";
-        var criteria = new PortReservationCriteria 
-        { 
-            DefaultReservationDuration = TimeSpan.FromHours(1)
-        };
-        
-        // Cette fois, on s'assure que le mapping est utilisé
-        return await _portReservationService.ReservePortAsync(criteria, clientId);
+        _logger.LogInformation($"✅ Production execution completed for BIB: {bibId}");
     }
     catch (Exception ex)
     {
-        _logger.LogError(ex, $"❌ Error reserving workflow port with mapping: {bibId}.{uutId}");
-        return null;
+        _logger.LogError(ex, $"💥 Production execution failed for BIB: {bibId}");
     }
 }
 
@@ -523,49 +452,46 @@ public class MultiBibWorkflowService : IHostedService
     /// Execute production cycle for a single UUT: START-once → TEST(loop) → STOP-once
     /// </summary>
     private async Task ExecuteUutProductionCycleAsync(string bibId, UutConfiguration uut,
-        HardwareSimulationConfig simConfig, CancellationToken cancellationToken)
+    HardwareSimulationConfig simConfig, CancellationToken cancellationToken)
+{
+    var uutId = uut.UutId;
+    
+    try
     {
-        var uutId = uut.UutId;
-        PortReservation? workflowReservation = null;
+        _logger.LogInformation($"🔧 Starting workflow with STICKY PORT for {bibId}.{uutId}");
 
-        try
+        // 1. Wait for START signal
+        var startReceived = await _bitBangService!.WaitForStartSignalAsync(uutId, simConfig);
+        if (!startReceived) 
         {
-            _logger.LogInformation($"🔧 Starting workflow with STICKY PORT for {bibId}.{uutId}");
-
-            // 1. Wait for START signal
-            var startReceived = await _bitBangService!.WaitForStartSignalAsync(uutId, simConfig);
-            if (!startReceived) return;
-
-            // 2. RESERVE PORT ONCE for entire workflow
-            workflowReservation = await ReserveWorkflowPortWithMappingAsync(bibId, uutId);
-            if (workflowReservation == null)
-            {
-                _logger.LogError("❌ Failed to reserve port for workflow {BibId}.{UutId}", bibId, uutId);
-                return;
-            }
-
-            _logger.LogInformation($"🔒 Reserved port {workflowReservation.PortName} for entire workflow {bibId}.{uutId}");
-
-            // 3. START phase with fixed port
-            var startResult = await ExecutePhaseWithFixedPortAsync("START", bibId, uutId, workflowReservation);
-            if (!startResult) return;
-
-            // 4. TEST LOOP with same fixed port
-            await ExecuteContinuousTestLoopWithFixedPortAsync(bibId, uutId, workflowReservation, simConfig, cancellationToken);
-
-            // 5. STOP phase with same fixed port
-            await ExecutePhaseWithFixedPortAsync("STOP", bibId, uutId, workflowReservation);
+            _logger.LogWarning($"⚠️ START signal not received for {uutId}");
+            return;
         }
-        finally
+
+        // 2. START phase using orchestrator
+        _logger.LogInformation($"🚀 Executing START phase for {bibId}.{uutId}");
+        var startResult = await _orchestrator.ExecuteStartPhaseOnlyAsync(bibId, uutId, 1, $"Production_START_{bibId}_{uutId}");
+        if (!startResult.IsSuccess) 
         {
-            // 6. RELEASE PORT only here
-            if (workflowReservation != null)
-            {
-                await _portReservationService.ReleaseReservationAsync(workflowReservation.ReservationId, workflowReservation.ClientId);
-                _logger.LogInformation($"🔓 Released workflow port {workflowReservation.PortName} for {bibId}.{uutId}");
-            }
+            _logger.LogError($"❌ START phase failed for {bibId}.{uutId}");
+            return;
         }
+
+        // 3. TEST LOOP
+        _logger.LogInformation($"🔄 Starting continuous TEST loop for {bibId}.{uutId}");
+        await ExecuteContinuousTestLoopAsync(bibId, uutId, simConfig, cancellationToken);
+
+        // 4. STOP phase
+        _logger.LogInformation($"🛑 Executing STOP phase for {bibId}.{uutId}");
+        await _orchestrator.ExecuteStopPhaseOnlyAsync(bibId, uutId, 1, $"Production_STOP_{bibId}_{uutId}");
+
+        _logger.LogInformation($"✅ Production execution completed for BIB: {bibId}.{uutId}");
     }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"💥 Production cycle exception: {bibId}.{uutId}");
+    }
+}
 
     /// <summary>
     /// Continuous TEST loop - FIXED PRODUCTION PATTERN

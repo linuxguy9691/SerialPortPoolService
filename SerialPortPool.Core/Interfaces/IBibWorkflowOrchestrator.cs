@@ -136,37 +136,39 @@ public interface IBibWorkflowOrchestrator
         bool includeDetailedLogs = true,
         string clientId = "CompleteBibSystemWorkflow",
         CancellationToken cancellationToken = default);
-    
+
     // AJOUTER ces signatures à IBibWorkflowOrchestrator.cs (après les méthodes existantes)
 
-/// <summary>
-/// Execute START phase only - for Production Mode
-/// </summary>
-Task<CommandSequenceResult> ExecuteStartPhaseOnlyAsync(
-    string bibId,
-    string uutId,
-    int portNumber = 1,
-    string clientId = "ProductionMode",
-    CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Execute START phase only - for Production Mode
+    /// </summary>
+    Task<CommandSequenceResult> ExecuteStartPhaseOnlyAsync(
+        string bibId,
+        string uutId,
+        int portNumber = 1,
+        string clientId = "ProductionMode",
+        CancellationToken cancellationToken = default);
 
-/// <summary>
-/// Execute TEST phase only - for Production Mode continuous loop
-/// </summary>
-Task<CommandSequenceResult> ExecuteTestPhaseOnlyAsync(
-    string bibId,
-    string uutId,
-    int portNumber = 1,
-    string clientId = "ProductionMode",
-    CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Execute TEST phase only - for Production Mode continuous loop
+    /// </summary>
+    Task<CommandSequenceResult> ExecuteTestPhaseOnlyAsync(
+        string bibId,
+        string uutId,
+        int portNumber = 1,
+        string clientId = "ProductionMode",
+        CancellationToken cancellationToken = default);
 
-/// <summary>
-/// Execute STOP phase only - for Production Mode
-/// </summary>
-Task<CommandSequenceResult> ExecuteStopPhaseOnlyAsync(
-    string bibId,
-    string uutId,
-    int portNumber = 1,
-    string clientId = "ProductionMode",
-    CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Execute STOP phase only - for Production Mode
+    /// </summary>
+    Task<CommandSequenceResult> ExecuteStopPhaseOnlyAsync(
+        string bibId,
+        string uutId,
+        int portNumber = 1,
+        string clientId = "ProductionMode",
+        CancellationToken cancellationToken = default);
+    
+
 }
 
