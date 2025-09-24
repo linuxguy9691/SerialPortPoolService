@@ -9,8 +9,10 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SerialPortPool.Core.Interfaces;
 using SerialPortPool.Core.Models;
+using SerialPortPool.Core.Services.Configuration;
 
 namespace SerialPortPoolService.Services;
+
 
 /// <summary>
 /// Production Multi-BIB Workflow Service
@@ -25,6 +27,7 @@ public class MultiBibWorkflowService : IHostedService
     private readonly ILoggerFactory _loggerFactory;  // ← SPRINT 14: Logger factory for BitBang service
     private readonly IPortReservationService _portReservationService;
     private readonly MultiBibServiceConfiguration _config;
+    private readonly HotReloadConfigurationService? _hotReloadService;
 
     private Timer? _scheduledExecutionTimer;
     private CancellationTokenSource? _cancellationTokenSource;
@@ -36,7 +39,8 @@ public class MultiBibWorkflowService : IHostedService
         ILogger<MultiBibWorkflowService> logger,
         ILoggerFactory loggerFactory,  // ← SPRINT 14: Added for BitBang service creation
         IPortReservationService portReservationService,
-        MultiBibServiceConfiguration config)
+        MultiBibServiceConfiguration config,
+        HotReloadConfigurationService? hotReloadService = null)
     {
         _orchestrator = orchestrator;
         _configLoader = configLoader;
@@ -44,6 +48,84 @@ public class MultiBibWorkflowService : IHostedService
         _loggerFactory = loggerFactory;  // ← SPRINT 14: Store logger factory
         _portReservationService = portReservationService;
         _config = config;
+        _hotReloadService = hotReloadService;
+
+         // 🔥 AJOUTER ÇA ICI - À LA FIN DU CONSTRUCTEUR :
+        if (_hotReloadService != null)
+        {
+            _hotReloadService.ConfigurationAdded += OnNewBibAdded;
+            _hotReloadService.ConfigurationChanged += OnBibChanged;
+            _logger.LogInformation("🔗 Hot reload events connected to MultiBibWorkflowService");
+        }
+        else
+        {
+            _logger.LogWarning("⚠️ HotReloadConfigurationService not available - hot add disabled");
+        }
+    }
+
+private async void OnBibChanged(object? sender, ConfigurationChangedEventArgs e)
+{
+    _logger.LogInformation($"🔄 HOT CHANGE: BIB modified - {e.BibId}");
+    
+    if (_config.ExecutionMode == MultiBibExecutionMode.Production)
+    {
+        _logger.LogInformation($"🏭 Starting production workflow for changed BIB: {e.BibId}");
+        
+        _ = Task.Run(async () => 
+        {
+            try
+            {
+                await ExecuteSingleBibProductionAsync(e.BibId, 
+                    _cancellationTokenSource?.Token ?? CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"❌ Hot-changed BIB execution failed: {e.BibId}");
+            }
+        });
+        
+        _logger.LogInformation($"✅ Hot-changed BIB task started: {e.BibId}");
+    }
+}
+
+// <summary>
+    /// Handle new BIB configuration hot-added
+    /// </summary>
+    private async void OnNewBibAdded(object? sender, ConfigurationAddedEventArgs e)
+    {
+        try
+        {
+            _logger.LogInformation($"🆕 HOT ADD: New BIB detected - {e.BibId}");
+            
+            if (_config.ExecutionMode == MultiBibExecutionMode.Production)
+            {
+                _logger.LogInformation($"🏭 Starting production workflow for hot-added BIB: {e.BibId}");
+                
+                // Démarrer immédiatement le nouveau BIB en mode production
+                _ = Task.Run(async () => 
+                {
+                    try
+                    {
+                        await ExecuteSingleBibProductionAsync(e.BibId, 
+                            _cancellationTokenSource?.Token ?? CancellationToken.None);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"❌ Hot-added BIB execution failed: {e.BibId}");
+                    }
+                });
+                
+                _logger.LogInformation($"✅ Hot-added BIB task started: {e.BibId}");
+            }
+            else
+            {
+                _logger.LogInformation($"ℹ️ Hot-added BIB detected but not in production mode: {e.BibId}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"❌ Error handling hot-added BIB: {e.BibId}");
+        }
     }
 
     /// <summary>
@@ -97,6 +179,15 @@ public async Task StartAsync(CancellationToken cancellationToken)
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("🛑 Multi-BIB Workflow Service Stopping...");
+
+
+// 🔥 AJOUTER CETTE LIGNE AU DÉBUT :
+    if (_hotReloadService != null)
+    {
+        _hotReloadService.ConfigurationAdded -= OnNewBibAdded;
+        _hotReloadService.ConfigurationChanged -= OnBibChanged;
+        _logger.LogDebug("🔗 Hot reload events disconnected");
+    }
 
         _scheduledExecutionTimer?.Dispose();
         _cancellationTokenSource?.Cancel();
@@ -459,6 +550,14 @@ public async Task StartAsync(CancellationToken cancellationToken)
     try
     {
         _logger.LogInformation($"🔧 Starting workflow with STICKY PORT for {bibId}.{uutId}");
+
+        if (_bitBangService == null)
+        {
+            _logger.LogWarning($"⚠️ BitBangService is null for hot-added BIB: {bibId}, recreating...");
+            _bitBangService = new BitBangProductionService(
+                _loggerFactory.CreateLogger<BitBangProductionService>());
+            _logger.LogInformation($"✅ BitBangService recreated for hot-added BIB: {bibId}");
+        }
 
         // 1. Wait for START signal
         var startReceived = await _bitBangService!.WaitForStartSignalAsync(uutId, simConfig);

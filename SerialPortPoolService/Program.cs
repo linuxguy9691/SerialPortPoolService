@@ -16,6 +16,7 @@ using SerialPortPoolService.Services;
 using SerialPortPool.Core.Protocols;
 using System.CommandLine;
 using System.CommandLine.Invocation;
+using SerialPortPool.Core.Services.Configuration; // ← Pour HotReloadConfigurationService
 
 namespace SerialPortPoolService;
 
@@ -215,7 +216,8 @@ class Program
             ["ConfigurationDirectory"] = configDir,
             ["EnableMultiFileDiscovery"] = enableMultiFile || executionMode == MultiBibExecutionMode.Production,
             ["DiscoverBibs"] = discoverBibs || executionMode == MultiBibExecutionMode.Production,
-            ["Sprint13Enhanced"] = true,
+            ["Sprint13Enhanced"] = false,  // ← CHANGÉ: false car on utilise Sprint 11++
+            ["Sprint11PlusPlus"] = true,   // ← AJOUTÉ: Nouvelle architecture
             ["PureProductionMode"] = executionMode == MultiBibExecutionMode.Production,
             ["UseLegacyXml"] = configPath != null
         };
@@ -272,7 +274,19 @@ class Program
         try
         {
             using var scope = host.Services.CreateScope();
-            scope.ServiceProvider.ValidateSprint13Services();
+            scope.ServiceProvider.ValidateSprint6Services();
+            scope.ServiceProvider.ValidateSprint8Services();
+            
+            // Valider que HotReloadConfigurationService est enregistré
+            var hotReloadService = scope.ServiceProvider.GetService<HotReloadConfigurationService>();
+            if (hotReloadService != null)
+            {
+                Console.WriteLine("✅ HotReloadConfigurationService registered (Sprint 11++)");
+            }
+            else
+            {
+                Console.WriteLine("⚠️ HotReloadConfigurationService not found");
+            }
         }
         catch (Exception ex)
         {
@@ -371,36 +385,70 @@ class Program
     /// FIX: Configuration conditionnelle pour mode production
     /// </summary>
     static void ConfigureEnhancedMultiBibServices(IServiceCollection services, MultiBibServiceConfiguration config)
+{
+    Console.WriteLine("⚙️ Configuring SPRINT 11++ Enhanced Multi-BIB Services...");
+
+    try
     {
-        Console.WriteLine("⚙️ Configuring SPRINT 13 Enhanced Multi-BIB Services...");
+        var isPureProduction = config.Metadata?.GetValueOrDefault("PureProductionMode", false) as bool? ?? false;
 
-        try
+        if (isPureProduction)
         {
-            // ✅ Variable existante - ne pas la redéclarer
-            var isPureProduction = config.Metadata?.GetValueOrDefault("PureProductionMode", false) as bool? ?? false;
-
-            if (isPureProduction)
+            Console.WriteLine($"🏭 Production mode: Using Sprint 11++ production services");
+            
+            // ✅ SPRINT 11++ PRODUCTION SERVICES
+            services.AddSprint6CoreServices();
+            services.AddSprint8Services();
+            
+            // 🔧 FIX: Ajouter les services manquants pour MultiBibWorkflowService
+            services.AddScoped<IBibWorkflowOrchestrator, BibWorkflowOrchestrator>();
+            services.AddScoped<IPortReservationService, PortReservationService>();
+            
+            // 🔥 SPRINT 11: Hot Reload Configuration Service (Production Mode)
+            services.AddSingleton<HotReloadConfigurationService>();
+            services.AddSingleton<IHostedService>(provider => 
+                provider.GetRequiredService<HotReloadConfigurationService>());
+            
+            // Production logging
+            services.AddLogging(builder =>
             {
-                Console.WriteLine($"🏭 Production mode: Using Sprint 13 production-only services");
-                services.AddSprint13ProductionOnlyServices();
-            }
-            else
-            {
-                Console.WriteLine($"🔧 Demo mode: Using Sprint 13 demo services with auto-execution");
-                services.AddSprint13DemoServices();
-            }
-
-            // Supprimer ou commenter la configuration XML loader conditionnelle existante
-            // car elle est maintenant gérée dans les méthodes d'extension
-
-            Console.WriteLine("✅ SPRINT 13 Enhanced Services configured successfully");
+                builder.AddConsole();
+                builder.SetMinimumLevel(LogLevel.Information);
+            });
         }
-        catch (Exception ex)
+        else
         {
-            Console.WriteLine($"❌ ERROR configuring SPRINT 13 services: {ex.Message}");
-            throw;
+            Console.WriteLine($"🔧 Demo mode: Using Sprint 11++ demo services");
+            
+            // ✅ SPRINT 11++ DEMO SERVICES
+            services.AddSprint6DemoServices(); 
+            services.AddSprint8Services();
+            
+            // 🔧 FIX: Ajouter les services manquants pour MultiBibWorkflowService
+            services.AddScoped<IBibWorkflowOrchestrator, BibWorkflowOrchestrator>();
+            services.AddScoped<IPortReservationService, PortReservationService>();
+            
+            // 🔥 SPRINT 11: Hot Reload Configuration Service (Demo Mode)
+            services.AddSingleton<HotReloadConfigurationService>();
+            services.AddSingleton<IHostedService>(provider => 
+                provider.GetRequiredService<HotReloadConfigurationService>());
+            
+            // Demo logging (more verbose)
+            services.AddLogging(builder =>
+            {
+                builder.AddConsole();
+                builder.SetMinimumLevel(LogLevel.Debug);
+            });
         }
+
+        Console.WriteLine("✅ SPRINT 11++ Enhanced Services configured successfully");
     }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ ERROR configuring SPRINT 11++ services: {ex.Message}");
+        throw;
+    }
+}
 
     /// <summary>
     /// Create service demo configuration (legacy support)
