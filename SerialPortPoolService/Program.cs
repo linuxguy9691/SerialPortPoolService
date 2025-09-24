@@ -262,7 +262,21 @@ class Program
         
         // Register Multi-BIB service
         builder.Services.AddSingleton(config);
-        builder.Services.AddHostedService<MultiBibWorkflowService>();
+        builder.Services.AddSingleton<MultiBibWorkflowService>(serviceProvider => 
+        new MultiBibWorkflowService(
+            serviceProvider.GetRequiredService<IBibWorkflowOrchestrator>(),
+            serviceProvider.GetRequiredService<IBibConfigurationLoader>(),
+            serviceProvider.GetRequiredService<ILogger<MultiBibWorkflowService>>(),
+            serviceProvider.GetRequiredService<ILoggerFactory>(),
+            serviceProvider.GetRequiredService<IPortReservationService>(),
+            serviceProvider.GetRequiredService<DynamicBibConfigurationService>(), // Paramètre 6
+            serviceProvider, // Paramètre 7 - IServiceProvider
+            serviceProvider.GetRequiredService<MultiBibServiceConfiguration>() // Paramètre 8
+        ));
+
+        // Enregistrer comme HostedService
+        builder.Services.AddHostedService<MultiBibWorkflowService>(serviceProvider =>
+            serviceProvider.GetRequiredService<MultiBibWorkflowService>());
         
         var host = builder.Build();
         
@@ -366,41 +380,53 @@ class Program
         }
     }
 
-    /// <summary>
-    /// SPRINT 13: Configure services using Sprint13ServiceExtensions
-    /// FIX: Configuration conditionnelle pour mode production
-    /// </summary>
-    static void ConfigureEnhancedMultiBibServices(IServiceCollection services, MultiBibServiceConfiguration config)
+    // ===================================================================
+// SPRINT 14 FIX: Program.cs Service Injection
+// File: SerialPortPoolService/Program.cs  
+// Fix: Ensure DynamicBibConfigurationService is available for injection
+// ===================================================================
+
+static void ConfigureEnhancedMultiBibServices(IServiceCollection services, MultiBibServiceConfiguration config)
+{
+    Console.WriteLine("⚙️ Configuring SPRINT 13 Enhanced Multi-BIB Services...");
+
+    try
     {
-        Console.WriteLine("⚙️ Configuring SPRINT 13 Enhanced Multi-BIB Services...");
+        var isPureProduction = config.Metadata?.GetValueOrDefault("PureProductionMode", false) as bool? ?? false;
 
-        try
+        if (isPureProduction)
         {
-            // ✅ Variable existante - ne pas la redéclarer
-            var isPureProduction = config.Metadata?.GetValueOrDefault("PureProductionMode", false) as bool? ?? false;
-
-            if (isPureProduction)
-            {
-                Console.WriteLine($"🏭 Production mode: Using Sprint 13 production-only services");
-                services.AddSprint13ProductionOnlyServices();
-            }
-            else
-            {
-                Console.WriteLine($"🔧 Demo mode: Using Sprint 13 demo services with auto-execution");
-                services.AddSprint13DemoServices();
-            }
-
-            // Supprimer ou commenter la configuration XML loader conditionnelle existante
-            // car elle est maintenant gérée dans les méthodes d'extension
-
-            Console.WriteLine("✅ SPRINT 13 Enhanced Services configured successfully");
+            Console.WriteLine($"🏭 Production mode: Using Sprint 13 production-only services");
+            services.AddSprint13ProductionOnlyServices();
         }
-        catch (Exception ex)
+        else
         {
-            Console.WriteLine($"❌ ERROR configuring SPRINT 13 services: {ex.Message}");
-            throw;
+            Console.WriteLine($"🔧 Demo mode: Using Sprint 13 demo services with auto-execution");
+            services.AddSprint13DemoServices();
         }
+
+        // 🆕 SPRINT 14 FIX: Ensure DynamicBibConfigurationService is registered
+        // This is needed for MultiBibWorkflowService injection
+        services.AddSingleton<DynamicBibConfigurationService>();
+        
+        // 🆕 SPRINT 14 FIX: Configure DynamicBibConfigurationService options
+        var dynamicOptions = new DynamicBibConfigurationOptions
+        {
+            WatchDirectory = config.Metadata?.GetValueOrDefault("ConfigurationDirectory", "Configuration/") as string ?? "Configuration/",
+            AutoExecuteOnDiscovery = !isPureProduction, // Don't auto-execute in production mode
+            PerformInitialDiscovery = true,
+            CreateSampleFiles = false // Don't create samples in production
+        };
+        services.AddSingleton(dynamicOptions);
+
+        Console.WriteLine("✅ SPRINT 13 Enhanced Services configured successfully");
     }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ ERROR configuring SPRINT 13 services: {ex.Message}");
+        throw;
+    }
+}
 
     /// <summary>
     /// Create service demo configuration (legacy support)

@@ -37,6 +37,8 @@ public class DynamicBibConfigurationService : IHostedService, IDisposable
     public event EventHandler<BibRemovedEventArgs>? BibRemoved;
     public event EventHandler<BibProcessedEventArgs>? BibProcessed;
     public event EventHandler<BibErrorEventArgs>? BibError;
+    public event EventHandler<BibConfigurationChangedEventArgs>? BibConfigurationChanged;
+    
 
     public DynamicBibConfigurationService(
         IBibConfigurationLoader configLoader,
@@ -55,6 +57,7 @@ public class DynamicBibConfigurationService : IHostedService, IDisposable
         _logger.LogInformation("⏱️ Debounce Delay: {DebounceMs}ms", _options.DebounceDelayMs);
         _logger.LogInformation("🎬 Auto Execute: {AutoExecute}", _options.AutoExecuteOnDiscovery);
     }
+    
 
     /// <summary>
     /// Start the Hot-Add service with FileSystemWatcher
@@ -164,7 +167,21 @@ public class DynamicBibConfigurationService : IHostedService, IDisposable
         // Debounce and process
         _ = Task.Run(async () => await ProcessBibFileWithDebounceAsync(bibId, e.FullPath, BibChangeType.Created));
     }
-
+    
+protected virtual void OnBibConfigurationChanged(string bibId, BibChangeType changeType, string filePath)
+{
+    try 
+    {
+        var eventArgs = new BibConfigurationChangedEventArgs(bibId, changeType, filePath);
+        BibConfigurationChanged?.Invoke(this, eventArgs);
+        _logger.LogCritical($"🎯 Event fired: BIB {bibId} - {changeType}"); // Changé en LogCritical
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"❌ Error firing BibConfigurationChanged event for {bibId}");
+    }
+}
+    
     /// <summary>
     /// Handle BIB file changes
     /// </summary>
@@ -290,73 +307,80 @@ public class DynamicBibConfigurationService : IHostedService, IDisposable
     /// <summary>
     /// Process individual BIB file using existing excellent services
     /// </summary>
-    private async Task ProcessBibFileAsync(string bibId, string filePath, BibChangeType changeType)
+   /// <summary>
+/// Process individual BIB file using existing excellent services
+/// FIXED: Fire BibConfigurationChanged event BEFORE checking production mode
+/// </summary>
+private async Task ProcessBibFileAsync(string bibId, string filePath, BibChangeType changeType)
+{
+    _logger.LogInformation("🔄 Processing BIB: {BibId} (Change: {ChangeType})", bibId, changeType);
+
+    try
     {
-        _logger.LogInformation("🔄 Processing BIB: {BibId} (Change: {ChangeType})", bibId, changeType);
+        // ✅ FOUNDATION EXCELLENCE: Use existing XmlBibConfigurationLoader
+        var bibConfig = await _configLoader.LoadBibConfigurationAsync(bibId);
 
-        try
+        if (bibConfig == null)
         {
-            // ✅ FOUNDATION EXCELLENCE: Use existing XmlBibConfigurationLoader
-            var bibConfig = await _configLoader.LoadBibConfigurationAsync(bibId);
-
-            if (bibConfig == null)
-            {
-                _logger.LogError("❌ Failed to load BIB configuration: {BibId}", bibId);
-                await HandleBibErrorAsync(bibId, filePath, "BIB configuration loading failed");
-                return;
-            }
-
-            // Track discovered BIB
-            var isNewBib = _discoveredBibs.Add(bibId);
-
-            // Log BIB details
-            _logger.LogInformation("📋 BIB Loaded: {BibConfig}", bibConfig);
-            _logger.LogInformation("🛠️ Hardware Simulation: {SimulationSummary}", bibConfig.GetSimulationSummary());
-
-            // Fire discovery event
-            if (changeType == BibChangeType.Created || isNewBib)
-            {
-                BibDiscovered?.Invoke(this, new BibDiscoveredEventArgs
-                {
-                    BibId = bibId,
-                    FilePath = filePath,
-                    BibConfiguration = bibConfig,
-                    IsHardwareSimulation = bibConfig.IsHardwareSimulationEnabled,
-                    DiscoveredAt = DateTime.Now
-                });
-            }
-
-            // ✅ AUTO-EXECUTE: Use existing excellent BibWorkflowOrchestrator
-            if (_options.AutoExecuteOnDiscovery)
-            {
-                // 🎯 SPRINT 14: Check if we're in Production mode - if so, skip auto-execute
-                // Production mode handles execution via MultiBibWorkflowService
-                
-                _logger.LogInformation("🎯 AutoExecuteOnDiscovery enabled - checking execution mode coordination...");
-                
-                // In Production mode, MultiBibWorkflowService handles the execution
-                // DynamicBibConfigurationService should only register the BIB, not execute it
-                var isProductionMode = CheckIfProductionMode();
-                
-                if (isProductionMode)
-                {
-                    _logger.LogInformation("🏭 Production mode detected - BIB registered but execution delegated to Production workflow");
-                    _logger.LogInformation("✅ BIB processing completed successfully: {BibId} (Production Mode)", bibId);
-                    return;
-                }
-                
-                // Non-production modes: execute immediately as before
-                await ExecuteBibWorkflowAsync(bibConfig, bibId, filePath);
-            }
-
-            _logger.LogInformation("✅ BIB processing completed successfully: {BibId}", bibId);
+            _logger.LogError("❌ Failed to load BIB configuration: {BibId}", bibId);
+            await HandleBibErrorAsync(bibId, filePath, "BIB configuration loading failed");
+            return;
         }
-        catch (Exception ex)
+
+        // Track discovered BIB
+        var isNewBib = _discoveredBibs.Add(bibId);
+
+        // Log BIB details
+        _logger.LogInformation("📋 BIB Loaded: {BibConfig}", bibConfig);
+        _logger.LogInformation("🛠️ Hardware Simulation: {SimulationSummary}", bibConfig.GetSimulationSummary());
+
+        // Fire discovery event
+        if (changeType == BibChangeType.Created || isNewBib)
         {
-            _logger.LogError(ex, "❌ Error processing BIB: {BibId}", bibId);
-            await HandleBibErrorAsync(bibId, filePath, $"BIB processing failed: {ex.Message}");
+            BibDiscovered?.Invoke(this, new BibDiscoveredEventArgs
+            {
+                BibId = bibId,
+                FilePath = filePath,
+                BibConfiguration = bibConfig,
+                IsHardwareSimulation = bibConfig.IsHardwareSimulationEnabled,
+                DiscoveredAt = DateTime.Now
+            });
         }
+
+        // 🎯 CRITICAL FIX: Fire the BibConfigurationChanged event ALWAYS (before production check)
+        OnBibConfigurationChanged(bibId, changeType, filePath);
+
+        // ✅ AUTO-EXECUTE: Use existing excellent BibWorkflowOrchestrator
+        if (_options.AutoExecuteOnDiscovery)
+        {
+            // 🎯 SPRINT 14: Check if we're in Production mode - if so, skip auto-execute
+            // Production mode handles execution via MultiBibWorkflowService
+            
+            _logger.LogInformation("🎯 AutoExecuteOnDiscovery enabled - checking execution mode coordination...");
+            
+            // In Production mode, MultiBibWorkflowService handles the execution
+            // DynamicBibConfigurationService should only register the BIB, not execute it
+            var isProductionMode = CheckIfProductionMode();
+            
+            if (isProductionMode)
+            {
+                _logger.LogInformation("🏭 Production mode detected - BIB registered but execution delegated to Production workflow");
+                _logger.LogInformation("✅ BIB processing completed successfully: {BibId} (Production Mode)", bibId);
+                return; // Event was already fired above, so safe to return
+            }
+            
+            // Non-production modes: execute immediately as before
+            await ExecuteBibWorkflowAsync(bibConfig, bibId, filePath);
+        }
+
+        _logger.LogInformation("✅ BIB processing completed successfully: {BibId}", bibId);
     }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "❌ Error processing BIB: {BibId}", bibId);
+        await HandleBibErrorAsync(bibId, filePath, $"BIB processing failed: {ex.Message}");
+    }
+}
 
     /// <summary>
     /// Execute BIB workflow using existing orchestrator (FOUNDATION EXCELLENCE)
@@ -884,5 +908,21 @@ public class BibErrorEventArgs : EventArgs
     public string ErrorMessage { get; set; } = string.Empty;
     public DateTime ErrorTime { get; set; }
 }
+
+public class BibConfigurationChangedEventArgs : EventArgs
+    {
+        public string BibId { get; }
+        public BibChangeType ChangeType { get; }
+        public string FilePath { get; }
+        public DateTime Timestamp { get; }
+
+        public BibConfigurationChangedEventArgs(string bibId, BibChangeType changeType, string filePath)
+        {
+            BibId = bibId;
+            ChangeType = changeType;
+            FilePath = filePath;
+            Timestamp = DateTime.UtcNow;
+        }
+    }
 
 #endregion

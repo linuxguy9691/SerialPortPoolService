@@ -103,6 +103,7 @@ public static class Sprint13ServiceExtensions
         // 🎯 PRODUCTION: Register DynamicBibConfigurationService as regular service (NOT IHostedService)
         // This allows manual control without auto-execution
         services.AddSingleton<DynamicBibConfigurationService>();
+        services.AddHostedService<DynamicBibConfigurationService>();
         
         return services;
     }
