@@ -381,72 +381,269 @@ class Program
     }
 
     /// <summary>
-    /// SPRINT 13: Configure services using Sprint13ServiceExtensions
-    /// FIX: Configuration conditionnelle pour mode production
-    /// </summary>
-    static void ConfigureEnhancedMultiBibServices(IServiceCollection services, MultiBibServiceConfiguration config)
+/// CRITICAL FIX: Configure enhanced services with robust logging validation
+/// FAIL FAST: Service won't start if logging is broken
+/// </summary>
+static void ConfigureEnhancedMultiBibServices(IServiceCollection services, MultiBibServiceConfiguration config)
 {
     Console.WriteLine("⚙️ Configuring SPRINT 11++ Enhanced Multi-BIB Services...");
 
     try
     {
+        // STEP 1: Validate and configure logging FIRST (fail fast if broken)
+        ValidateAndConfigureLogging(services, config);
+        
         var isPureProduction = config.Metadata?.GetValueOrDefault("PureProductionMode", false) as bool? ?? false;
 
         if (isPureProduction)
         {
             Console.WriteLine($"🏭 Production mode: Using Sprint 11++ production services");
             
-            // ✅ SPRINT 11++ PRODUCTION SERVICES
+            // Sprint 11++ PRODUCTION SERVICES
             services.AddSprint6CoreServices();
             services.AddSprint8Services();
             
-            // 🔧 FIX: Ajouter les services manquants pour MultiBibWorkflowService
+            // Services manquants pour MultiBibWorkflowService
             services.AddScoped<IBibWorkflowOrchestrator, BibWorkflowOrchestrator>();
             services.AddScoped<IPortReservationService, PortReservationService>();
             
-            // 🔥 SPRINT 11: Hot Reload Configuration Service (Production Mode)
+            // Sprint 11: Hot Reload Configuration Service (Production Mode)
             services.AddSingleton<HotReloadConfigurationService>();
             services.AddSingleton<IHostedService>(provider => 
                 provider.GetRequiredService<HotReloadConfigurationService>());
-            
-            // Production logging
-            services.AddLogging(builder =>
-            {
-                builder.AddConsole();
-                builder.SetMinimumLevel(LogLevel.Information);
-            });
         }
         else
         {
             Console.WriteLine($"🔧 Demo mode: Using Sprint 11++ demo services");
             
-            // ✅ SPRINT 11++ DEMO SERVICES
+            // Sprint 11++ DEMO SERVICES
             services.AddSprint6DemoServices(); 
             services.AddSprint8Services();
             
-            // 🔧 FIX: Ajouter les services manquants pour MultiBibWorkflowService
+            // Services manquants pour MultiBibWorkflowService
             services.AddScoped<IBibWorkflowOrchestrator, BibWorkflowOrchestrator>();
             services.AddScoped<IPortReservationService, PortReservationService>();
             
-            // 🔥 SPRINT 11: Hot Reload Configuration Service (Demo Mode)
+            // Sprint 11: Hot Reload Configuration Service (Demo Mode)
             services.AddSingleton<HotReloadConfigurationService>();
             services.AddSingleton<IHostedService>(provider => 
                 provider.GetRequiredService<HotReloadConfigurationService>());
-            
-            // Demo logging (more verbose)
-            services.AddLogging(builder =>
-            {
-                builder.AddConsole();
-                builder.SetMinimumLevel(LogLevel.Debug);
-            });
         }
 
         Console.WriteLine("✅ SPRINT 11++ Enhanced Services configured successfully");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"❌ ERROR configuring SPRINT 11++ services: {ex.Message}");
+        Console.WriteLine($"❌ FATAL ERROR configuring services: {ex.Message}");
+        Console.WriteLine($"📋 Details: {ex}");
+        Console.WriteLine("🛑 Service cannot start - fix configuration and retry");
         throw;
+    }
+}
+
+/// <summary>
+/// NOUVELLE FONCTION: Validate logging configuration and fail fast if broken
+/// </summary>
+static void ValidateAndConfigureLogging(IServiceCollection services, MultiBibServiceConfiguration config)
+{
+    Console.WriteLine("🔧 Validating logging configuration...");
+    
+    string nlogConfigPath = "";
+    string logDirectory = "";
+    List<string> errors = new List<string>();
+    bool nlogOk = false;
+    bool consoleOk = false;
+
+    try
+    {
+        // STEP 1: Check NLog.config exists and is readable
+        var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        nlogConfigPath = Path.Combine(baseDir, "NLog.config");
+        
+        Console.WriteLine($"📁 Checking NLog.config at: {nlogConfigPath}");
+        
+        if (!File.Exists(nlogConfigPath))
+        {
+            errors.Add($"NLog.config file not found at: {nlogConfigPath}");
+        }
+        else
+        {
+            // Try to read the file
+            try
+            {
+                var content = File.ReadAllText(nlogConfigPath);
+                if (string.IsNullOrWhiteSpace(content))
+                {
+                    errors.Add($"NLog.config file is empty: {nlogConfigPath}");
+                }
+                else
+                {
+                    Console.WriteLine("✅ NLog.config file found and readable");
+                }
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"Cannot read NLog.config: {ex.Message}");
+            }
+        }
+
+        // STEP 2: Check log directory exists and is writable
+        logDirectory = Path.Combine("C:", "Logs", "SerialPortPool");
+        Console.WriteLine($"📁 Checking log directory: {logDirectory}");
+        
+        try
+        {
+            Directory.CreateDirectory(logDirectory);
+            
+            // Test write permissions
+            var testFile = Path.Combine(logDirectory, $"startup_test_{DateTime.Now:yyyyMMdd_HHmmss}.tmp");
+            File.WriteAllText(testFile, $"Startup test: {DateTime.Now}");
+            File.Delete(testFile);
+            
+            Console.WriteLine("✅ Log directory writable");
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"Cannot write to log directory {logDirectory}: {ex.Message}");
+        }
+
+        // STEP 3: Configure logging with fallback strategy
+        services.AddLogging(builder =>
+        {
+            builder.ClearProviders();
+            
+            // Try NLog first
+            if (errors.Count == 0)
+            {
+                try
+                {
+                    builder.AddNLog();
+                    nlogOk = true;
+                    Console.WriteLine("✅ NLog provider configured");
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"NLog provider configuration failed: {ex.Message}");
+                }
+            }
+            
+            // Always add console as fallback
+            try
+            {
+                builder.AddConsole();
+                consoleOk = true;
+                Console.WriteLine("✅ Console provider configured");
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"Console provider configuration failed: {ex.Message}");
+            }
+            
+            // Set log level
+            var logLevel = config.IncludeDetailedLogs ? LogLevel.Information : LogLevel.Warning;
+            builder.SetMinimumLevel(logLevel);
+        });
+
+        // STEP 4: Display status and fail if critical
+        DisplayLoggingStatus(nlogOk, consoleOk, nlogConfigPath, logDirectory, errors);
+
+        // FAIL FAST if no logging available
+        if (!nlogOk && !consoleOk)
+        {
+            throw new InvalidOperationException(
+                "CRITICAL: No logging providers configured successfully. Service cannot start without logging capability.");
+        }
+
+        // STEP 5: Test actual logging functionality
+        TestLoggingFunctionality(services);
+        
+    }
+    catch (Exception ex) when (!(ex is InvalidOperationException))
+    {
+        Console.WriteLine($"❌ FATAL: Logging validation failed: {ex.Message}");
+        throw new InvalidOperationException("Logging validation failed - service cannot start", ex);
+    }
+}
+
+/// <summary>
+/// NOUVELLE FONCTION: Display clear logging status
+/// </summary>
+static void DisplayLoggingStatus(bool nlogOk, bool consoleOk, string nlogPath, string logDir, List<string> errors)
+{
+    Console.WriteLine();
+    Console.WriteLine("📋 LOGGING CONFIGURATION STATUS");
+    Console.WriteLine("=" + new string('=', 60));
+    
+    if (nlogOk && consoleOk)
+    {
+        Console.WriteLine("✅ OPTIMAL: File logging + Console logging active");
+        Console.WriteLine($"📁 NLog config: {nlogPath}");
+        Console.WriteLine($"📂 Log files: {logDir}");
+        Console.WriteLine("🖥️  Real-time console output available");
+    }
+    else if (consoleOk && !nlogOk)
+    {
+        Console.WriteLine("⚠️  DEGRADED: Console-only logging (file logging failed)");
+        Console.WriteLine($"📁 NLog config issues: {nlogPath}");
+        Console.WriteLine($"📂 Target log directory: {logDir}");
+        Console.WriteLine("🖥️  Console output available but no log files");
+        
+        Console.WriteLine("\n🔧 ISSUES TO FIX:");
+        foreach (var error in errors)
+        {
+            Console.WriteLine($"   • {error}");
+        }
+    }
+    else if (nlogOk && !consoleOk)
+    {
+        Console.WriteLine("⚠️  PARTIAL: File logging only (console failed)");
+        Console.WriteLine($"📁 Log files active: {logDir}");
+        Console.WriteLine("❌ No real-time console output");
+    }
+    else
+    {
+        Console.WriteLine("❌ CRITICAL FAILURE: NO LOGGING AVAILABLE");
+        Console.WriteLine("🛑 SERVICE CANNOT START");
+        
+        Console.WriteLine("\n💥 ALL ISSUES:");
+        foreach (var error in errors)
+        {
+            Console.WriteLine($"   • {error}");
+        }
+        
+        Console.WriteLine("\n🔧 REQUIRED FIXES:");
+        Console.WriteLine("   1. Ensure NLog.config exists and is readable");
+        Console.WriteLine("   2. Check log directory permissions");
+        Console.WriteLine("   3. Verify disk space availability");
+        Console.WriteLine("   4. Run as administrator if necessary");
+    }
+    
+    Console.WriteLine("=" + new string('=', 60));
+    Console.WriteLine();
+}
+
+/// <summary>
+/// NOUVELLE FONCTION: Test actual logging functionality
+/// </summary>
+static void TestLoggingFunctionality(IServiceCollection services)
+{
+    try
+    {
+        Console.WriteLine("🧪 Testing logging functionality...");
+        
+        using var serviceProvider = services.BuildServiceProvider();
+        var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
+        
+        // Test different log levels
+        logger.LogInformation("🧪 Logging test: INFO level - {Timestamp}", DateTime.Now);
+        logger.LogWarning("🧪 Logging test: WARNING level - {Timestamp}", DateTime.Now);
+        
+        Console.WriteLine("✅ Logging functionality test completed");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Logging functionality test FAILED: {ex.Message}");
+        throw new InvalidOperationException("Logging system is not functional", ex);
     }
 }
 
