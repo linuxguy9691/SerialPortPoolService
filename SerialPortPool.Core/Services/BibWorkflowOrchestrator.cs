@@ -1331,6 +1331,11 @@ public async Task<CommandSequenceResult> ExecutePhaseWithFixedPortAsync(
         string clientId = "ProductionMode",
         CancellationToken cancellationToken = default)
     {
+        // 🆕 SPRINT 12/14: Add structured logging 
+        var bibLogger = _logger.ForBibUut(bibId, uutId, portNumber);
+
+        bibLogger.LogBibExecution(LogLevel.Information, "🚀 PRODUCTION START PHASE: {ClientId}", clientId);
+    
         try
         {
             _logger.LogInformation($"🚀 START phase beginning: {bibId}.{uutId}.{portNumber}");
@@ -1392,6 +1397,11 @@ public async Task<CommandSequenceResult> ExecutePhaseWithFixedPortAsync(
         string clientId = "ProductionMode",
         CancellationToken cancellationToken = default)
     {
+        // 🆕 SPRINT 12/14: Add structured logging 
+        var bibLogger = _logger.ForBibUut(bibId, uutId, portNumber);
+    
+        bibLogger.LogBibExecution(LogLevel.Information, "🚀 PRODUCTION TEST PHASE: {ClientId}", clientId);
+    
         try
         {
             var sessionKey = GetSessionKey(bibId, uutId, portNumber);
@@ -1435,6 +1445,11 @@ public async Task<CommandSequenceResult> ExecutePhaseWithFixedPortAsync(
         CancellationToken cancellationToken = default)
     {
         var sessionKey = GetSessionKey(bibId, uutId, portNumber);
+       // 🆕 SPRINT 12/14: Add structured logging 
+        var bibLogger = _logger.ForBibUut(bibId, uutId, portNumber);
+    
+        bibLogger.LogBibExecution(LogLevel.Information, "🚀 PRODUCTION STOP PHASE: {ClientId}", clientId);
+    
         
         try
         {

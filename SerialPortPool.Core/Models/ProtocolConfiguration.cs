@@ -1,6 +1,7 @@
 // SerialPortPool.Core/Models/ProtocolConfiguration.cs - VERSION COMPLÈTE CORRIGÉE
 using System;
 using System.Collections.Generic;
+using SerialPortPool.Core.Interfaces;
 
 namespace SerialPortPool.Core.Models
 {
@@ -231,6 +232,10 @@ namespace SerialPortPool.Core.Models
                 : 2000;
         }
 
+        /// <summary>
+        /// BIB/UUT specific logger for structured logging
+        /// </summary>
+        public IBibUutLogger? BibLogger { get; set; }
         #endregion
 
         /// <summary>

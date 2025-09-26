@@ -94,7 +94,12 @@ public class RS232ProtocolHandler : IProtocolHandler
         try
         {
             _logger.LogDebug("📤 Executing command with enhanced validation: {Command}", command.Command.Trim());
-
+        
+        // Log vers BibUutLogger si disponible
+            if (session.Configuration?.BibLogger != null)
+            {
+                session.Configuration?.BibLogger.LogBibExecution(LogLevel.Information, "📤 TX: '{Command}'", command.Command);
+            }
             // Send command
             var dataToSend = command.Data.Length > 0 ? command.Data : Encoding.UTF8.GetBytes(command.Command);
             await Task.Run(() => _serialPort!.Write(dataToSend, 0, dataToSend.Length), cancellationToken);
@@ -106,6 +111,11 @@ public class RS232ProtocolHandler : IProtocolHandler
             _logger.LogDebug("📥 Received response: '{Response}' (Length: {Length})", 
                 responseText, responseText.Length);
 
+            //Log vers BibUutLogger si disponible
+            if (session.Configuration?.BibLogger != null)
+            {
+                session.Configuration?.BibLogger.LogBibExecution(LogLevel.Information, "📥 RX: '{Response}'",  responseText);
+            }
             // ✨ SPRINT 9: Enhanced multi-level validation
             var enhancedResult = PerformEnhancedValidation(command, responseText);
             
