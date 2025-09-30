@@ -1,8 +1,7 @@
 // ===================================================================
-// SPRINT 12 FIX: BibUutLogger Path Alignment
+// SPRINT 12 ENHANCED: BibUutLogger with Stable Filenames
 // File: SerialPortPool.Core/Services/BibUutLogger.cs
-// Purpose: Fix path inconsistency with existing NLog configuration
-// Issue: BibUutLogger used C:\ProgramData\ but NLog uses C:\Logs\
+// FIX: Stable daily log files + robust validation like Program.cs
 // ===================================================================
 
 using Microsoft.Extensions.Logging;
@@ -10,9 +9,9 @@ using Microsoft.Extensions.Logging;
 namespace SerialPortPool.Core.Services;
 
 /// <summary>
-/// SPRINT 12 FIXED: Enhanced logger providing BIB/UUT specific logging
-/// PATH FIX: Now aligned with existing NLog configuration path
-/// ZERO TOUCH: Composes with existing ILogger without modification
+/// SPRINT 12 ENHANCED: Logger with stable daily filenames and robust validation
+/// IMPROVEMENT: One file per day per UUT (not per hour)
+/// ROBUSTNESS: Explicit validation and fail-safe fallback
 /// </summary>
 public class BibUutLogger
 {
@@ -20,16 +19,21 @@ public class BibUutLogger
     private readonly string _bibId;
     private readonly string _uutId;
     private readonly int _portNumber;
-    private readonly string _logDirectory;  // CHANGÉ: Plus "readonly" car peut être string.Empty
+    private readonly string? _logDirectory;
+    private readonly string? _dailyLogFile;
     private readonly object _lockObject = new();
-
-    // NOUVELLES PROPRIÉTÉS AJOUTÉES pour tracking des erreurs
+    
+    // Validation and error tracking
+    private readonly bool _structuredLoggingAvailable;
     private int _consecutiveWriteFailures = 0;
     private DateTime _lastSuccessfulWrite = DateTime.Now;
     private DateTime _lastWarningTime = DateTime.MinValue;
     private static readonly TimeSpan WARNING_INTERVAL = TimeSpan.FromMinutes(5);
+    
+    // Validation status
+    private readonly List<string> _initializationErrors = new();
+    private readonly LoggingStatus _status;
 
-    // CONSTRUCTEUR MODIFIÉ
     public BibUutLogger(ILogger serviceLogger, string bibId, string uutId, int portNumber)
     {
         _serviceLogger = serviceLogger;
@@ -37,23 +41,211 @@ public class BibUutLogger
         _uutId = uutId;
         _portNumber = portNumber;
         
-        // CHANGÉ: Try to create log directory, but handle failure gracefully
-        _logDirectory = CreateLogDirectory(bibId) ?? string.Empty;
+        // Perform robust validation and setup
+        (_logDirectory, _dailyLogFile, _status) = ValidateAndInitializeStructuredLogging(bibId, uutId, portNumber);
+        _structuredLoggingAvailable = _status == LoggingStatus.Optimal || _status == LoggingStatus.Degraded;
         
-        if (string.IsNullOrEmpty(_logDirectory))
+        // Log initialization status
+        LogInitializationStatus();
+    }
+
+    /// <summary>
+    /// NOUVEAU: Robust validation inspired by Program.cs ValidateAndConfigureLogging
+    /// Returns: (logDirectory, dailyLogFile, status)
+    /// </summary>
+    private (string?, string?, LoggingStatus) ValidateAndInitializeStructuredLogging(
+        string bibId, string uutId, int portNumber)
+    {
+        var errors = new List<string>();
+        string? logDirectory = null;
+        string? dailyLogFile = null;
+        
+        try
         {
-            // Log the fallback situation once at startup
-            Console.WriteLine($"ℹ️  BibUutLogger: Using service log fallback for {bibId}/{uutId} (structured logging unavailable)");
-            _serviceLogger.LogWarning(
-                "BibUutLogger: Structured logging unavailable for {BibId}/{UutId} - using service log fallback",
-                bibId, uutId);
+            // STEP 1: Validate base log path
+            var baseLogPath = Path.Combine("C:", "Logs", "SerialPortPool");
+            if (!ValidateBasePath(baseLogPath, errors))
+            {
+                return (null, null, LoggingStatus.Failed);
+            }
+            
+            // STEP 2: Create and validate BIB directory
+            var bibLogPath = Path.Combine(baseLogPath, $"BIB_{bibId}");
+            if (!ValidateAndCreateDirectory(bibLogPath, "BIB directory", errors))
+            {
+                return (null, null, LoggingStatus.Failed);
+            }
+            
+            // STEP 3: Create and validate daily directory
+            var dailyPath = Path.Combine(bibLogPath, DateTime.Now.ToString("yyyy-MM-dd"));
+            if (!ValidateAndCreateDirectory(dailyPath, "daily directory", errors))
+            {
+                return (null, null, LoggingStatus.Degraded);
+            }
+            
+            // STEP 4: Generate stable daily filename (NO timestamp in name)
+            var stableFileName = $"{uutId}_port{portNumber}.log";
+            var fullLogPath = Path.Combine(dailyPath, stableFileName);
+            
+            // STEP 5: Validate write permissions
+            if (!ValidateWritePermissions(fullLogPath, errors))
+            {
+                return (dailyPath, fullLogPath, LoggingStatus.Degraded);
+            }
+            
+            // SUCCESS: All validations passed
+            logDirectory = dailyPath;
+            dailyLogFile = fullLogPath;
+            return (logDirectory, dailyLogFile, LoggingStatus.Optimal);
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"Unexpected initialization error: {ex.Message}");
+            _initializationErrors.AddRange(errors);
+            return (null, null, LoggingStatus.Failed);
+        }
+        finally
+        {
+            _initializationErrors.AddRange(errors);
         }
     }
 
     /// <summary>
-    /// Log BIB execution event with structured output
-    /// FIXED: Corrected string formatting compatibility issue
-    /// DUAL OUTPUT: Service log (existing) + BIB-specific log (new)
+    /// NOUVEAU: Validate base logging path exists and is accessible
+    /// </summary>
+    private bool ValidateBasePath(string basePath, List<string> errors)
+    {
+        try
+        {
+            if (!Directory.Exists(basePath))
+            {
+                Directory.CreateDirectory(basePath);
+            }
+            return true;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            errors.Add($"Access denied to base log path {basePath}: {ex.Message}");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"Cannot access base log path {basePath}: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// NOUVEAU: Validate and create directory with clear error reporting
+    /// </summary>
+    private bool ValidateAndCreateDirectory(string path, string description, List<string> errors)
+    {
+        try
+        {
+            if (!Directory.Exists(path))
+            {
+                Directory.CreateDirectory(path);
+            }
+            return true;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            errors.Add($"Access denied creating {description} at {path}: {ex.Message}");
+            return false;
+        }
+        catch (IOException ex)
+        {
+            errors.Add($"IO error creating {description} at {path}: {ex.Message}");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"Unexpected error creating {description} at {path}: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// NOUVEAU: Validate write permissions with test file
+    /// </summary>
+    private bool ValidateWritePermissions(string logFilePath, List<string> errors)
+    {
+        try
+        {
+            // Test write by appending a validation marker
+            var testContent = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Log file initialized\n";
+            File.AppendAllText(logFilePath, testContent);
+            return true;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            errors.Add($"No write permission for {logFilePath}: {ex.Message}");
+            return false;
+        }
+        catch (IOException ex) when (ex.Message.Contains("disk") || ex.Message.Contains("space"))
+        {
+            errors.Add($"Disk space issue for {logFilePath}: {ex.Message}");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"Cannot write to {logFilePath}: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// NOUVEAU: Log initialization status clearly (like Program.cs)
+    /// </summary>
+    private void LogInitializationStatus()
+    {
+        var statusLine = "=".PadRight(70, '=');
+        
+        switch (_status)
+        {
+            case LoggingStatus.Optimal:
+                Console.WriteLine($"✅ BibUutLogger OPTIMAL: {_bibId}/{_uutId}");
+                Console.WriteLine($"   📁 Log file: {Path.GetFileName(_dailyLogFile)}");
+                Console.WriteLine($"   📂 Directory: {_logDirectory}");
+                
+                _serviceLogger.LogInformation(
+                    "BibUutLogger initialized: {BibId}/{UutId} → {LogFile}", 
+                    _bibId, _uutId, _dailyLogFile);
+                break;
+                
+            case LoggingStatus.Degraded:
+                Console.WriteLine($"⚠️  BibUutLogger DEGRADED: {_bibId}/{_uutId}");
+                Console.WriteLine($"   🔄 Using service log fallback");
+                Console.WriteLine($"   📋 Issues:");
+                foreach (var error in _initializationErrors)
+                {
+                    Console.WriteLine($"      • {error}");
+                }
+                
+                _serviceLogger.LogWarning(
+                    "BibUutLogger degraded mode for {BibId}/{UutId}: {Errors}",
+                    _bibId, _uutId, string.Join("; ", _initializationErrors));
+                break;
+                
+            case LoggingStatus.Failed:
+                Console.WriteLine($"❌ BibUutLogger FAILED: {_bibId}/{_uutId}");
+                Console.WriteLine($"   🔄 Service log only");
+                Console.WriteLine($"   💥 Critical issues:");
+                foreach (var error in _initializationErrors)
+                {
+                    Console.WriteLine($"      • {error}");
+                }
+                
+                _serviceLogger.LogError(
+                    "BibUutLogger initialization failed for {BibId}/{UutId}: {Errors}",
+                    _bibId, _uutId, string.Join("; ", _initializationErrors));
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Log BIB execution event with STABLE daily file
+    /// DUAL OUTPUT: Service log (always) + BIB-specific log (when available)
     /// </summary>
     public void LogBibExecution(LogLevel level, string message, params object[] args)
     {
@@ -61,15 +253,9 @@ public class BibUutLogger
         
         try
         {
-            // SPRINT 12 FIX: Handle both indexed ({0}) and named ({ClientId}) format strings
             if (args.Any())
             {
-                // Try Microsoft.Extensions.Logging format first (supports named placeholders)
-                // The service logger will handle the actual formatting properly
-                formattedMessage = message; // Keep original for service logger
-                
-                // For our local logging, create a safe version
-                // Replace named placeholders with indexed ones for string.Format compatibility
+                formattedMessage = message;
                 var safeMessage = ConvertToIndexedFormat(message, args.Length);
                 formattedMessage = string.Format(safeMessage, args);
             }
@@ -80,30 +266,31 @@ public class BibUutLogger
         }
         catch (FormatException ex)
         {
-            // DEFENSIVE: If formatting fails, log the error and use original message
-            _serviceLogger.LogError(ex, "Format error in BibUutLogger for {BibId}/{UutId}: {Message}", _bibId, _uutId, message);
+            _serviceLogger.LogError(ex, 
+                "Format error in BibUutLogger for {BibId}/{UutId}: {Message}", 
+                _bibId, _uutId, message);
             formattedMessage = $"{message} [FORMAT_ERROR: {string.Join(", ", args)}]";
         }
         
         var timestamp = DateTime.Now;
         
-        // ✅ EXISTING: Continue using service logger (ZERO TOUCH) 
-        // Service logger handles named placeholders correctly
+        // ALWAYS log to service logger
         _serviceLogger.Log(level, "[{BibId}/{UutId}] " + message, _bibId, _uutId, args);
         
-        // 🆕 NEW: Add structured BIB-specific logging with safe formatted message
-        WriteStructuredBibLog(level, formattedMessage, timestamp);
+        // Write to structured log if available
+        if (_structuredLoggingAvailable)
+        {
+            WriteStructuredBibLog(level, formattedMessage, timestamp);
+        }
     }
 
     /// <summary>
-    /// SPRINT 12 FIX: Convert named placeholders to indexed format for string.Format
-    /// Handles common patterns like {ClientId} -> {0}, {Error} -> {1}, etc.
+    /// Convert named placeholders to indexed format for string.Format
     /// </summary>
     private string ConvertToIndexedFormat(string message, int argCount)
     {
         var result = message;
         
-        // Common named placeholders to indexed conversion
         var commonPatterns = new Dictionary<string, int>
         {
             {"{ClientId}", 0},
@@ -122,14 +309,12 @@ public class BibUutLogger
             {
                 result = result.Replace(pattern, $"{{{index}}}");
                 index++;
-                break; // Only replace the first pattern found
+                break;
             }
         }
         
-        // Fallback: If no known patterns, assume it's meant to be {0}
         if (result.Contains("{") && !result.Contains("{0}") && argCount > 0)
         {
-            // Find all {name} patterns and replace with {0}, {1}, etc.
             var regex = new System.Text.RegularExpressions.Regex(@"\{[^}]+\}");
             var matches = regex.Matches(result);
             
@@ -140,6 +325,83 @@ public class BibUutLogger
         }
         
         return result;
+    }
+
+    /// <summary>
+    /// FIX: Write to STABLE daily file (not hourly files)
+    /// </summary>
+    private void WriteStructuredBibLog(LogLevel level, string message, DateTime timestamp)
+    {
+        if (!_structuredLoggingAvailable || string.IsNullOrEmpty(_dailyLogFile))
+        {
+            LogStructuredLoggingWarning();
+            return;
+        }
+
+        try
+        {
+            var logEntry = $"[{timestamp:HH:mm:ss.fff}] [{level.ToString().ToUpper()}] {message}\n";
+            
+            lock (_lockObject)
+            {
+                File.AppendAllText(_dailyLogFile, logEntry);
+            }
+            
+            _consecutiveWriteFailures = 0;
+            _lastSuccessfulWrite = DateTime.Now;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            HandleWriteFailure($"Access denied: {ex.Message}");
+        }
+        catch (IOException ex) when (ex.Message.Contains("disk") || ex.Message.Contains("space"))
+        {
+            HandleWriteFailure($"Disk full: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            HandleWriteFailure($"Write error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Handle write failures with periodic warnings
+    /// </summary>
+    private void HandleWriteFailure(string errorMessage)
+    {
+        _consecutiveWriteFailures++;
+        
+        var now = DateTime.Now;
+        if (now - _lastWarningTime > WARNING_INTERVAL)
+        {
+            var timeSinceSuccess = now - _lastSuccessfulWrite;
+            
+            Console.WriteLine($"⚠️  BibUutLogger write failure: {_bibId}/{_uutId}");
+            Console.WriteLine($"    Reason: {errorMessage}");
+            Console.WriteLine($"    Failures: {_consecutiveWriteFailures} consecutive");
+            Console.WriteLine($"    Time since success: {timeSinceSuccess:mm\\:ss}");
+            
+            _serviceLogger.LogWarning(
+                "Structured logging failed for {BibId}/{UutId}: {Error}. Failures: {Count}",
+                _bibId, _uutId, errorMessage, _consecutiveWriteFailures);
+            
+            _lastWarningTime = now;
+        }
+    }
+
+    /// <summary>
+    /// Periodic warning for unavailable structured logging
+    /// </summary>
+    private void LogStructuredLoggingWarning()
+    {
+        var now = DateTime.Now;
+        if (now - _lastWarningTime > WARNING_INTERVAL)
+        {
+            _serviceLogger.LogWarning(
+                "Structured logging unavailable for {BibId}/{UutId}",
+                _bibId, _uutId);
+            _lastWarningTime = now;
+        }
     }
 
     /// <summary>
@@ -163,233 +425,73 @@ public class BibUutLogger
         var summary = $"WORKFLOW COMPLETE: {status} - {commandCount} commands in {totalDuration.TotalSeconds:F1}s";
         
         LogBibExecution(success ? LogLevel.Information : LogLevel.Error, summary);
-        
-        // Write daily summary entry
         WriteDailySummaryEntry(success, totalDuration, commandCount);
     }
 
-// <summary>
-/// ROBUSTNESS FIX: Create structured log directory with fallback protection
-/// FAIL SAFE: Returns null if directory creation fails, enables fallback logging
-/// </summary>
-private static string? CreateLogDirectory(string bibId)
-{
-    try
-    {
-        // Use same base path as NLog configuration
-        var baseLogPath = Path.Combine("C:", "Logs", "SerialPortPool");
-        var bibLogPath = Path.Combine(baseLogPath, $"BIB_{bibId}", DateTime.Now.ToString("yyyy-MM-dd"));
-        
-        Directory.CreateDirectory(bibLogPath);
-        
-        // Test write permissions
-        var testFile = Path.Combine(bibLogPath, $"test_{DateTime.Now:HHmmss}.tmp");
-        File.WriteAllText(testFile, "test");
-        File.Delete(testFile);
-        
-        return bibLogPath;
-    }
-    catch (UnauthorizedAccessException ex)
-    {
-        Console.WriteLine($"⚠️  BibUutLogger: Access denied to log directory for BIB {bibId}: {ex.Message}");
-        Console.WriteLine($"🔄 Falling back to main service logs only");
-        return null;
-    }
-    catch (DirectoryNotFoundException ex)
-    {
-        Console.WriteLine($"⚠️  BibUutLogger: Directory not found error for BIB {bibId}: {ex.Message}");
-        Console.WriteLine($"🔄 Falling back to main service logs only");
-        return null;
-    }
-    catch (IOException ex)
-    {
-        Console.WriteLine($"⚠️  BibUutLogger: IO error creating log directory for BIB {bibId}: {ex.Message}");
-        Console.WriteLine($"🔄 Falling back to main service logs only (disk full?)");
-        return null;
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"⚠️  BibUutLogger: Unexpected error creating log directory for BIB {bibId}: {ex.Message}");
-        Console.WriteLine($"🔄 Falling back to main service logs only");
-        return null;
-    }
-}
-
-    // <summary>
-/// ROBUSTNESS FIX: Write structured BIB log with runtime failure detection
-/// FAIL SAFE: Falls back to service logger + periodic warnings if file logging fails
-/// </summary>
-private void WriteStructuredBibLog(LogLevel level, string message, DateTime timestamp)
-{
-    // If no log directory available, skip structured logging silently
-    if (string.IsNullOrEmpty(_logDirectory))
-    {
-        LogStructuredLoggingWarning();
-        return;
-    }
-
-    try
-    {
-        var logFileName = $"{_uutId}_port{_portNumber}_{timestamp:HHmm}.log";
-        var logFilePath = Path.Combine(_logDirectory, logFileName);
-        
-        var logEntry = $"[{timestamp:HH:mm:ss.fff}] [{level.ToString().ToUpper()}] {message}\n";
-        
-        lock (_lockObject)
-        {
-            File.AppendAllText(logFilePath, logEntry);
-        }
-        
-        // Reset failure tracking on success
-        _consecutiveWriteFailures = 0;
-        _lastSuccessfulWrite = DateTime.Now;
-    }
-    catch (UnauthorizedAccessException ex)
-    {
-        HandleWriteFailure($"Access denied to log file: {ex.Message}");
-    }
-    catch (DirectoryNotFoundException ex)
-    {
-        HandleWriteFailure($"Log directory disappeared: {ex.Message}");
-    }
-    catch (IOException ex) when (ex.Message.Contains("disk") || ex.Message.Contains("space"))
-    {
-        HandleWriteFailure($"Disk space issue: {ex.Message}");
-    }
-    catch (IOException ex)
-    {
-        HandleWriteFailure($"IO error: {ex.Message}");
-    }
-    catch (Exception ex)
-    {
-        HandleWriteFailure($"Unexpected error: {ex.Message}");
-    }
-}
-
-
-/// <summary>
-/// NOUVELLE MÉTHODE: Handle write failures with periodic warnings
-/// </summary>
-private void HandleWriteFailure(string errorMessage)
-{
-    _consecutiveWriteFailures++;
-    
-    // Show warning on console and service logger periodically
-    var now = DateTime.Now;
-    if (now - _lastWarningTime > WARNING_INTERVAL)
-    {
-        var timeSinceSuccess = now - _lastSuccessfulWrite;
-        
-        Console.WriteLine($"⚠️  BibUutLogger: Structured logging failing for {_bibId}/{_uutId}");
-        Console.WriteLine($"    Reason: {errorMessage}");
-        Console.WriteLine($"    Failures: {_consecutiveWriteFailures} consecutive");
-        Console.WriteLine($"    Time since last success: {timeSinceSuccess:mm\\:ss}");
-        Console.WriteLine($"    Using main service logs as fallback");
-        
-        _serviceLogger.LogWarning(
-            "BibUutLogger structured logging failed for {BibId}/{UutId}: {Error}. " +
-            "Consecutive failures: {Failures}. Using service log fallback.",
-            _bibId, _uutId, errorMessage, _consecutiveWriteFailures);
-        
-        _lastWarningTime = now;
-    }
-}
-
-/// <summary>
-/// NOUVELLE MÉTHODE: Periodic warning for missing structured logging capability
-/// </summary>
-private void LogStructuredLoggingWarning()
-{
-    var now = DateTime.Now;
-    if (now - _lastWarningTime > WARNING_INTERVAL)
-    {
-        Console.WriteLine($"⚠️  BibUutLogger: No structured logging available for {_bibId}/{_uutId} (directory creation failed at startup)");
-        Console.WriteLine($"    All logs going to main service log only");
-        
-        _serviceLogger.LogWarning(
-            "BibUutLogger: Structured logging unavailable for {BibId}/{UutId} - directory creation failed at startup",
-            _bibId, _uutId);
-            
-        _lastWarningTime = now;
-    }
-}
-
-
-   // <summary>
-/// ROBUSTNESS FIX: Write daily summary with failure handling
-/// </summary>
-private void WriteDailySummaryEntry(bool success, TimeSpan duration, int commandCount)
-{
-    if (string.IsNullOrEmpty(_logDirectory))
-    {
-        // No structured logging available - log to service logger instead
-        _serviceLogger.LogInformation(
-            "DAILY SUMMARY {BibId}/{UutId}: {Status} - {Commands} commands, {Duration:F1}s",
-            _bibId, _uutId, success ? "SUCCESS" : "FAILED", commandCount, duration.TotalSeconds);
-        return;
-    }
-
-    try
-    {
-        var summaryFile = Path.Combine(_logDirectory, $"daily_summary_{DateTime.Now:yyyy-MM-dd}.log");
-        var summaryEntry = $"[{DateTime.Now:HH:mm:ss}] {_uutId}_port{_portNumber}: " +
-                         $"{(success ? "SUCCESS" : "FAILED")} - {commandCount} cmds, {duration.TotalSeconds:F1}s\n";
-        
-        lock (_lockObject)
-        {
-            File.AppendAllText(summaryFile, summaryEntry);
-        }
-    }
-    catch (Exception ex)
-    {
-        // Fallback to service logger for daily summary
-        _serviceLogger.LogWarning(ex, 
-            "Failed to write daily summary to structured log for {BibId}/{UutId} - using service log instead",
-            _bibId, _uutId);
-            
-        _serviceLogger.LogInformation(
-            "DAILY SUMMARY {BibId}/{UutId}: {Status} - {Commands} commands, {Duration:F1}s",
-            _bibId, _uutId, success ? "SUCCESS" : "FAILED", commandCount, duration.TotalSeconds);
-    }
-}
-
-
-/// <summary>
-/// ROBUSTNESS FIX: Create execution marker with failure handling
-/// </summary>
-public void CreateCurrentExecutionMarker()
-{
-    if (string.IsNullOrEmpty(_logDirectory))
-    {
-        // Log to service instead
-        _serviceLogger.LogInformation(
-            "Current execution started for {BibId}/{UutId} on port {Port} (no structured logging available)",
-            _bibId, _uutId, _portNumber);
-        return;
-    }
-
-    try
-    {
-        var latestDir = Path.Combine(Path.GetDirectoryName(_logDirectory)!, "latest");
-        Directory.CreateDirectory(latestDir);
-        
-        var currentFile = Path.Combine(latestDir, $"{_uutId}_current.log");
-        var markerContent = $"Current execution started: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n" +
-                           $"Log directory: {_logDirectory}\n" +
-                           $"BIB: {_bibId}, UUT: {_uutId}, Port: {_portNumber}\n";
-        
-        File.WriteAllText(currentFile, markerContent);
-    }
-    catch (Exception ex)
-    {
-        // Not critical - just log the issue
-        _serviceLogger.LogDebug(ex, 
-            "Could not create execution marker for {BibId}/{UutId} (not critical)", 
-            _bibId, _uutId);
-    }
-}
     /// <summary>
-    /// Factory method to create BibUutLogger from workflow context
+    /// Write daily summary entry
+    /// </summary>
+    private void WriteDailySummaryEntry(bool success, TimeSpan duration, int commandCount)
+    {
+        if (!_structuredLoggingAvailable || string.IsNullOrEmpty(_logDirectory))
+        {
+            _serviceLogger.LogInformation(
+                "DAILY SUMMARY {BibId}/{UutId}: {Status} - {Commands} commands, {Duration:F1}s",
+                _bibId, _uutId, success ? "SUCCESS" : "FAILED", commandCount, duration.TotalSeconds);
+            return;
+        }
+
+        try
+        {
+            var summaryFile = Path.Combine(_logDirectory, $"daily_summary_{DateTime.Now:yyyy-MM-dd}.log");
+            var summaryEntry = $"[{DateTime.Now:HH:mm:ss}] {_uutId}_port{_portNumber}: " +
+                             $"{(success ? "SUCCESS" : "FAILED")} - {commandCount} cmds, {duration.TotalSeconds:F1}s\n";
+            
+            lock (_lockObject)
+            {
+                File.AppendAllText(summaryFile, summaryEntry);
+            }
+        }
+        catch (Exception ex)
+        {
+            _serviceLogger.LogWarning(ex, 
+                "Failed to write summary for {BibId}/{UutId}",
+                _bibId, _uutId);
+        }
+    }
+
+    /// <summary>
+    /// Create execution marker for "latest" tracking
+    /// </summary>
+    public void CreateCurrentExecutionMarker()
+    {
+        if (!_structuredLoggingAvailable || string.IsNullOrEmpty(_logDirectory))
+        {
+            return;
+        }
+
+        try
+        {
+            var latestDir = Path.Combine(Path.GetDirectoryName(_logDirectory)!, "latest");
+            Directory.CreateDirectory(latestDir);
+            
+            var currentFile = Path.Combine(latestDir, $"{_uutId}_current.log");
+            var markerContent = $"Current execution: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n" +
+                               $"Log file: {_dailyLogFile}\n" +
+                               $"BIB: {_bibId}, UUT: {_uutId}, Port: {_portNumber}\n";
+            
+            File.WriteAllText(currentFile, markerContent);
+        }
+        catch (Exception ex)
+        {
+            _serviceLogger.LogDebug(ex, 
+                "Could not create execution marker for {BibId}/{UutId}", 
+                _bibId, _uutId);
+        }
+    }
+
+    /// <summary>
+    /// Factory method to create BibUutLogger
     /// </summary>
     public static BibUutLogger Create(ILogger serviceLogger, string bibId, string uutId, int portNumber)
     {
@@ -400,14 +502,20 @@ public void CreateCurrentExecutionMarker()
 }
 
 /// <summary>
-/// Extension methods for easy integration with existing workflow code
+/// Logging status enum for clear state tracking
+/// </summary>
+public enum LoggingStatus
+{
+    Optimal,    // File + Console logging working
+    Degraded,   // Only console or only file working
+    Failed      // No logging available
+}
+
+/// <summary>
+/// Extension methods for easy integration
 /// </summary>
 public static class BibUutLoggerExtensions
 {
-    /// <summary>
-    /// Create BIB/UUT logger from existing service logger
-    /// INTEGRATION: Easy to add to existing workflow without changes
-    /// </summary>
     public static BibUutLogger ForBibUut(this ILogger logger, string bibId, string uutId, int portNumber)
     {
         return BibUutLogger.Create(logger, bibId, uutId, portNumber);
